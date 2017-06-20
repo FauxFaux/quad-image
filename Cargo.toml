@@ -1,0 +1,13 @@
+[package]
+name = "image-paste"
+version = "0.1.0"
+authors = ["Chris West (Faux) <git@goeswhere.com>"]
+
+[dependencies]
+iron = "0.5.0"
+params = "0.6.0"
+router = "0.5.1"
+
+rand = "0.3.15"
+tempfile = "2.1.5"
+image = "0.14.0"
