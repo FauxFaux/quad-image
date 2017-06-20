@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>quad.pe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"
+            integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+            crossorigin="anonymous"></script>
+    <script src="paste.js"></script>
+    <style type="text/css">
+        #paste {
+            width: 600px;
+            background-color: #ccc;
+            color: #000;
+        }
+        #paste p {
+            line-height: 100px;
+        }
+    </style>
+</head>
+<body>
+<div id="manual">
+    <form method="post" action="/api/upload">
+        <label>Image: <input type="file" name="image"/></label>
+        <input type="submit"/>
+    </form>
+</div>
+<div id="paste">
+    <p id="msg">
+    <span>Or just paste an image in this box...</>
+    <span>You might have to click here because computers suck.</span>
+    </p>
+</div>
+
+<script>
+    $('#paste').pastableNonInputable().on('pasteImage', (ev, data) => {
+        let msg = $('#msg');
+        let fd = new FormData();
+        fd.append('image', data.blob);
+        msg.text("Thanks! Attempting to upload...");
+        $.post({
+            type: 'POST',
+            url: '/api/upload',
+            data: fd,
+            processData: false,
+            contentType: false,
+            success: (resp) => {
+                console.log(resp);
+                msg.text("Uploaded! " + resp);
+            },
+            error: (failure) => {
+                console.log(failure);
+                msg.text("upload failed: " + failure.status + " / " + failure.responseText);
+            }
+        });
+    }).on('pasteImageError', function (ev, data) {
+        let msg = $('#msg');
+        msg.text("Someone fucked up: " + data.message);
+    }).on('pasteText', function (ev, data) {
+        let msg = $('#msg');
+        msg.text("That's totally text, you failure: " + data.text);
+    });
+</script>
+</body>
+</html>
