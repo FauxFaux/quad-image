@@ -36,7 +36,7 @@ fn make_readable(path: &str) -> io::Result<()> {
     let mut perms = fs::File::open(path)?.metadata()?.permissions();
 
     use std::os::unix::fs::PermissionsExt;
-    perms.set_mode(0644);
+    perms.set_mode(0o0644);
     fs::set_permissions(path, perms)
 }
 
