@@ -92,7 +92,12 @@ fn upload(req: &mut Request) -> IronResult<Response> {
                     println!("{:?} {}", remote_addr, code);
                     let url = format!("https://{}/{}", host, code);
                     let dest = iron::Url::parse(url.as_str()).expect("url 2");
-                    Ok(Response::with((status::SeeOther, iron::modifiers::Redirect(dest))))
+                    if params.contains_key("js-sucks") {
+                        Ok(Response::with((status::Ok, code)))
+                    } else {
+                        Ok(Response::with((status::SeeOther, iron::modifiers::Redirect(dest))))
+                    }
+
                 }
             }
         }
