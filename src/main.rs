@@ -32,6 +32,14 @@ fn outfile(ext: &str) -> String {
     }
 }
 
+fn make_readable(path: &str) -> io::Result<()> {
+    let mut perms = fs::File::open(path)?.metadata()?.permissions();
+
+    use std::os::unix::fs::PermissionsExt;
+    perms.set_mode(0644);
+    fs::set_permissions(path, perms)
+}
+
 fn store(f: &params::File) -> io::Result<String> {
     let loaded: image::DynamicImage;
     let guessed_format: image::ImageFormat;
@@ -57,6 +65,8 @@ fn store(f: &params::File) -> io::Result<String> {
         _ => unreachable!(),
     });
     temp.persist(&written_to).expect("rename");
+
+    make_readable(&written_to)?;
 
     Ok(written_to)
 }
