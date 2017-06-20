@@ -19,8 +19,8 @@
 </head>
 <body>
 <div id="manual">
-    <form method="post" action="/api/upload">
-        <label>Image: <input type="file" name="image"/></label>
+    <form method="post" action="/api/upload" accept-charset="utf-8" enctype="multipart/form-data">
+        <label>Image: <input type="file" name="image" accept="image/*"/></label>
         <input type="submit"/>
     </form>
 </div>
