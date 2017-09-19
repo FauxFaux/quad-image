@@ -109,6 +109,13 @@ fn upload(req: &mut Request) -> IronResult<Response> {
         .hostname
         .clone();
     let remote_addr = req.remote_addr;
+    let remote_forwarded = req.headers.get_raw("X-Forwarded-For").map(|vecs| {
+        vecs.iter()
+            .map(|vec| {
+                String::from_utf8(vec.clone()).expect("valid utf-8 forwarded for")
+            })
+            .collect::<Vec<String>>()
+    });
     let params = req.get_ref::<Params>();
     if params.is_err() {
         return Ok(Response::with((status::BadRequest, "'not a form post'")));
@@ -120,11 +127,11 @@ fn upload(req: &mut Request) -> IronResult<Response> {
         Some(&params::Value::File(ref f)) => {
             match store(f) {
                 Err(e) => {
-                    println!("failed: {:?}", e);
+                    println!("{:?} {:?}: failed: {:?}", remote_addr, remote_forwarded, e);
                     Ok(Response::with(status::InternalServerError))
                 }
                 Ok(code) => {
-                    println!("{:?} {}", remote_addr, code);
+                    println!("{:?} {:?}: {}", remote_addr, remote_forwarded, code);
                     let url = format!("https://{}/{}", host, code);
                     let dest = iron::Url::parse(url.as_str()).expect("url 2");
                     if params.contains_key("js-sucks") {
