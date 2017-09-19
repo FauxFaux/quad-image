@@ -78,14 +78,22 @@ fn store(f: &params::File) -> io::Result<String> {
         let png_length = temp.metadata().expect("temp metadata").len();
         if png_length > 1024 * 1024 {
             temp.set_len(0).expect("truncating temp file");
-            temp.seek(SeekFrom::Start(0)).expect("truncating temp file 2");
+            temp.seek(SeekFrom::Start(0)).expect(
+                "truncating temp file 2",
+            );
 
             target_format = JPEG;
 
-            loaded.save(&mut temp, target_format).expect("save attempt 2");
+            loaded.save(&mut temp, target_format).expect(
+                "save attempt 2",
+            );
 
             let jpeg_length = temp.metadata().expect("temp metadata 2").len();
-            println!("png came out too big so we jpeg'd it: {} -> {}", png_length, jpeg_length);
+            println!(
+                "png came out too big so we jpeg'd it: {} -> {}",
+                png_length,
+                jpeg_length
+            );
         }
     }
 
