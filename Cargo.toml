@@ -10,3 +10,6 @@ params = "0.6.0"
 rand = "0.3.16"
 router = "0.5.1"
 tempfile = "2.1.6"
+
+[profile.release]
+lto = true
