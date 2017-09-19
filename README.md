@@ -8,6 +8,24 @@ A very, very simple image hosting API, plus support files.
  * The image is saved to the local disc.
  * The URL of the image is returned.
 
+### Building
+
+`quad-image` probably only works on Linux. It requires Rust, stable should be fine.
+
+Build it by running `cargo build --release`, and grabbing the binary from
+`target/release/quad-image`.
+
+
+### Hosting
+
+The expected deployment situation is:
+
+ * `quad-image` running under a service manager.
+ * the `web/` subdirectory being served by a webserver
+ * the webserver proxying traffic to `quad-image`.
+
+There are example config files in `quad-image.nginx` (for nginx) and
+`quad-image.service` (for systemd). All the ports/addresses are hardcoded.
 
 ### Safety
 

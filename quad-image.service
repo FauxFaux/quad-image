@@ -1,0 +1,35 @@
+[Unit]
+Description=Quad Image Paste
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+User=quad-image
+Group=quad-image
+
+# note images are written to the 'e' subdirectory of this working directory:
+WorkingDirectory=/opt/quad-image
+ExecStart=/opt/quad-image/quad-image
+
+Restart=on-failure
+
+#[Hardening]
+
+# strict isn't supported in Ubuntu 16.04, so start with full then try to upgrade
+ProtectSystem=full
+ProtectSystem=strict
+
+ProtectHome=yes
+
+# shouldn't need to elevate
+NoNewPrivileges=true
+CapabilityBoundingSet=
+
+# these three protects aren't supported in Ubuntu 16.04, but don't add value as we should have no privs
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+
+PrivateDevices=true
+PrivateTmp=true
