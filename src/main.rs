@@ -8,6 +8,8 @@ extern crate tempfile;
 use std::fs;
 use std::io;
 use std::io::BufRead;
+use std::io::Seek;
+use std::io::SeekFrom;
 
 use iron::prelude::*;
 use iron::status;
@@ -56,7 +58,7 @@ fn store(f: &params::File) -> io::Result<String> {
     }
 
     use image::ImageFormat::*;
-    let target_format = match guessed_format {
+    let mut target_format = match guessed_format {
         PNG | PPM | TIFF | BMP | ICO | HDR | TGA => PNG,
         JPEG | WEBP => JPEG,
         GIF => GIF,
@@ -66,6 +68,27 @@ fn store(f: &params::File) -> io::Result<String> {
         .create_in("images")
         .expect("temp file");
     loaded.save(&mut temp, target_format).expect("save");
+
+    if target_format == PNG {
+        // Chrome seems to convert everything parted to png, even if it's huge.
+        // So, if we see a png that's too big, down-convert it to a jpg,
+        // and log about how proud we are of having ruined the internet.
+        // Alternatively, we could record whether it was a pasted upload?
+
+        let png_length = temp.metadata().expect("temp metadata").len();
+        if png_length > 1024 * 1024 {
+            temp.set_len(0).expect("truncating temp file");
+            temp.seek(SeekFrom::Start(0)).expect("truncating temp file 2");
+
+            target_format = JPEG;
+
+            loaded.save(&mut temp, target_format).expect("save attempt 2");
+
+            let jpeg_length = temp.metadata().expect("temp metadata 2").len();
+            println!("png came out too big so we jpeg'd it: {} -> {}", png_length, jpeg_length);
+        }
+    }
+
     let written_to = outfile(match target_format {
         PNG => "png",
         JPEG => "jpg",
