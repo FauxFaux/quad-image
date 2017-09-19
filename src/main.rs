@@ -15,6 +15,8 @@ use params::Params;
 
 use rand::Rng;
 
+const C_OPEN_FAILED_ALREADY_EXISTS: i32 = 17;
+
 fn outfile(ext: &str) -> String {
     let mut rand = rand::thread_rng();
     loop {
@@ -25,8 +27,10 @@ fn outfile(ext: &str) -> String {
         ) {
             Ok(_) => return cand,
             Err(e) => {
+                // TODO: this probably panics on non-Linux(?).
+                // TODO: not a major problem as it's hard to hit anyway.
                 match e.raw_os_error() {
-                    Some(17) => {}
+                    Some(C_OPEN_FAILED_ALREADY_EXISTS) => {}
                     _ => panic!(format!("couldn't create candidate {}: {:?}", cand, e)),
                 }
             }
