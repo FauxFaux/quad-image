@@ -1,13 +1,12 @@
 [package]
+authors = ["Chris West (Faux) <git@goeswhere.com>"]
 name = "quad-image"
 version = "0.1.0"
-authors = ["Chris West (Faux) <git@goeswhere.com>"]
 
 [dependencies]
-iron = "0.5.0"
+image = "0.15.0"
+iron = "0.5.1"
 params = "0.6.0"
+rand = "0.3.16"
 router = "0.5.1"
-
-rand = "0.3.15"
-tempfile = "2.1.5"
-image = "0.14.0"
+tempfile = "2.1.6"
