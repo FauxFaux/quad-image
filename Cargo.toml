@@ -1,5 +1,5 @@
 [package]
-name = "image-paste"
+name = "quad-image"
 version = "0.1.0"
 authors = ["Chris West (Faux) <git@goeswhere.com>"]
 
