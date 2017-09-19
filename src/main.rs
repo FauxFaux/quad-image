@@ -20,14 +20,16 @@ fn outfile(ext: &str) -> String {
     loop {
         let rand_bit: String = rand.gen_ascii_chars().take(10).collect();
         let cand = format!("images/{}.{}", rand_bit, ext);
-        match fs::OpenOptions::new().write(true).create_new(true).open(&cand) {
+        match fs::OpenOptions::new().write(true).create_new(true).open(
+            &cand,
+        ) {
             Ok(_) => return cand,
             Err(e) => {
                 match e.raw_os_error() {
-                    Some(17) => {},
-                    _ => panic!(format!("couldn't create candidate {}: {:?}", cand, e))
+                    Some(17) => {}
+                    _ => panic!(format!("couldn't create candidate {}: {:?}", cand, e)),
                 }
-            },
+            }
         }
     }
 }
@@ -56,7 +58,9 @@ fn store(f: &params::File) -> io::Result<String> {
         GIF => GIF,
     };
 
-    let mut temp = tempfile::NamedTempFileOptions::new().create_in("images").expect("temp file");
+    let mut temp = tempfile::NamedTempFileOptions::new()
+        .create_in("images")
+        .expect("temp file");
     loaded.save(&mut temp, target_format).expect("save");
     let written_to = outfile(match target_format {
         PNG => "png",
@@ -72,7 +76,11 @@ fn store(f: &params::File) -> io::Result<String> {
 }
 
 fn upload(req: &mut Request) -> IronResult<Response> {
-    let host = req.headers.get::<iron::headers::Host>().expect("host header present").hostname.clone();
+    let host = req.headers
+        .get::<iron::headers::Host>()
+        .expect("host header present")
+        .hostname
+        .clone();
     let remote_addr = req.remote_addr;
     let params = req.get_ref::<Params>();
     if params.is_err() {
@@ -95,13 +103,17 @@ fn upload(req: &mut Request) -> IronResult<Response> {
                     if params.contains_key("js-sucks") {
                         Ok(Response::with((status::Ok, code)))
                     } else {
-                        Ok(Response::with((status::SeeOther, iron::modifiers::Redirect(dest))))
+                        Ok(Response::with(
+                            (status::SeeOther, iron::modifiers::Redirect(dest)),
+                        ))
                     }
 
                 }
             }
         }
-        _ => Ok(Response::with((status::BadRequest, "'image attr not present'")))
+        _ => Ok(Response::with(
+            (status::BadRequest, "'image attr not present'"),
+        )),
     }
 }
 

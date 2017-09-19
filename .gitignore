@@ -2,3 +2,4 @@
 **/*.rs.bk
 images
 .idea
+*.iml
