@@ -23,7 +23,7 @@ fn outfile(ext: &str) -> String {
     let mut rand = rand::thread_rng();
     loop {
         let rand_bit: String = rand.gen_ascii_chars().take(10).collect();
-        let cand = format!("images/{}.{}", rand_bit, ext);
+        let cand = format!("e/{}.{}", rand_bit, ext);
         match fs::OpenOptions::new().write(true).create_new(true).open(
             &cand,
         ) {
@@ -65,7 +65,7 @@ fn store(f: &params::File) -> io::Result<String> {
     };
 
     let mut temp = tempfile::NamedTempFileOptions::new()
-        .create_in("images")
+        .create_in("e")
         .expect("temp file");
     loaded.save(&mut temp, target_format).expect("save");
 
