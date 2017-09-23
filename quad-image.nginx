@@ -23,3 +23,8 @@ location /e {
     expires 30d;
     try_files $uri =404;
 }
+
+location = /e {
+    return 302 /;
+}
+
