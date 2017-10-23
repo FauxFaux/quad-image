@@ -162,9 +162,40 @@
 		transform: translateY(0);
 	}
 
+	#performance-booster {
+		position: absolute;
+		top: 5px;
+		right: 5px;
+		opacity: 0.2;
+		color: hotpink;
+		transition: opacity 1s;
+		z-index: 2;
+		cursor: pointer;
+		font-style: italic;
+	}
+
+	#performance-booster:hover {
+		opacity: 1;
+		animation: throbYeahThrob infinite .5s;
+	}
+
+	@keyframes throbYeahThrob {
+		from {
+			transform: scale(1);
+			color: hotpink;
+		}
+
+		to {
+			transform: scale(1.1);
+			color: limegreen;
+		}
+	}
+
 </style>
 <body>
-	
+	<label id="performance-booster">
+		Performance boost: <input type="checkbox" id="performantToggle">
+	</label>
 	<label for="realos" id="form"></label>
 	<input type="file" multiple id="realos">
 	<ul id="images"></ul>
@@ -172,6 +203,7 @@
 	<script>
 
 	var storage = localStorage.getItem("quadpees");
+	var performanceBoost = localStorage.getItem("performanceboost");
 	var quadpees = [];
 
 	if(storage) {
@@ -182,6 +214,20 @@
 		})
 	} else {
 		localStorage.setItem("quadpees", "[]");
+	}
+
+	if(performanceBoost) {
+		performanceBoost = JSON.parse(performanceBoost);
+	} else {
+		localStorage.setItem("performanceboost", false);
+	}
+
+	performantToggle.onchange = togglePerformant;
+	performantToggle.checked = performanceBoost;
+
+	function togglePerformant() {
+		localStorage.setItem("performanceboost", performantToggle.checked);
+		performanceBoost = performantToggle.checked;
 	}
 
 	function upload(fileBlob, cb) {
@@ -273,20 +319,36 @@
 			
 			var blob = new Blob([e.target.result], { type: "image/jpeg" });
 
-			var loadingItem = makePlaceholderItem(true);
+			if(!performanceBoost) {
 
-			upload(blob, function(err, resp) {
+				var loadingItem = makePlaceholderItem(true);
 
-				if(err) {
-					loadingItem.actionButton.onclick = function() { alert(err); };
-					loadingItem.li.classList.add("failed");
-					loadingItem.li.classList.remove("loading");
-					return;
-				}
+				upload(blob, function(err, resp) {
 
-				makeLoadedItem(loadingItem, resp);
+					if(err) {
+						loadingItem.actionButton.onclick = function() { alert(err); };
+						loadingItem.li.classList.add("failed");
+						loadingItem.li.classList.remove("loading");
+						return;
+					}
 
-			});
+					makeLoadedItem(loadingItem, resp);
+					
+				});
+			} else {
+				form.classList.add("uploading");
+				upload(blob, function(err, resp) {
+					// Will probably have a problem if uploading multiple
+					form.classList.remove("uploading");
+					if(err) {
+						alert(err);
+						return;
+					}
+					window.open("https://quad.pe/" + resp);
+
+				});
+			}
+			
 			
 		};
 		
