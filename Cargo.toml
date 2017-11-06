@@ -1,13 +1,8 @@
 [package]
 authors = ["Chris West (Faux) <git@goeswhere.com>"]
-name = "quad-image"
+name = "boom"
 version = "0.1.0"
 
 [dependencies]
 iron = "0.6.0"
 params = "0.7.1"
-rand = "0.3.17"
-router = "0.5.1"
-tempfile = "2.2.0"
-[profile.release]
-lto = true
