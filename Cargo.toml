@@ -4,9 +4,9 @@ name = "quad-image"
 version = "0.1.0"
 
 [dependencies]
-image = "0.16.0"
-iron = "0.5.1"
-params = "0.6.0"
+image = "0.17.0"
+iron = "0.6.0"
+params = "0.7.1"
 rand = "0.3.17"
 router = "0.5.1"
 tempfile = "2.2.0"
