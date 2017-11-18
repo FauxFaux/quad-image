@@ -9,6 +9,6 @@ iron = "~0.5"
 params = "~0.6"
 rand = "0"
 router = "~0.5"
-tempfile = "2"
+tempfile-fast = "0.1"
 [profile.release]
 lto = true

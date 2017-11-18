@@ -3,7 +3,7 @@ extern crate image;
 extern crate params;
 extern crate rand;
 extern crate router;
-extern crate tempfile;
+extern crate tempfile_fast;
 
 use std::fs;
 use std::io;
@@ -64,10 +64,9 @@ fn store(f: &params::File) -> io::Result<String> {
         GIF => GIF,
     };
 
-    let mut temp = tempfile::NamedTempFileOptions::new()
-        .create_in("e")
+    let mut temp = tempfile_fast::persistable_tempfile_in("e")
         .expect("temp file");
-    loaded.save(&mut temp, target_format).expect("save");
+    loaded.save(temp.as_mut(), target_format).expect("save");
 
     if target_format == PNG {
         // Chrome seems to convert everything parted to png, even if it's huge.
@@ -84,7 +83,7 @@ fn store(f: &params::File) -> io::Result<String> {
 
             target_format = JPEG;
 
-            loaded.save(&mut temp, target_format).expect(
+            loaded.save(temp.as_mut(), target_format).expect(
                 "save attempt 2",
             );
 
@@ -103,7 +102,7 @@ fn store(f: &params::File) -> io::Result<String> {
         GIF => "gif",
         _ => unreachable!(),
     });
-    temp.persist(&written_to).expect("rename");
+    temp.persist_noclobber(&written_to).expect("rename");
 
     make_readable(&written_to)?;
 
