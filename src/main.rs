@@ -1,5 +1,5 @@
-extern crate iron;
 extern crate image;
+extern crate iron;
 extern crate params;
 extern crate rand;
 extern crate router;
@@ -24,9 +24,11 @@ fn outfile(ext: &str) -> String {
     loop {
         let rand_bit: String = rand.gen_ascii_chars().take(10).collect();
         let cand = format!("e/{}.{}", rand_bit, ext);
-        match fs::OpenOptions::new().write(true).create_new(true).open(
-            &cand,
-        ) {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&cand)
+        {
             Ok(_) => return cand,
             Err(e) => {
                 // TODO: this probably panics on non-Linux(?).
@@ -64,8 +66,7 @@ fn store(f: &params::File) -> io::Result<String> {
         GIF => GIF,
     };
 
-    let mut temp = tempfile_fast::persistable_tempfile_in("e")
-        .expect("temp file");
+    let mut temp = tempfile_fast::persistable_tempfile_in("e").expect("temp file");
     loaded.save(temp.as_mut(), target_format).expect("save");
 
     if target_format == PNG {
@@ -77,15 +78,14 @@ fn store(f: &params::File) -> io::Result<String> {
         let png_length = temp.metadata().expect("temp metadata").len();
         if png_length > 1024 * 1024 {
             temp.set_len(0).expect("truncating temp file");
-            temp.seek(SeekFrom::Start(0)).expect(
-                "truncating temp file 2",
-            );
+            temp.seek(SeekFrom::Start(0))
+                .expect("truncating temp file 2");
 
             target_format = JPEG;
 
-            loaded.save(temp.as_mut(), target_format).expect(
-                "save attempt 2",
-            );
+            loaded
+                .save(temp.as_mut(), target_format)
+                .expect("save attempt 2");
 
             let jpeg_length = temp.metadata().expect("temp metadata 2").len();
             println!(
@@ -131,27 +131,24 @@ fn upload(req: &mut Request) -> IronResult<Response> {
     let params: &params::Map = params.unwrap();
 
     match params.get("image") {
-        Some(&params::Value::File(ref f)) => {
-            match store(f) {
-                Err(e) => {
-                    println!("{:?} {:?}: failed: {:?}", remote_addr, remote_forwarded, e);
-                    Ok(Response::with(status::InternalServerError))
-                }
-                Ok(code) => {
-                    println!("{:?} {:?}: {}", remote_addr, remote_forwarded, code);
-                    let url = format!("https://{}/{}", host, code);
-                    let dest = iron::Url::parse(url.as_str()).expect("url 2");
-                    if params.contains_key("js-sucks") {
-                        Ok(Response::with((status::Ok, code)))
-                    } else {
-                        Ok(Response::with(
-                            (status::SeeOther, iron::modifiers::Redirect(dest)),
-                        ))
-                    }
-
+        Some(&params::Value::File(ref f)) => match store(f) {
+            Err(e) => {
+                println!("{:?} {:?}: failed: {:?}", remote_addr, remote_forwarded, e);
+                Ok(Response::with(status::InternalServerError))
+            }
+            Ok(code) => {
+                println!("{:?} {:?}: {}", remote_addr, remote_forwarded, code);
+                let url = format!("https://{}/{}", host, code);
+                let dest = iron::Url::parse(url.as_str()).expect("url 2");
+                if params.contains_key("js-sucks") {
+                    Ok(Response::with((status::Ok, code)))
+                } else {
+                    Ok(Response::with(
+                        (status::SeeOther, iron::modifiers::Redirect(dest)),
+                    ))
                 }
             }
-        }
+        },
         _ => Ok(Response::with(
             (status::BadRequest, "'image attr not present'"),
         )),
