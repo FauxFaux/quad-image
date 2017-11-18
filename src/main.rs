@@ -167,8 +167,13 @@ fn upload(req: &mut Request) -> IronResult<Response> {
     }
 }
 
-fn main() {
+quick_main!(run);
+
+fn run() -> Result<()> {
     let mut router = router::Router::new();
     router.post("/api/upload", upload, "upload");
-    Iron::new(router).http("127.0.0.1:6699").unwrap();
+    Iron::new(router)
+        .http("127.0.0.1:6699")
+        .map_err(|iron| format!("couldn't start server: {:?}", iron))?;
+    Ok(())
 }
