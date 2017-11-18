@@ -1,9 +1,15 @@
+#[macro_use]
+extern crate error_chain;
+
 extern crate image;
 extern crate iron;
 extern crate params;
 extern crate rand;
 extern crate router;
 extern crate tempfile_fast;
+
+mod errors;
+use errors::*;
 
 use std::fs;
 use std::io;
@@ -19,7 +25,7 @@ use rand::Rng;
 
 const C_OPEN_FAILED_ALREADY_EXISTS: i32 = 17;
 
-fn outfile(ext: &str) -> String {
+fn outfile(ext: &str) -> Result<String> {
     let mut rand = rand::thread_rng();
     loop {
         let rand_bit: String = rand.gen_ascii_chars().take(10).collect();
@@ -29,13 +35,13 @@ fn outfile(ext: &str) -> String {
             .create_new(true)
             .open(&cand)
         {
-            Ok(_) => return cand,
+            Ok(_) => return Ok(cand),
             Err(e) => {
                 // TODO: this probably panics on non-Linux(?).
                 // TODO: not a major problem as it's hard to hit anyway.
                 match e.raw_os_error() {
                     Some(C_OPEN_FAILED_ALREADY_EXISTS) => {}
-                    _ => panic!(format!("couldn't create candidate {}: {:?}", cand, e)),
+                    _ => bail!(format!("couldn't create candidate {}: {:?}", cand, e)),
                 }
             }
         }
@@ -50,13 +56,15 @@ fn make_readable(path: &str) -> io::Result<()> {
     fs::set_permissions(path, perms)
 }
 
-fn store(f: &params::File) -> io::Result<String> {
+fn store(f: &params::File) -> Result<String> {
     let loaded: image::DynamicImage;
     let guessed_format: image::ImageFormat;
     {
-        let mut file = io::BufReader::new(fs::File::open(&f.path).expect("open posted file"));
-        guessed_format = image::guess_format(file.fill_buf().expect("fill")).expect("guess");
-        loaded = image::load(file, guessed_format).expect("load");
+        let mut file =
+            io::BufReader::new(fs::File::open(&f.path).chain_err(|| "open posted file")?);
+        guessed_format =
+            image::guess_format(file.fill_buf().chain_err(|| "fill")?).chain_err(|| "guess")?;
+        loaded = image::load(file, guessed_format).chain_err(|| "load")?;
     }
 
     use image::ImageFormat::*;
@@ -66,8 +74,10 @@ fn store(f: &params::File) -> io::Result<String> {
         GIF => GIF,
     };
 
-    let mut temp = tempfile_fast::persistable_tempfile_in("e").expect("temp file");
-    loaded.save(temp.as_mut(), target_format).expect("save");
+    let mut temp = tempfile_fast::persistable_tempfile_in("e").chain_err(|| "temp file")?;
+    loaded
+        .save(temp.as_mut(), target_format)
+        .chain_err(|| "save")?;
 
     if target_format == PNG {
         // Chrome seems to convert everything parted to png, even if it's huge.
@@ -75,19 +85,20 @@ fn store(f: &params::File) -> io::Result<String> {
         // and log about how proud we are of having ruined the internet.
         // Alternatively, we could record whether it was a pasted upload?
 
-        let png_length = temp.metadata().expect("temp metadata").len();
+        let png_length = temp.metadata().chain_err(|| "temp metadata")?.len();
         if png_length > 1024 * 1024 {
-            temp.set_len(0).expect("truncating temp file");
             temp.seek(SeekFrom::Start(0))
-                .expect("truncating temp file 2");
+                .chain_err(|| "truncating temp file 2")?;
+
+            temp.set_len(0).chain_err(|| "truncating temp file")?;
 
             target_format = JPEG;
 
             loaded
                 .save(temp.as_mut(), target_format)
-                .expect("save attempt 2");
+                .chain_err(|| "save attempt 2")?;
 
-            let jpeg_length = temp.metadata().expect("temp metadata 2").len();
+            let jpeg_length = temp.metadata().chain_err(|| "temp metadata 2")?.len();
             println!(
                 "png came out too big so we jpeg'd it: {} -> {}",
                 png_length,
@@ -101,8 +112,8 @@ fn store(f: &params::File) -> io::Result<String> {
         JPEG => "jpg",
         GIF => "gif",
         _ => unreachable!(),
-    });
-    temp.persist_noclobber(&written_to).expect("rename");
+    })?;
+    temp.persist_noclobber(&written_to).chain_err(|| "rename")?;
 
     make_readable(&written_to)?;
 
@@ -110,11 +121,13 @@ fn store(f: &params::File) -> io::Result<String> {
 }
 
 fn upload(req: &mut Request) -> IronResult<Response> {
-    let host = req.headers
-        .get::<iron::headers::Host>()
-        .expect("host header present")
-        .hostname
-        .clone();
+    let host = {
+        match req.headers.get::<iron::headers::Host>() {
+            Some(header) => header.hostname.clone(),
+            None => return Ok(Response::with((status::BadRequest, "'no Host header'"))),
+        }
+    };
+
     let remote_addr = req.remote_addr;
     let remote_forwarded = req.headers.get_raw("X-Forwarded-For").map(|vecs| {
         vecs.iter()
@@ -123,12 +136,11 @@ fn upload(req: &mut Request) -> IronResult<Response> {
             })
             .collect::<Vec<String>>()
     });
-    let params = req.get_ref::<Params>();
-    if params.is_err() {
-        return Ok(Response::with((status::BadRequest, "'not a form post'")));
-    }
 
-    let params: &params::Map = params.unwrap();
+    let params = match req.get_ref::<Params>() {
+        Ok(params) => params,
+        Err(_) => return Ok(Response::with((status::BadRequest, "'not a form post'"))),
+    };
 
     match params.get("image") {
         Some(&params::Value::File(ref f)) => match store(f) {

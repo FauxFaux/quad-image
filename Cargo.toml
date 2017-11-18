@@ -4,6 +4,7 @@ name = "quad-image"
 version = "0.1.0"
 
 [dependencies]
+error-chain = "0.11"
 image = "0"
 iron = "~0.5"
 params = "~0.6"
