@@ -69,9 +69,8 @@ fn store(f: &params::File) -> Result<String> {
 
     use image::ImageFormat::*;
     let mut target_format = match guessed_format {
-        PNG | PPM | TIFF | BMP | ICO | HDR | TGA => PNG,
+        PNG | PPM | TIFF | BMP | ICO | HDR | TGA | GIF => PNG,
         JPEG | WEBP => JPEG,
-        GIF => GIF,
     };
 
     let mut temp = tempfile_fast::persistable_tempfile_in("e").chain_err(|| "temp file")?;
