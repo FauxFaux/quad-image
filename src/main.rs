@@ -160,9 +160,12 @@ fn upload(req: &mut Request) -> IronResult<Response> {
                 }
             }
         },
-        _ => Ok(Response::with(
-            (status::BadRequest, "'image attr not present'"),
-        )),
+        _ => {
+            println!("{:?} {:?}: invalid request, no image attr", remote_addr, remote_forwarded);
+            Ok(Response::with(
+                (status::BadRequest, "'image attr not present'"),
+            ))
+        },
     }
 }
 
