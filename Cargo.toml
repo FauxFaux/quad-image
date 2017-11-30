@@ -6,10 +6,10 @@ version = "0.1.0"
 [dependencies]
 error-chain = "0.11"
 image = "0"
-iron = "~0.5"
-params = "~0.6"
+iron = "~0.6"
+params = "~0.8"
 rand = "0"
-router = "~0.5"
+router = "~0.6"
 tempfile-fast = "0.1"
 [profile.release]
 lto = true
