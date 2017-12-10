@@ -69,7 +69,7 @@ fn store(f: &params::File) -> Result<String> {
 
     use image::ImageFormat::*;
     let mut target_format = match guessed_format {
-        PNG | PPM | TIFF | BMP | ICO | HDR | TGA | GIF => PNG,
+        PNG | PPM | PNM | TIFF | BMP | ICO | HDR | TGA | GIF => PNG,
         JPEG | WEBP => JPEG,
     };
 
@@ -161,11 +161,15 @@ fn upload(req: &mut Request) -> IronResult<Response> {
             }
         },
         _ => {
-            println!("{:?} {:?}: invalid request, no image attr", remote_addr, remote_forwarded);
+            println!(
+                "{:?} {:?}: invalid request, no image attr",
+                remote_addr,
+                remote_forwarded
+            );
             Ok(Response::with(
                 (status::BadRequest, "'image attr not present'"),
             ))
-        },
+        }
     }
 }
 
