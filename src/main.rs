@@ -6,7 +6,7 @@ extern crate iron;
 extern crate params;
 extern crate rand;
 extern crate router;
-extern crate tempfile_fast;
+extern crate tempfile;
 
 mod errors;
 use errors::*;
@@ -73,7 +73,9 @@ fn store(f: &params::File) -> Result<String> {
         JPEG | WEBP => JPEG,
     };
 
-    let mut temp = tempfile_fast::persistable_tempfile_in("e").chain_err(|| "temp file")?;
+    let mut temp = tempfile::NamedTempFileOptions::new()
+        .create_in("e")
+        .chain_err(|| "temp file")?;
     loaded
         .save(temp.as_mut(), target_format)
         .chain_err(|| "save")?;
@@ -112,7 +114,7 @@ fn store(f: &params::File) -> Result<String> {
         GIF => "gif",
         _ => unreachable!(),
     })?;
-    temp.persist_noclobber(&written_to).chain_err(|| "rename")?;
+    temp.persist(&written_to).chain_err(|| "rename")?;
 
     make_readable(&written_to)?;
 
