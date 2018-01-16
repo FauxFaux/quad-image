@@ -102,8 +102,7 @@ fn store(f: &params::File) -> Result<String> {
             let jpeg_length = temp.metadata().chain_err(|| "temp metadata 2")?.len();
             println!(
                 "png came out too big so we jpeg'd it: {} -> {}",
-                png_length,
-                jpeg_length
+                png_length, jpeg_length
             );
         }
     }
@@ -132,9 +131,7 @@ fn upload(req: &mut Request) -> IronResult<Response> {
     let remote_addr = req.remote_addr;
     let remote_forwarded = req.headers.get_raw("X-Forwarded-For").map(|vecs| {
         vecs.iter()
-            .map(|vec| {
-                String::from_utf8(vec.clone()).expect("valid utf-8 forwarded for")
-            })
+            .map(|vec| String::from_utf8(vec.clone()).expect("valid utf-8 forwarded for"))
             .collect::<Vec<String>>()
     });
 
@@ -156,21 +153,22 @@ fn upload(req: &mut Request) -> IronResult<Response> {
                 if params.contains_key("js-sucks") {
                     Ok(Response::with((status::Ok, code)))
                 } else {
-                    Ok(Response::with(
-                        (status::SeeOther, iron::modifiers::Redirect(dest)),
-                    ))
+                    Ok(Response::with((
+                        status::SeeOther,
+                        iron::modifiers::Redirect(dest),
+                    )))
                 }
             }
         },
         _ => {
             println!(
                 "{:?} {:?}: invalid request, no image attr",
-                remote_addr,
-                remote_forwarded
+                remote_addr, remote_forwarded
             );
-            Ok(Response::with(
-                (status::BadRequest, "'image attr not present'"),
-            ))
+            Ok(Response::with((
+                status::BadRequest,
+                "'image attr not present'",
+            )))
         }
     }
 }
