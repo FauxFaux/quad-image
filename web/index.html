@@ -44,7 +44,7 @@
     }
 
     #form.dragover {
-        box-shadow: inset 0px 0px 10px 0px rgba(0, 0, 0, 0.75);
+        box-shadow: inset 0 0 10px 0 rgba(0, 0, 0, 0.75);
     }
 
     #form.dragover:before {
@@ -204,7 +204,7 @@
         fd.append('image', fileBlob);
         fd.append('js-sucks', true);
 
-        quadPeer.open("POST", "https://quad.pe/api/upload");
+        quadPeer.open("POST", "/api/upload");
 
         quadPeer.onreadystatechange = function () {
 
@@ -247,7 +247,7 @@
         var a = document.createElement("a");
         var img = document.createElement("img");
 
-        a.href = "https://quad.pe/" + url;
+        a.href = url;
         a.target = "_blank";
 
         var copyInput = document.createElement("input");
@@ -262,9 +262,9 @@
         };
         loadingItem.actionButton.onmouseleave = function () {
             this.innerHTML = t;
-        }
+        };
 
-        a.appendChild(img)
+        a.appendChild(img);
         loadingItem.li.appendChild(a);
         loadingItem.li.appendChild(copyInput);
 
@@ -326,7 +326,7 @@
 
     realos.onchange = function () {
         onFiles(this.files);
-    }
+    };
 
     document.documentElement.onpaste = function (e) {
         e.preventDefault();
