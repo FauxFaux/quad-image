@@ -145,8 +145,17 @@
         z-index: 2;
     }
 
+    ul#images li button + button {
+        top: 0;
+        left: 0;
+    }
+
     ul#images li button:hover {
         background: #ddd;
+    }
+
+    ul#images li button + button:hover {
+        background: #d77;
     }
 
     ul#images li input {
@@ -208,8 +217,8 @@
 
         quadPeer.onreadystatechange = function () {
 
-            if (quadPeer.readyState == 4) {
-                if (quadPeer.status == 200) {
+            if (quadPeer.readyState === 4) {
+                if (quadPeer.status === 200) {
                     quadpees.push(quadPeer.responseText);
                     localStorage.setItem("quadpees", JSON.stringify(quadpees));
                     cb(null, quadPeer.responseText);
@@ -218,8 +227,7 @@
                 }
 
             }
-
-        }
+        };
 
         quadPeer.send(fd);
 
@@ -236,9 +244,13 @@
         var actionButton = document.createElement("button");
         li.appendChild(actionButton);
 
+        var binButton = document.createElement("button");
+        li.appendChild(binButton);
+
         return {
             li: li,
-            actionButton: actionButton
+            actionButton: actionButton,
+            binButton: binButton
         };
     }
 
@@ -264,9 +276,30 @@
             this.innerHTML = t;
         };
 
+        loadingItem.binButton.innerHTML = "🗑➡️";
+        loadingItem.binButton.onclick = function (e) {
+            e.preventDefault();
+            var removing = false;
+            Array.prototype.slice.call(images.childNodes).forEach(function(i) {
+                if (url === i.dataset.miniUrl) {
+                    removing = true;
+                }
+                if (removing) {
+                    images.removeChild(i);
+                    var idx = quadpees.indexOf(i.dataset.miniUrl);
+                    if (idx >= 0) {
+                        quadpees.splice(idx, 1);
+                    }
+                }
+            });
+
+            localStorage.setItem("quadpees", JSON.stringify(quadpees));
+        };
+
         a.appendChild(img);
         loadingItem.li.appendChild(a);
         loadingItem.li.appendChild(copyInput);
+        loadingItem.li.dataset.miniUrl = url;
 
         img.onload = function () {
             loadingItem.li.classList.remove("loading");
