@@ -7,9 +7,14 @@ version = "0.1.0"
 error-chain = "0.11"
 image = "0.18"
 iron = "~0.6"
+libc = "0.2"
 params = "~0.8"
 rand = "0"
 router = "~0.6"
-tempfile = "2"
+tempfile-fast = "0.2"
+
+[dev-dependencies]
+tempdir = "0.3"
+
 [profile.release]
 lto = true

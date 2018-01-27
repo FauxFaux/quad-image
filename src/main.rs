@@ -3,10 +3,17 @@ extern crate error_chain;
 
 extern crate image;
 extern crate iron;
+extern crate libc;
 extern crate params;
 extern crate rand;
 extern crate router;
-extern crate tempfile;
+extern crate tempfile_fast;
+
+#[cfg(test)]
+extern crate tempdir;
+
+#[cfg(test)]
+mod tests;
 
 mod errors;
 use errors::*;
@@ -23,30 +30,7 @@ use params::Params;
 
 use rand::Rng;
 
-const C_OPEN_FAILED_ALREADY_EXISTS: i32 = 17;
-
-fn outfile(ext: &str) -> Result<String> {
-    let mut rand = rand::thread_rng();
-    loop {
-        let rand_bit: String = rand.gen_ascii_chars().take(10).collect();
-        let cand = format!("e/{}.{}", rand_bit, ext);
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&cand)
-        {
-            Ok(_) => return Ok(cand),
-            Err(e) => {
-                // TODO: this probably panics on non-Linux(?).
-                // TODO: not a major problem as it's hard to hit anyway.
-                match e.raw_os_error() {
-                    Some(C_OPEN_FAILED_ALREADY_EXISTS) => {}
-                    _ => bail!(format!("couldn't create candidate {}: {:?}", cand, e)),
-                }
-            }
-        }
-    }
-}
+use tempfile_fast::PersistableTempFile;
 
 fn make_readable(path: &str) -> io::Result<()> {
     let mut perms = fs::File::open(path)?.metadata()?.permissions();
@@ -73,9 +57,7 @@ fn store(f: &params::File) -> Result<String> {
         JPEG | WEBP => JPEG,
     };
 
-    let mut temp = tempfile::NamedTempFileOptions::new()
-        .create_in("e")
-        .chain_err(|| "temp file")?;
+    let mut temp = PersistableTempFile::new_in("e").chain_err(|| "temp file")?;
     loaded
         .save(temp.as_mut(), target_format)
         .chain_err(|| "save")?;
@@ -106,18 +88,31 @@ fn store(f: &params::File) -> Result<String> {
             );
         }
     }
-
-    let written_to = outfile(match target_format {
+    let ext = match target_format {
         PNG => "png",
         JPEG => "jpg",
         GIF => "gif",
         _ => unreachable!(),
-    })?;
-    temp.persist(&written_to).chain_err(|| "rename")?;
+    };
 
-    make_readable(&written_to)?;
+    let mut rand = rand::thread_rng();
 
-    Ok(written_to)
+    for _ in 0..32768 {
+        let rand_bit: String = rand.gen_ascii_chars().take(10).collect();
+        let cand = format!("e/{}.{}", rand_bit, ext);
+        temp = match temp.persist_noclobber(&cand) {
+            Ok(_) => {
+                make_readable(&cand)?;
+                return Ok(cand);
+            }
+            Err(e) => match e.error.raw_os_error() {
+                Some(libc::EEXIST) => e.file,
+                _ => bail!(format!("couldn't create candidate {}: {:?}", cand, e)),
+            },
+        }
+    }
+
+    Err("couldn't find a viable file name".into())
 }
 
 fn upload(req: &mut Request) -> IronResult<Response> {

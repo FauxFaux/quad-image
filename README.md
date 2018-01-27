@@ -10,7 +10,8 @@ A very, very simple image hosting API, plus support files.
 
 ### Building
 
-`quad-image` probably only works on Linux. It requires Rust, stable should be fine.
+`quad-image` probably only works on libc/Unix operating systems.
+It requires Rust, stable should be fine.
 
 Build it by running `cargo build --release`, and grabbing the binary from
 `target/release/quad-image`.
