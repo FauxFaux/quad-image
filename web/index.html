@@ -183,13 +183,26 @@
         transform: translateY(0);
     }
 
+    #errors {
+        position: fixed;
+        top: 1em;
+        left: 1em;
+        border: 2px dashed red;
+        background-color: red;
+        font-family: sans-serif;
+        font-weight: bold;
+        padding: 0.2em;
+        color: white;
+    }
 </style>
 <body>
 
 <label for="realos" id="form"></label>
 <input type="file" multiple id="realos">
 <ul id="images"></ul>
-
+<div id="errors">
+    Waiting for Javascript to initialise...
+</div>
 <script>
 
     var storage = localStorage.getItem("quadpees");
@@ -345,31 +358,49 @@
         document.body.classList.add("active-upload");
     }
 
-    function onFiles(items) {
+    function onFiles(items, context) {
+        var keys = Object.keys(items);
 
-        Object.keys(items).filter(function (f) {
-            return items[f].type.match(/image.*/);
-        }).forEach(function (f) {
-            process(items[f]);
-        });
+        if (0 === keys.length) {
+            error("No files, valid or not, were found in your " + context
+                + ". Maybe it wasn't a valid image, or your browser is confused about what it was?");
+        }
+
+        for (var f in keys) {
+            var item = items[f];
+            console.log(item);
+
+            if (item.type.match(/image.*/)) {
+                process(item);
+            } else {
+                error("Ignoring non-image item (of type '" + item.type + "') in " + context + ": " + item.name);
+            }
+        }
 
         form.classList.remove("dragover");
+    }
 
+    function error(msg) {
+        var errors = document.getElementById('errors');
+        errors.style.display = 'block';
+        var span = document.createElement('p');
+        span.innerHTML = msg;
+        errors.insertBefore(span, errors.firstChild);
     }
 
     realos.onchange = function () {
-        onFiles(this.files);
+        onFiles(this.files, "picked files");
     };
 
     document.documentElement.onpaste = function (e) {
         e.preventDefault();
-        onFiles(e.clipboardData.files);
+        onFiles(e.clipboardData.files, "pasted content");
     };
 
     document.documentElement.ondrop = function (e) {
         e.preventDefault();
         form.classList.remove("dragover");
-        onFiles(e.dataTransfer.files);
+        onFiles(e.dataTransfer.files, "dropped objects");
     };
 
     document.documentElement.ondragenter = function (e) {
@@ -387,6 +418,9 @@
         form.classList.remove("dragover");
     };
 
+    var errors = document.getElementById("errors");
+    errors.style.display = 'none';
+    errors.innerHTML = '';
 </script>
 
 
