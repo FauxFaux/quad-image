@@ -37,7 +37,8 @@ fn write_an_image() {
         &["png"],
         fs::read_dir(&e)
             .unwrap()
-            .map(|e| e.unwrap()
+            .map(|e| e
+                .unwrap()
                 .path()
                 .extension()
                 .unwrap()

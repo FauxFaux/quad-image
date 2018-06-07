@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 
 extern crate image;
 extern crate iron;
@@ -15,15 +15,14 @@ extern crate tempdir;
 #[cfg(test)]
 mod tests;
 
-mod errors;
-use errors::*;
-
 use std::fs;
 use std::io;
 use std::io::BufRead;
 use std::io::Seek;
 use std::io::SeekFrom;
 
+use failure::Error;
+use failure::ResultExt;
 use iron::prelude::*;
 use iron::status;
 use params::Params;
@@ -40,15 +39,17 @@ fn make_readable(path: &str) -> io::Result<()> {
     fs::set_permissions(path, perms)
 }
 
-fn store(f: &params::File) -> Result<String> {
+fn store(f: &params::File) -> Result<String, Error> {
     let loaded: image::DynamicImage;
     let guessed_format: image::ImageFormat;
     {
-        let mut file =
-            io::BufReader::new(fs::File::open(&f.path).chain_err(|| "open posted file")?);
-        guessed_format =
-            image::guess_format(file.fill_buf().chain_err(|| "fill")?).chain_err(|| "guess")?;
-        loaded = image::load(file, guessed_format).chain_err(|| "load")?;
+        let mut file = io::BufReader::new(
+            fs::File::open(&f.path).with_context(|_| format_err!("open posted file"))?,
+        );
+        guessed_format = image::guess_format(
+            file.fill_buf().with_context(|_| format_err!("fill"))?,
+        ).with_context(|_| format_err!("guess"))?;
+        loaded = image::load(file, guessed_format).with_context(|_| format_err!("load"))?;
     }
 
     use image::ImageFormat::*;
@@ -57,10 +58,10 @@ fn store(f: &params::File) -> Result<String> {
         JPEG | WEBP => JPEG,
     };
 
-    let mut temp = PersistableTempFile::new_in("e").chain_err(|| "temp file")?;
+    let mut temp = PersistableTempFile::new_in("e").with_context(|_| format_err!("temp file"))?;
     loaded
         .write_to(temp.as_mut(), target_format)
-        .chain_err(|| "save")?;
+        .with_context(|_| format_err!("save"))?;
 
     if target_format == PNG {
         // Chrome seems to convert everything parted to png, even if it's huge.
@@ -68,20 +69,27 @@ fn store(f: &params::File) -> Result<String> {
         // and log about how proud we are of having ruined the internet.
         // Alternatively, we could record whether it was a pasted upload?
 
-        let png_length = temp.metadata().chain_err(|| "temp metadata")?.len();
+        let png_length = temp
+            .metadata()
+            .with_context(|_| format_err!("temp metadata"))?
+            .len();
         if png_length > 1024 * 1024 {
             temp.seek(SeekFrom::Start(0))
-                .chain_err(|| "truncating temp file 2")?;
+                .with_context(|_| format_err!("truncating temp file 2"))?;
 
-            temp.set_len(0).chain_err(|| "truncating temp file")?;
+            temp.set_len(0)
+                .with_context(|_| format_err!("truncating temp file"))?;
 
             target_format = JPEG;
 
             loaded
                 .write_to(temp.as_mut(), target_format)
-                .chain_err(|| "save attempt 2")?;
+                .with_context(|_| format_err!("save attempt 2"))?;
 
-            let jpeg_length = temp.metadata().chain_err(|| "temp metadata 2")?.len();
+            let jpeg_length = temp
+                .metadata()
+                .with_context(|_| format_err!("temp metadata 2"))?
+                .len();
             println!(
                 "png came out too big so we jpeg'd it: {} -> {}",
                 png_length, jpeg_length
@@ -112,7 +120,7 @@ fn store(f: &params::File) -> Result<String> {
         }
     }
 
-    Err("couldn't find a viable file name".into())
+    bail!("couldn't find a viable file name")
 }
 
 fn upload(req: &mut Request) -> IronResult<Response> {
@@ -168,13 +176,11 @@ fn upload(req: &mut Request) -> IronResult<Response> {
     }
 }
 
-quick_main!(run);
-
-fn run() -> Result<()> {
+fn main() -> Result<(), Error> {
     let mut router = router::Router::new();
     router.post("/api/upload", upload, "upload");
     Iron::new(router)
         .http("127.0.0.1:6699")
-        .map_err(|iron| format!("couldn't start server: {:?}", iron))?;
+        .map_err(|iron| format_err!("couldn't start server: {:?}", iron))?;
     Ok(())
 }
