@@ -28,7 +28,6 @@ use iron::status;
 use params::Params;
 use rand::distributions::Alphanumeric;
 use rand::distributions::Distribution;
-use rand::Rng;
 use tempfile_fast::PersistableTempFile;
 
 fn make_readable(path: &str) -> io::Result<()> {
@@ -115,7 +114,7 @@ fn store(f: &params::File) -> Result<String, Error> {
             }
             Err(e) => match e.error.raw_os_error() {
                 Some(libc::EEXIST) => e.file,
-                _ => bail!(format!("couldn't create candidate {}: {:?}", cand, e)),
+                _ => bail!("couldn't create candidate {}: {:?}", cand, e),
             },
         }
     }
