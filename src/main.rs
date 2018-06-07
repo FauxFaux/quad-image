@@ -53,13 +53,13 @@ fn store(f: &params::File) -> Result<String> {
 
     use image::ImageFormat::*;
     let mut target_format = match guessed_format {
-        PNG | PPM | PNM | TIFF | BMP | ICO | HDR | TGA | GIF => PNG,
+        PNG | PNM | TIFF | BMP | ICO | HDR | TGA | GIF => PNG,
         JPEG | WEBP => JPEG,
     };
 
     let mut temp = PersistableTempFile::new_in("e").chain_err(|| "temp file")?;
     loaded
-        .save(temp.as_mut(), target_format)
+        .write_to(temp.as_mut(), target_format)
         .chain_err(|| "save")?;
 
     if target_format == PNG {
@@ -78,7 +78,7 @@ fn store(f: &params::File) -> Result<String> {
             target_format = JPEG;
 
             loaded
-                .save(temp.as_mut(), target_format)
+                .write_to(temp.as_mut(), target_format)
                 .chain_err(|| "save attempt 2")?;
 
             let jpeg_length = temp.metadata().chain_err(|| "temp metadata 2")?.len();
