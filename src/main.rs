@@ -26,9 +26,9 @@ use failure::ResultExt;
 use iron::prelude::*;
 use iron::status;
 use params::Params;
-
+use rand::distributions::Alphanumeric;
+use rand::distributions::Distribution;
 use rand::Rng;
-
 use tempfile_fast::PersistableTempFile;
 
 fn make_readable(path: &str) -> io::Result<()> {
@@ -106,7 +106,7 @@ fn store(f: &params::File) -> Result<String, Error> {
     let mut rand = rand::thread_rng();
 
     for _ in 0..32768 {
-        let rand_bit: String = rand.gen_ascii_chars().take(10).collect();
+        let rand_bit: String = Alphanumeric.sample_iter(&mut rand).take(10).collect();
         let cand = format!("e/{}.{}", rand_bit, ext);
         temp = match temp.persist_noclobber(&cand) {
             Ok(_) => {
