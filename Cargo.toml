@@ -5,13 +5,18 @@ version = "0.1.0"
 
 [dependencies]
 failure = "0.1"
-image = "0.19"
 iron = "~0.6"
 libc = "0.2"
 params = "~0.8"
 rand = "0.5"
 router = "~0.6"
 tempfile-fast = "0.2"
+
+[dependencies.image]
+version = "0.19"
+# features -= "hdr", "dxt", "jpeg_rayon"
+default-features = false
+features = ["gif_codec", "jpeg", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
 
 [dev-dependencies]
 tempdir = "0.3"

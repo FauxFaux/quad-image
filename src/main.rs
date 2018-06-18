@@ -63,7 +63,7 @@ fn store(f: &params::File) -> Result<String, Error> {
         .with_context(|_| format_err!("save"))?;
 
     if target_format == PNG {
-        // Chrome seems to convert everything parted to png, even if it's huge.
+        // Chrome seems to convert everything pasted to png, even if it's huge.
         // So, if we see a png that's too big, down-convert it to a jpg,
         // and log about how proud we are of having ruined the internet.
         // Alternatively, we could record whether it was a pasted upload?
