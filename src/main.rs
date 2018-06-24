@@ -45,9 +45,12 @@ fn store(f: &params::File) -> Result<String, Error> {
         let mut file = io::BufReader::new(
             fs::File::open(&f.path).with_context(|_| format_err!("open posted file"))?,
         );
-        guessed_format = image::guess_format(
-            file.fill_buf().with_context(|_| format_err!("fill"))?,
-        ).with_context(|_| format_err!("guess"))?;
+
+        guessed_format = {
+            let bytes = file.fill_buf().with_context(|_| format_err!("fill"))?;
+            image::guess_format(bytes)
+                .with_context(|_| format_err!("guess from {} bytes: {:?}", bytes.len(), bytes))?
+        };
         loaded = image::load(file, guessed_format).with_context(|_| format_err!("load"))?;
     }
 
