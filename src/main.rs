@@ -23,6 +23,7 @@ use std::io::SeekFrom;
 
 use failure::Error;
 use failure::ResultExt;
+use image::ImageFormat;
 use iron::prelude::*;
 use iron::status;
 use params::Params;
@@ -48,8 +49,19 @@ fn store(f: &params::File) -> Result<String, Error> {
 
         guessed_format = {
             let bytes = file.fill_buf().with_context(|_| format_err!("fill"))?;
-            image::guess_format(bytes)
-                .with_context(|_| format_err!("guess from {} bytes: {:?}", bytes.len(), bytes))?
+            // the crate supports webp, but doesn't seem to detect it:
+            // https://github.com/PistonDevelopers/image/issues/660
+            if bytes.len() >= 4 && b"RIFF"[..] == bytes[..4] {
+                ImageFormat::WEBP
+            } else {
+                image::guess_format(bytes).with_context(|_| {
+                    format_err!(
+                        "guess from {} bytes: {:?}",
+                        bytes.len(),
+                        &bytes[..30.min(bytes.len())]
+                    )
+                })?
+            }
         };
         loaded = image::load(file, guessed_format).with_context(|_| format_err!("load"))?;
     }
