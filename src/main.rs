@@ -16,7 +16,6 @@ mod tests;
 
 use std::fs;
 use std::io;
-use std::io::BufRead;
 use std::io::Seek;
 use std::io::SeekFrom;
 
@@ -44,10 +43,10 @@ fn store(f: &post::BufferedFile) -> Result<String, Error> {
     let loaded: image::DynamicImage;
     let guessed_format: image::ImageFormat;
     {
-        let mut file = io::BufReader::new(io::Cursor::new(&f.data));
+        let file = io::Cursor::new(&f.data);
 
         guessed_format = {
-            let bytes = file.fill_buf().with_context(|_| format_err!("fill"))?;
+            let bytes = file.get_ref();
             // the crate supports webp, but doesn't seem to detect it:
             // https://github.com/PistonDevelopers/image/issues/660
             if bytes.len() >= 4 && b"RIFF"[..] == bytes[..4] {
