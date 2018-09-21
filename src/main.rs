@@ -212,7 +212,7 @@ fn log_error(location: &str, request: &Request, error: Error) -> Response {
     error_object(location).with_status_code(500)
 }
 
-fn gallery_list_all(public: &str) -> Result<String, Error> {
+fn gallery_list_all(public: &str) -> Result<Vec<String>, Error> {
     let conn = gallery_db()?;
 
     let mut stat = conn.prepare(
@@ -220,11 +220,10 @@ fn gallery_list_all(public: &str) -> Result<String, Error> {
 where gallery=? order by added desc",
     )?;
 
-    let mut resp = String::new();
+    let mut resp = Vec::new();
 
     for image in stat.query_map(&[&public], |row| row.get::<usize, String>(0))? {
-        resp.push_str(&image?);
-        resp.push('\n');
+        resp.push(image?);
     }
 
     Ok(resp)
@@ -291,7 +290,7 @@ fn gallery_get(request: &Request, public: &str) -> Response {
     }
 
     match gallery_list_all(public) {
-        Ok(resp) => Response::text(resp),
+        Ok(resp) => Response::json(&json!({"items": resp})),
         Err(e) => log_error("listing gallery", request, e),
     }
 }
