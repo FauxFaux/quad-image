@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::io::Write;
 
-use params;
+use rouille::input::post;
 use tempdir;
 
 use store;
@@ -26,11 +26,10 @@ fn write_an_image() {
         fs::File::create(&input).unwrap().write_all(bytes).unwrap();
     }
 
-    store(&params::File {
-        path: input,
+    store(&post::BufferedFile {
         filename: None,
-        size: bytes.len() as u64,
-        content_type: "image/png".parse().unwrap(),
+        data: bytes.to_vec(),
+        mime: "image/png".to_string(),
     }).unwrap();
 
     assert_eq!(
@@ -43,8 +42,7 @@ fn write_an_image() {
                 .extension()
                 .unwrap()
                 .to_string_lossy()
-                .to_string())
-            .collect::<Vec<String>>()
+                .to_string()).collect::<Vec<String>>()
             .as_slice(),
         "created exactly one png file"
     );

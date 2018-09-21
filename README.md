@@ -30,7 +30,7 @@ There are example config files in `quad-image.nginx` (for nginx) and
 
 ### Safety
 
-HTTP is handled by [Iron](https://crates.io/crates/iron), a mature
+HTTP is handled by [Rouille](https://crates.io/crates/rouille), a simple
 Rust HTTP library. It's expected that you will run the API server
 behind `nginx`, so it doesn't even have to cope with TLS or any HTTP
 weirdness.

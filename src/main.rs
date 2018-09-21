@@ -2,11 +2,10 @@
 extern crate failure;
 
 extern crate image;
-extern crate iron;
 extern crate libc;
-extern crate params;
 extern crate rand;
-extern crate router;
+#[macro_use]
+extern crate rouille;
 extern crate tempfile_fast;
 
 #[cfg(test)]
@@ -24,12 +23,14 @@ use std::io::SeekFrom;
 use failure::Error;
 use failure::ResultExt;
 use image::ImageFormat;
-use iron::prelude::*;
-use iron::status;
-use params::Params;
 use rand::distributions::Alphanumeric;
 use rand::distributions::Distribution;
+use rouille::input::post;
+use rouille::Request;
+use rouille::Response;
 use tempfile_fast::PersistableTempFile;
+
+const BAD_REQUEST: u16 = 400;
 
 fn make_readable(path: &str) -> io::Result<()> {
     let mut perms = fs::File::open(path)?.metadata()?.permissions();
@@ -39,13 +40,11 @@ fn make_readable(path: &str) -> io::Result<()> {
     fs::set_permissions(path, perms)
 }
 
-fn store(f: &params::File) -> Result<String, Error> {
+fn store(f: &post::BufferedFile) -> Result<String, Error> {
     let loaded: image::DynamicImage;
     let guessed_format: image::ImageFormat;
     {
-        let mut file = io::BufReader::new(
-            fs::File::open(&f.path).with_context(|_| format_err!("open posted file"))?,
-        );
+        let mut file = io::BufReader::new(io::Cursor::new(&f.data));
 
         guessed_format = {
             let bytes = file.fill_buf().with_context(|_| format_err!("fill"))?;
@@ -137,64 +136,48 @@ fn store(f: &params::File) -> Result<String, Error> {
     bail!("couldn't find a viable file name")
 }
 
-fn upload(req: &mut Request) -> IronResult<Response> {
-    let host = {
-        match req.headers.get::<iron::headers::Host>() {
-            Some(header) => header.hostname.clone(),
-            None => return Ok(Response::with((status::BadRequest, "'no Host header'"))),
+fn upload(request: &Request) -> Response {
+    let host = match request.header("Host") {
+        Some(host) => host,
+        None => return Response::text("missing host").with_status_code(400),
+    };
+
+    let remote_addr = request.remote_addr();
+    let remote_forwarded = request.header("X-Forwarded-For");
+
+    let params = try_or_400!(post_input!(request, {
+        redirect: Option<bool>,
+        image: Vec<post::BufferedFile>,
+    }));
+
+    let image = match params.image.len() {
+        1 => &params.image[0],
+        _ => return Response::text("exactly one upload required").with_status_code(BAD_REQUEST),
+    };
+
+    match store(image) {
+        Err(e) => {
+            println!("{:?} {:?}: failed: {:?}", remote_addr, remote_forwarded, e);
+            Response::text("internal server error").with_status_code(500)
         }
-    };
-
-    let remote_addr = req.remote_addr;
-    let remote_forwarded = req.headers.get_raw("X-Forwarded-For").map(|vecs| {
-        vecs.iter()
-            .map(|vec| String::from_utf8(vec.clone()).expect("valid utf-8 forwarded for"))
-            .collect::<Vec<String>>()
-    });
-
-    let params = match req.get_ref::<Params>() {
-        Ok(params) => params,
-        Err(_) => return Ok(Response::with((status::BadRequest, "'not a form post'"))),
-    };
-
-    match params.get("image") {
-        Some(&params::Value::File(ref f)) => match store(f) {
-            Err(e) => {
-                println!("{:?} {:?}: failed: {:?}", remote_addr, remote_forwarded, e);
-                Ok(Response::with(status::InternalServerError))
+        Ok(code) => {
+            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, code);
+            if !params.redirect.unwrap_or(true) {
+                Response::text(code)
+            } else {
+                Response::redirect_302(format!("https://{}/{}", host, code))
             }
-            Ok(code) => {
-                println!("{:?} {:?}: {}", remote_addr, remote_forwarded, code);
-                let url = format!("https://{}/{}", host, code);
-                let dest = iron::Url::parse(url.as_str()).expect("url 2");
-                if params.contains_key("js-sucks") {
-                    Ok(Response::with((status::Ok, code)))
-                } else {
-                    Ok(Response::with((
-                        status::SeeOther,
-                        iron::modifiers::Redirect(dest),
-                    )))
-                }
-            }
-        },
-        _ => {
-            println!(
-                "{:?} {:?}: invalid request, no image attr",
-                remote_addr, remote_forwarded
-            );
-            Ok(Response::with((
-                status::BadRequest,
-                "'image attr not present'",
-            )))
         }
     }
 }
 
-fn main() -> Result<(), Error> {
-    let mut router = router::Router::new();
-    router.post("/api/upload", upload, "upload");
-    Iron::new(router)
-        .http("127.0.0.1:6699")
-        .map_err(|iron| format_err!("couldn't start server: {:?}", iron))?;
-    Ok(())
+fn main() {
+    rouille::start_server("127.0.0.1:6699", move |request| {
+        rouille::log(&request, io::stdout(), || {
+            router!(request,
+                (POST) (/api/upload) => { upload(request) },
+                _ => rouille::Response::empty_404()
+            )
+        })
+    });
 }
