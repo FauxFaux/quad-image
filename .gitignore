@@ -4,3 +4,5 @@ images
 .idea
 *.iml
 ?
+.secret
+gallery.db

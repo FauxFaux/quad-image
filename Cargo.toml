@@ -4,10 +4,13 @@ name = "quad-image"
 version = "0.1.0"
 
 [dependencies]
+base64 = "0.9"
 failure = "0.1"
+hmac = "0.6"
 libc = "0.2"
 rand = "0.5"
 rouille = "2.2"
+sha2 = "0.7"
 tempfile-fast = "0.2"
 
 [dependencies.image]
@@ -15,6 +18,10 @@ version = "0.20"
 # features -= "hdr", "dxt", "jpeg_rayon"
 default-features = false
 features = ["gif_codec", "jpeg", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
+
+[dependencies.rusqlite]
+version = "0.14"
+features = ["bundled"]
 
 [dev-dependencies]
 tempdir = "0.3"

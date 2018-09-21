@@ -1,11 +1,14 @@
+extern crate base64;
 #[macro_use]
 extern crate failure;
-
+extern crate hmac;
 extern crate image;
 extern crate libc;
 extern crate rand;
 #[macro_use]
 extern crate rouille;
+extern crate rusqlite;
+extern crate sha2;
 extern crate tempfile_fast;
 
 #[cfg(test)]
@@ -16,14 +19,18 @@ mod tests;
 
 use std::fs;
 use std::io;
+use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
+use std::io::Write;
+use std::path;
 
 use failure::Error;
 use failure::ResultExt;
 use image::ImageFormat;
 use rand::distributions::Alphanumeric;
 use rand::distributions::Distribution;
+use rand::RngCore;
 use rouille::input::post;
 use rouille::Request;
 use rouille::Response;
@@ -174,7 +181,121 @@ fn upload(request: &Request) -> Response {
     }
 }
 
-fn main() {
+fn gallery_list_all(public: &str) -> Result<String, Error> {
+    let conn = gallery_db()?;
+
+    let mut stat = conn.prepare(
+        "select image from gallery_images
+where gallery=? order by added desc",
+    )?;
+
+    let mut resp = String::new();
+
+    for image in stat.query_map(&[&public], |row| row.get::<usize, String>(0))? {
+        resp.push_str(&image?);
+        resp.push('\n');
+    }
+
+    Ok(resp)
+}
+
+fn mac(key: &[u8], val: &[u8]) -> Vec<u8> {
+    use hmac::Mac;
+    let mut mac = hmac::Hmac::<sha2::Sha512Trunc256>::new_varkey(key).expect("varkey");
+    mac.input(val);
+    mac.result().code().to_vec()
+}
+
+fn gallery_store(secret: &[u8], token: &str, private: &str, image: &str) -> Result<String, Error> {
+    let user_details = mac(token.as_bytes(), private.as_bytes());
+    let trigger = mac(secret, &user_details);
+    let public = format!(
+        "{}:{}",
+        token,
+        base64::encode_config(&trigger[..7], base64::URL_SAFE_NO_PAD)
+    );
+
+    gallery_db()?.execute(
+        "insert into gallery_images (gallery, image, added) values (?, ?, current_timestamp)",
+        &[&public, &image],
+    )?;
+
+    Ok(public)
+}
+
+fn not_url_safe(string: &str) -> bool {
+    string
+        .chars()
+        .find(|x| !x.is_ascii_alphanumeric())
+        .is_some()
+}
+
+fn gallery_put(secret: &[u8], request: &Request) -> Response {
+    let params = try_or_400!(post_input!(request, {
+        user: String,
+        pass: String,
+        image: String,
+    }));
+
+    println!("{:?} {:?}", params, params.user);
+
+    if not_url_safe(&params.user) || params.user.is_empty() || params.user.len() > 16 {
+        return Response::text("disallowed user").with_status_code(BAD_REQUEST);
+    }
+    if params.pass.len() < 4 {
+        return Response::text("disallowed pass").with_status_code(BAD_REQUEST);
+    }
+
+    if not_url_safe(&params.image) || params.image.len() != 10 {
+        return Response::text("bad image id").with_status_code(BAD_REQUEST);
+    }
+
+    Response::text(gallery_store(secret, &params.user, &params.pass, &params.image).unwrap())
+}
+
+fn gallery_get(public: &str) -> Response {
+    match gallery_list_all(public) {
+        Ok(resp) => Response::text(resp),
+        Err(e) => {
+            println!("sqlite error: {:?}", e);
+            Response::text("internal server error").with_status_code(500)
+        }
+    }
+}
+
+fn gallery_db() -> Result<rusqlite::Connection, Error> {
+    Ok(rusqlite::Connection::open("gallery.db")?)
+}
+
+fn migrate_gallery() -> Result<(), Error> {
+    let conn = gallery_db()?;
+    conn.execute(
+        "create table if not exists gallery_images (
+gallery char(10) not null,
+image char(10) not null,
+added datetime not null
+)",
+        &[],
+    )?;
+    Ok(())
+}
+
+fn app_secret() -> Result<[u8; 32], Error> {
+    let mut buf = [0u8; 32];
+    let path = path::Path::new(".secret");
+    if path.exists() {
+        fs::File::open(path)?.read_exact(&mut buf)?;
+    } else {
+        rand::thread_rng().fill_bytes(&mut buf);
+        fs::File::create(path)?.write_all(&buf)?;
+    }
+    Ok(buf)
+}
+
+fn main() -> Result<(), Error> {
+    migrate_gallery()?;
+    let secret = app_secret()?;
+
     rouille::start_server("127.0.0.1:6699", move |request| {
         rouille::log(&request, io::stdout(), || {
             if let Some(e) = request.remove_prefix("/e") {
@@ -182,11 +303,17 @@ fn main() {
             }
 
             router!(request,
-                (GET)  (/)           => { static_file("web/index.html")       },
-                (GET)  (/terms/)     => { static_file("web/terms/index.html") },
-                (GET)  (/dumb/)      => { static_file("web/dumb/index.html")  },
-                (POST) (/api/upload) => { upload(request)                     },
-                _                    => { rouille::Response::empty_404()      }
+                (GET)  (/)            => { static_file("web/index.html")       },
+                (GET)  (/terms/)      => { static_file("web/terms/index.html") },
+                (GET)  (/dumb/)       => { static_file("web/dumb/index.html")  },
+                (POST) (/api/upload)  => { upload(request)                     },
+                (PUT)  (/api/gallery) => { gallery_put(&secret, request)       },
+
+                (GET)  (/api/gallery/{public: String}) => {
+                    gallery_get(&public)
+                },
+
+                _ => rouille::Response::empty_404()
             )
         })
     });
