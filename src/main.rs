@@ -237,8 +237,6 @@ fn gallery_put(secret: &[u8], request: &Request) -> Response {
         image: String,
     }));
 
-    println!("{:?} {:?}", params, params.user);
-
     if not_url_safe(&params.user) || params.user.is_empty() || params.user.len() > 16 {
         return Response::text("disallowed user").with_status_code(BAD_REQUEST);
     }
