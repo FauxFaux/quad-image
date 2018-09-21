@@ -237,7 +237,7 @@
 
         var fd = new FormData();
         fd.append('image', fileBlob);
-        fd.append('redirect', false);
+        fd.append('return_json', 'true');
 
         quadPeer.open("POST", "/api/upload");
 
@@ -245,9 +245,11 @@
 
             if (quadPeer.readyState === 4) {
                 if (quadPeer.status === 200) {
-                    quadpees.push(quadPeer.responseText);
+                    var resp = JSON.parse(quadPeer.responseText);
+                    var url = "e/" + resp.id + "." + resp.ext;
+                    quadpees.push(url);
                     localStorage.setItem("quadpees", JSON.stringify(quadpees));
-                    cb(null, quadPeer.responseText);
+                    cb(null, url);
                 } else {
                     cb(quadPeer.responseText || "Error.");
                 }

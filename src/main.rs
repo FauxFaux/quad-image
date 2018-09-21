@@ -8,6 +8,8 @@ extern crate rand;
 #[macro_use]
 extern crate rouille;
 extern crate rusqlite;
+#[macro_use]
+extern crate serde_json;
 extern crate sha2;
 extern crate tempfile_fast;
 
@@ -46,7 +48,12 @@ fn make_readable(path: &str) -> io::Result<()> {
     fs::set_permissions(path, perms)
 }
 
-fn store(f: &post::BufferedFile) -> Result<String, Error> {
+struct SavedImage {
+    id: String,
+    ext: String,
+}
+
+fn store(f: &post::BufferedFile) -> Result<SavedImage, Error> {
     let loaded: image::DynamicImage;
     let guessed_format: image::ImageFormat;
     {
@@ -130,7 +137,10 @@ fn store(f: &post::BufferedFile) -> Result<String, Error> {
         temp = match temp.persist_noclobber(&cand) {
             Ok(_) => {
                 make_readable(&cand)?;
-                return Ok(cand);
+                return Ok(SavedImage {
+                    id: rand_bit,
+                    ext: ext.to_string(),
+                });
             }
             Err(e) => match e.error.raw_os_error() {
                 Some(libc::EEXIST) => e.file,
@@ -143,42 +153,63 @@ fn store(f: &post::BufferedFile) -> Result<String, Error> {
 }
 
 fn upload(request: &Request) -> Response {
-    let remote_addr = request.remote_addr();
-    let remote_forwarded = request.header("X-Forwarded-For");
-
-    let params = try_or_400!(post_input!(request, {
+    let params = match post_input!(request, {
         image: Vec<post::BufferedFile>,
-        redirect: Option<String>,
-    }));
+        return_json: Option<String>,
+    }) {
+        Ok(params) => params,
+        Err(_) => return bad_request("invalid / missing parameters"),
+    };
 
     let image = match params.image.len() {
         1 => &params.image[0],
-        _ => return Response::text("exactly one upload required").with_status_code(BAD_REQUEST),
+        _ => return bad_request("exactly one upload required"),
     };
 
-    let redirect = match params.redirect {
+    let return_json = match params.return_json {
         Some(string) => match string.parse() {
             Ok(val) => val,
-            Err(_) => return Response::text("invalid redirect value").with_status_code(BAD_REQUEST),
+            Err(_) => return bad_request("invalid return_json value"),
         },
-        None => true,
+        None => false,
     };
 
     match store(image) {
-        Err(e) => {
-            println!("{:?} {:?}: failed: {:?}", remote_addr, remote_forwarded, e);
-            Response::text("internal server error").with_status_code(500)
-        }
-        Ok(code) => {
-            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, code);
-            if redirect {
-                // relative to api/upload
-                Response::redirect_303(format!("../{}", code))
+        Ok(img) => {
+            let remote_addr = request.remote_addr();
+            let remote_forwarded = request.header("X-Forwarded-For");
+
+            let filename = format!("e/{}.{}", img.id, img.ext);
+            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, filename);
+
+            if return_json {
+                Response::json(&json!({ "id": img.id, "ext": img.ext }))
             } else {
-                Response::text(code)
+                // relative to api/upload
+                Response::redirect_303(format!("../{}", filename))
             }
         }
+        Err(e) => log_error("storing image", request, e),
     }
+}
+
+fn error_object(message: &str) -> Response {
+    Response::json(&json!({ "error": message }))
+}
+
+fn bad_request(message: &str) -> Response {
+    error_object(message).with_status_code(BAD_REQUEST)
+}
+
+fn log_error(location: &str, request: &Request, error: Error) -> Response {
+    let remote_addr = request.remote_addr();
+    let remote_forwarded = request.header("X-Forwarded-For");
+
+    println!(
+        "{:?} {:?}: failed: {}: {:?}",
+        remote_addr, remote_forwarded, location, error
+    );
+    error_object(location).with_status_code(500)
 }
 
 fn gallery_list_all(public: &str) -> Result<String, Error> {
@@ -238,26 +269,30 @@ fn gallery_put(secret: &[u8], request: &Request) -> Response {
     }));
 
     if not_url_safe(&params.user) || params.user.is_empty() || params.user.len() > 16 {
-        return Response::text("disallowed user").with_status_code(BAD_REQUEST);
+        return bad_request("disallowed user");
     }
     if params.pass.len() < 4 {
-        return Response::text("disallowed pass").with_status_code(BAD_REQUEST);
+        return bad_request("disallowed pass");
     }
 
     if not_url_safe(&params.image) || params.image.len() != 10 {
-        return Response::text("bad image id").with_status_code(BAD_REQUEST);
+        return bad_request("bad image id");
     }
 
-    Response::text(gallery_store(secret, &params.user, &params.pass, &params.image).unwrap())
+    match gallery_store(secret, &params.user, &params.pass, &params.image) {
+        Ok(public) => Response::json(&json!({ "gallery": public })),
+        Err(e) => log_error("saving gallery item", request, e),
+    }
 }
 
-fn gallery_get(public: &str) -> Response {
+fn gallery_get(request: &Request, public: &str) -> Response {
+    if public.len() > 32 || public.find(|c: char| !c.is_ascii_graphic()).is_some() {
+        return bad_request("invalid gallery id");
+    }
+
     match gallery_list_all(public) {
         Ok(resp) => Response::text(resp),
-        Err(e) => {
-            println!("sqlite error: {:?}", e);
-            Response::text("internal server error").with_status_code(500)
-        }
+        Err(e) => log_error("listing gallery", request, e),
     }
 }
 
@@ -308,7 +343,7 @@ fn main() -> Result<(), Error> {
                 (PUT)  (/api/gallery) => { gallery_put(&secret, request)       },
 
                 (GET)  (/api/gallery/{public: String}) => {
-                    gallery_get(&public)
+                    gallery_get(request, &public)
                 },
 
                 _ => rouille::Response::empty_404()
