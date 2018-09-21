@@ -137,22 +137,25 @@ fn store(f: &post::BufferedFile) -> Result<String, Error> {
 }
 
 fn upload(request: &Request) -> Response {
-    let host = match request.header("Host") {
-        Some(host) => host,
-        None => return Response::text("missing host").with_status_code(400),
-    };
-
     let remote_addr = request.remote_addr();
     let remote_forwarded = request.header("X-Forwarded-For");
 
     let params = try_or_400!(post_input!(request, {
-        redirect: Option<bool>,
         image: Vec<post::BufferedFile>,
+        redirect: Option<String>,
     }));
 
     let image = match params.image.len() {
         1 => &params.image[0],
         _ => return Response::text("exactly one upload required").with_status_code(BAD_REQUEST),
+    };
+
+    let redirect = match params.redirect {
+        Some(string) => match string.parse() {
+            Ok(val) => val,
+            Err(_) => return Response::text("invalid redirect value").with_status_code(BAD_REQUEST),
+        },
+        None => true,
     };
 
     match store(image) {
@@ -162,10 +165,11 @@ fn upload(request: &Request) -> Response {
         }
         Ok(code) => {
             println!("{:?} {:?}: {}", remote_addr, remote_forwarded, code);
-            if !params.redirect.unwrap_or(true) {
-                Response::text(code)
+            if redirect {
+                // relative to api/upload
+                Response::redirect_303(format!("../{}", code))
             } else {
-                Response::redirect_302(format!("https://{}/{}", host, code))
+                Response::text(code)
             }
         }
     }
@@ -174,10 +178,21 @@ fn upload(request: &Request) -> Response {
 fn main() {
     rouille::start_server("127.0.0.1:6699", move |request| {
         rouille::log(&request, io::stdout(), || {
+            if let Some(e) = request.remove_prefix("/e") {
+                return rouille::match_assets(&e, "e");
+            }
+
             router!(request,
+                (GET)  (/)           => { static_file("web/index.html") },
+                (GET)  (/terms/)     => { static_file("web/terms/index.html") },
+                (GET)  (/dumb/)      => { static_file("web/dumb/index.html") },
                 (POST) (/api/upload) => { upload(request) },
                 _ => rouille::Response::empty_404()
             )
         })
     });
+}
+
+fn static_file(path: &'static str) -> Response {
+    Response::from_file("text/html", fs::File::open(path).expect("static"))
 }

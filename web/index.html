@@ -237,7 +237,7 @@
 
         var fd = new FormData();
         fd.append('image', fileBlob);
-        fd.append('js-sucks', true);
+        fd.append('redirect', false);
 
         quadPeer.open("POST", "/api/upload");
 
