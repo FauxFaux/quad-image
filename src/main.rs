@@ -183,11 +183,11 @@ fn main() {
             }
 
             router!(request,
-                (GET)  (/)           => { static_file("web/index.html") },
+                (GET)  (/)           => { static_file("web/index.html")       },
                 (GET)  (/terms/)     => { static_file("web/terms/index.html") },
-                (GET)  (/dumb/)      => { static_file("web/dumb/index.html") },
-                (POST) (/api/upload) => { upload(request) },
-                _ => rouille::Response::empty_404()
+                (GET)  (/dumb/)      => { static_file("web/dumb/index.html")  },
+                (POST) (/api/upload) => { upload(request)                     },
+                _                    => { rouille::Response::empty_404()      }
             )
         })
     });
