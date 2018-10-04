@@ -23,6 +23,8 @@
             max-height: 80vh;
         }
     </style>
+    <script src="../jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+    <script src="gallery.js"></script>
 </head>
 <body>
 <div id="content"/>
@@ -30,91 +32,7 @@
 <div id="gallery">Loading...</div>
 
 <script>
-    function load() {
-        var body = document.getElementById('gallery');
-        var hash = window.location.hash;
-        if (!hash || hash[0] !== '#') {
-            body.innerText = 'Invalid gallery id';
-            return;
-        }
-
-        var parts = hash.split('#');
-
-        var gallery = parts[1];
-        var after;
-
-        if (parts.length > 1) {
-            after = parts[2];
-        } else {
-            after = '';
-        }
-
-        var req = new XMLHttpRequest();
-        req.onload = function() {
-            var resp = JSON.parse(this.response);
-            if ('errors' in resp) {
-                body.innerText = this.response;
-                return;
-            }
-
-            if (!('data' in resp)) {
-                body.innerText = this.response;
-            }
-
-            body.innerText = '';
-            var ids = [];
-
-            for (var i = 0; i < resp.data.length; ++i) {
-                var img = resp.data[i];
-
-                if ('image' !== img.type) {
-                    body.innerText = 'Invalid object in response';
-                    return;
-                }
-
-                ids.push(img.id);
-            }
-
-            var start = 0;
-            if (after) {
-                var afterIdx = ids.indexOf(after);
-                if (-1 !== after) {
-                    start = afterIdx + 1;
-                }
-            }
-
-            ids = ids.slice(start);
-            var more = ids.length > 10;
-            ids = ids.slice(0, Math.min(10, ids.length));
-
-            for (var idx in ids) {
-                var id = ids[idx];
-                var tag = document.createElement('img');
-                tag.src = '../' + id;
-                body.appendChild(tag);
-                body.appendChild(document.createElement('hr'));
-            }
-
-            if (ids.length && more) {
-                var last = ids[ids.length - 1];
-                var next = document.createElement('a');
-                next.href = '#' + gallery + '#' + last;
-                next.innerText = 'Next page';
-                body.appendChild(next);
-            }
-        };
-
-        req.onerror = function() {
-            body.innerText = 'network error fetching gallery';
-        };
-
-        req.open('GET', '../api/gallery/' + gallery);
-        req.send();
-    }
-
-    load();
-
-    window.onhashchange = load;
+    load(document.getElementById('gallery'));
 </script>
 </body>
 </html>
