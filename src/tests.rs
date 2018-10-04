@@ -30,7 +30,8 @@ fn write_an_image() {
         filename: None,
         data: bytes.to_vec(),
         mime: "image/png".to_string(),
-    }).unwrap();
+    })
+    .unwrap();
 
     assert_eq!(
         &["png"],
@@ -42,7 +43,8 @@ fn write_an_image() {
                 .extension()
                 .unwrap()
                 .to_string_lossy()
-                .to_string()).collect::<Vec<String>>()
+                .to_string())
+            .collect::<Vec<String>>()
             .as_slice(),
         "created exactly one png file"
     );

@@ -290,7 +290,7 @@ fn gallery_get(request: &Request, public: &str) -> Response {
     }
 
     match gallery_list_all(public) {
-        Ok(resp) => Response::json(&json!({"items": resp})),
+        Ok(resp) => Response::json(&json!({ "items": resp })),
         Err(e) => log_error("listing gallery", request, e),
     }
 }
