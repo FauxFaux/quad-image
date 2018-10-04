@@ -71,7 +71,7 @@ fn upload(request: &Request) -> Response {
                 Response::redirect_303(format!("../{}", img))
             }
         }
-        Err(e) => log_error("storing image", request, e),
+        Err(e) => log_error("storing image", request, &e),
     }
 }
 
@@ -83,7 +83,7 @@ fn bad_request(message: &str) -> Response {
     error_object(message).with_status_code(BAD_REQUEST)
 }
 
-fn log_error(location: &str, request: &Request, error: Error) -> Response {
+fn log_error(location: &str, request: &Request, error: &Error) -> Response {
     let remote_addr = request.remote_addr();
     let remote_forwarded = request.header("X-Forwarded-For");
 
@@ -95,10 +95,7 @@ fn log_error(location: &str, request: &Request, error: Error) -> Response {
 }
 
 fn not_url_safe(string: &str) -> bool {
-    string
-        .chars()
-        .find(|x| !x.is_ascii_alphanumeric())
-        .is_some()
+    string.chars().any(|x| !x.is_ascii_alphanumeric())
 }
 
 fn gallery_put(secret: &[u8], request: &Request) -> Response {
@@ -121,7 +118,7 @@ fn gallery_put(secret: &[u8], request: &Request) -> Response {
 
     match gallery::gallery_store(secret, &params.user, &params.pass, &params.image) {
         Ok(public) => Response::json(&json!({ "gallery": public })),
-        Err(e) => log_error("saving gallery item", request, e),
+        Err(e) => log_error("saving gallery item", request, &e),
     }
 }
 
@@ -132,7 +129,7 @@ fn gallery_get(request: &Request, public: &str) -> Response {
 
     match gallery::gallery_list_all(public) {
         Ok(resp) => Response::json(&json!({ "items": resp })),
-        Err(e) => log_error("listing gallery", request, e),
+        Err(e) => log_error("listing gallery", request, &e),
     }
 }
 
