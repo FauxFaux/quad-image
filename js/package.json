@@ -1,0 +1,20 @@
+{
+  "name": "quad-image",
+  "devDependencies": {
+    "@babel/cli": "^7.1.2",
+    "@babel/core": "^7.1.2",
+    "@babel/preset-env": "^7.1.0",
+    "babel-preset-minify": "^0.5.0",
+    "rollup": "^0.66.4",
+    "rollup-plugin-commonjs": "^9.1.8",
+    "rollup-plugin-node-resolve": "^3.4.0"
+  },
+  "browserslist": [
+    "defaults",
+    "not dead"
+  ],
+  "dependencies": {
+    "filesize": "^3.6.1",
+    "jquery": "^3.3.1"
+  }
+}
