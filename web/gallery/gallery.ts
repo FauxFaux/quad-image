@@ -18,7 +18,6 @@ function load(body: HTMLElement) {
         .done((data) => fetch_complete(body, data, gallery, after))
         .catch(() => {
             body.innerText = "network error fetching gallery";
-
         });
 }
 
@@ -30,6 +29,7 @@ function fetch_complete(body: HTMLElement, resp: JSONAPI.Document, gallery: stri
 
     if (!("data" in resp) || !Array.isArray(resp.data)) {
         body.innerText = JSON.stringify(resp);
+        return;
     }
 
     // TYPE CHECKER

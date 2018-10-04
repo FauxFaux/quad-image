@@ -23,6 +23,7 @@ function fetch_complete(body, resp, gallery, after) {
     }
     if (!("data" in resp) || !Array.isArray(resp.data)) {
         body.innerText = JSON.stringify(resp);
+        return;
     }
     // TYPE CHECKER
     var withData = resp;
