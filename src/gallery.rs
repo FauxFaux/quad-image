@@ -10,9 +10,14 @@ pub fn migrate_gallery() -> Result<(), Error> {
     conn.execute(
         "create table if not exists gallery_images (
 gallery char(10) not null,
-image char(10) not null,
+image char(15) not null,
 added datetime not null
 )",
+        &[],
+    )?;
+    conn.execute(
+        "create unique index if not exists gal_img
+on gallery_images (gallery, image)",
         &[],
     )?;
     Ok(())
@@ -35,12 +40,17 @@ where gallery=? order by added desc",
     Ok(resp)
 }
 
+pub enum StoreResult {
+    Ok(String),
+    Duplicate,
+}
+
 pub fn gallery_store(
     secret: &[u8],
     token: &str,
     private: &str,
     image: &str,
-) -> Result<String, Error> {
+) -> Result<StoreResult, Error> {
     let user_details = mac(token.as_bytes(), private.as_bytes());
     let trigger = mac(secret, &user_details);
     let public = format!(
@@ -49,12 +59,18 @@ pub fn gallery_store(
         base64::encode_config(&trigger[..7], base64::URL_SAFE_NO_PAD)
     );
 
-    gallery_db()?.execute(
+    Ok(match gallery_db()?.execute(
         "insert into gallery_images (gallery, image, added) values (?, ?, current_timestamp)",
         &[&public, &image],
-    )?;
-
-    Ok(public)
+    ) {
+        Ok(_) => StoreResult::Ok(public),
+        Err(rusqlite::Error::SqliteFailure(ffi, _))
+            if rusqlite::ErrorCode::ConstraintViolation == ffi.code =>
+        {
+            StoreResult::Duplicate
+        }
+        Err(e) => bail!(e),
+    })
 }
 
 fn mac(key: &[u8], val: &[u8]) -> Vec<u8> {

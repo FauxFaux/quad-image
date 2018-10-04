@@ -164,7 +164,8 @@ fn gallery_put(secret: &[u8], request: &Request) -> Response {
     }
 
     match gallery::gallery_store(secret, &params.user, &params.pass, &params.image) {
-        Ok(public) => data_response(resource_object(public, "gallery")),
+        Ok(gallery::StoreResult::Ok(public)) => data_response(resource_object(public, "gallery")),
+        Ok(gallery::StoreResult::Duplicate) => error_object("duplicate image for gallery"),
         Err(e) => log_error("saving gallery item", request, &e),
     }
 }
