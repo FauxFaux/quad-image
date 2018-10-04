@@ -48,10 +48,7 @@ fn make_readable(path: &str) -> io::Result<()> {
     fs::set_permissions(path, perms)
 }
 
-struct SavedImage {
-    id: String,
-    ext: String,
-}
+type SavedImage = String;
 
 fn store(f: &post::BufferedFile) -> Result<SavedImage, Error> {
     let loaded: image::DynamicImage;
@@ -137,10 +134,7 @@ fn store(f: &post::BufferedFile) -> Result<SavedImage, Error> {
         temp = match temp.persist_noclobber(&cand) {
             Ok(_) => {
                 make_readable(&cand)?;
-                return Ok(SavedImage {
-                    id: rand_bit,
-                    ext: ext.to_string(),
-                });
+                return Ok(cand);
             }
             Err(e) => match e.error.raw_os_error() {
                 Some(libc::EEXIST) => e.file,
@@ -179,14 +173,13 @@ fn upload(request: &Request) -> Response {
             let remote_addr = request.remote_addr();
             let remote_forwarded = request.header("X-Forwarded-For");
 
-            let filename = format!("e/{}.{}", img.id, img.ext);
-            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, filename);
+            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, img);
 
             if return_json {
-                Response::json(&json!({ "id": img.id, "ext": img.ext }))
+                Response::json(&json!({ "id": img }))
             } else {
                 // relative to api/upload
-                Response::redirect_303(format!("../{}", filename))
+                Response::redirect_303(format!("../{}", img))
             }
         }
         Err(e) => log_error("storing image", request, e),
