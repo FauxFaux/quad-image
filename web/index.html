@@ -246,7 +246,7 @@
             if (quadPeer.readyState === 4) {
                 if (quadPeer.status === 200) {
                     var resp = JSON.parse(quadPeer.responseText);
-                    var url = "e/" + resp.id + "." + resp.ext;
+                    var url = resp.data.id;
                     quadpees.push(url);
                     localStorage.setItem("quadpees", JSON.stringify(quadpees));
                     cb(null, url);
