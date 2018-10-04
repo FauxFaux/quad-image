@@ -5,7 +5,10 @@ use std::io::SeekFrom;
 
 use failure::Error;
 use failure::ResultExt;
+use image;
 use image::ImageFormat;
+use libc;
+use rand;
 use rand::distributions::Alphanumeric;
 use rand::distributions::Distribution;
 use tempfile_fast::PersistableTempFile;

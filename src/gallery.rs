@@ -1,5 +1,9 @@
+use base64;
 use failure::Error;
+use hmac;
+use rusqlite;
 use rusqlite::Connection;
+use sha2;
 
 fn gallery_db() -> Result<Connection, Error> {
     Ok(Connection::open("gallery.db")?)
