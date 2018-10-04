@@ -1,9 +1,5 @@
-
-out.js: node_modules bundle.js
-	NODE_ENV=production node_modules/.bin/babel bundle.js > out.js
-
-bundle.js: node_modules a.js
-	node_modules/.bin/rollup --config
+%.js: node_modules %.ts
+	node_modules/.bin/tsc $*.ts
 
 node_modules: package.json
 	npm install
