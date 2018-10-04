@@ -3,8 +3,11 @@ extern crate base64;
 extern crate failure;
 extern crate hmac;
 extern crate image;
+#[macro_use]
+extern crate lazy_static;
 extern crate libc;
 extern crate rand;
+extern crate regex;
 #[macro_use]
 extern crate rouille;
 extern crate rusqlite;
@@ -34,6 +37,11 @@ use rouille::Request;
 use rouille::Response;
 
 const BAD_REQUEST: u16 = 400;
+
+lazy_static! {
+    static ref IMAGE_ID: regex::Regex =
+        regex::Regex::new("e/[a-zA-Z0-9]{10}\\.(?:png|jpg)").unwrap();
+}
 
 fn upload(request: &Request) -> Response {
     let params = match post_input!(request, {
@@ -65,7 +73,7 @@ fn upload(request: &Request) -> Response {
             println!("{:?} {:?}: {}", remote_addr, remote_forwarded, img);
 
             if return_json {
-                Response::json(&json!({ "id": img }))
+                data_response(resource_object(img, "image"))
             } else {
                 // relative to api/upload
                 Response::redirect_303(format!("../{}", img))
@@ -75,8 +83,46 @@ fn upload(request: &Request) -> Response {
     }
 }
 
+/// http://jsonapi.org/format/#errors
 fn error_object(message: &str) -> Response {
-    Response::json(&json!({ "error": message }))
+    Response::json(&json!({ "errors": [
+        { "title": message }
+    ] }))
+}
+
+fn json_api_validate_obj(obj: &serde_json::Map<String, serde_json::Value>) {
+    assert!(obj.contains_key("id"), "id is mandatory in {:?}", obj);
+    assert!(obj.contains_key("type"), "type is mandatory in {:?}", obj);
+}
+
+/// panic if something isn't valid json-api.
+/// panic is fine because the structure should be static in code
+/// could be only tested at debug time..
+fn json_api_validate(obj: &serde_json::Value) {
+    if let Some(obj) = obj.as_object() {
+        json_api_validate_obj(obj)
+    } else if let Some(list) = obj.as_array() {
+        for obj in list {
+            if let Some(obj) = obj.as_object() {
+                json_api_validate_obj(obj)
+            } else {
+                panic!("array item must be obj, not {:?}", obj);
+            }
+        }
+    } else {
+        panic!("data response contents must be obj, not {:?}", obj);
+    }
+}
+
+/// http://jsonapi.org/format/#document-top-level
+fn data_response(inner: serde_json::Value) -> Response {
+    json_api_validate(&inner);
+    Response::json(&json!({ "data": inner }))
+}
+
+/// http://jsonapi.org/format/#document-resource-objects
+fn resource_object<I: AsRef<str>>(id: I, type_: &'static str) -> serde_json::Value {
+    json!({ "id": id.as_ref(), "type": type_ })
 }
 
 fn bad_request(message: &str) -> Response {
@@ -108,16 +154,17 @@ fn gallery_put(secret: &[u8], request: &Request) -> Response {
     if not_url_safe(&params.user) || params.user.is_empty() || params.user.len() > 16 {
         return bad_request("disallowed user");
     }
+
     if params.pass.len() < 4 {
         return bad_request("disallowed pass");
     }
 
-    if not_url_safe(&params.image) || params.image.len() != 10 {
+    if !IMAGE_ID.is_match(&params.image) {
         return bad_request("bad image id");
     }
 
     match gallery::gallery_store(secret, &params.user, &params.pass, &params.image) {
-        Ok(public) => Response::json(&json!({ "gallery": public })),
+        Ok(public) => data_response(resource_object(public, "gallery")),
         Err(e) => log_error("saving gallery item", request, &e),
     }
 }
@@ -128,7 +175,13 @@ fn gallery_get(request: &Request, public: &str) -> Response {
     }
 
     match gallery::gallery_list_all(public) {
-        Ok(resp) => Response::json(&json!({ "items": resp })),
+        Ok(resp) => {
+            let values: Vec<_> = resp
+                .into_iter()
+                .map(|id| json!({"id": id, "type": "image"}))
+                .collect();
+            data_response(json!(values))
+        }
         Err(e) => log_error("listing gallery", request, &e),
     }
 }

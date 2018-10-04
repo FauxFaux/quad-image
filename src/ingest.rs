@@ -92,7 +92,6 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
     let ext = match target_format {
         PNG => "png",
         JPEG => "jpg",
-        GIF => "gif",
         _ => unreachable!(),
     };
 
