@@ -1,11 +1,86 @@
 <!doctype html>
 <html>
 <meta charset="utf-8">
-<head><title>Simple upload</title></head>
+<head><title>Simple upload</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+
+        input[type=file], input[type=text], input[type=password] {
+            width: 100%;
+            padding: 0.4em 0.6em;
+            margin: 0.3em 0;
+            display: inline-block;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        input[type=submit] {
+            width: 100%;
+            padding: 0.4em 0.6em;
+            margin: 0.3em 0;
+        }
+    </style>
+</head>
 <body>
+<h2>Upload file</h2>
 <form method="post" action="/api/upload" enctype="multipart/form-data">
     <input type="file" name="image"/>
     <input type="submit"/>
 </form>
+
+<h2>Add file to gallery</h2>
+<form onsubmit="return add_to_gallery(this)">
+    <label>Gallery name:
+        <input type="text" name="gallery" required/>
+    </label>
+    <label>Gallery key:
+        <input type="password" name="key" required/>
+    </label>
+    <label>Image name:
+        <input type="text" name="image" required placeholder="e/1234567890.jpg"/>
+    </label>
+    <input type="submit"/>
+</form>
+
+<div id="gallery-result"></div>
+
+<script>
+    function add_to_gallery(form) {
+        var req = new XMLHttpRequest();
+        var target = document.getElementById('gallery-result');
+        target.innerText = "Submitting...";
+        req.onload = function() {
+            target.innerText = '';
+            var resp = JSON.parse(this.response);
+            if ('errors' in resp) {
+                for (err of resp.errors) {
+                    target.innerText += 'Server error: ' + err.title + '\n';
+                }
+            } else if ('data' in resp) {
+                if ('gallery' !== resp.data.type) {
+                    target.innerText = "invalid response type";
+                } else {
+                    target.innerText = 'Added to gallery: ';
+                    var a = document.createElement('a');
+                    a.href = '/gallery/#' + resp.data.id;
+                    a.innerText = resp.data.id;
+                    target.appendChild(a);
+                }
+            } else {
+                target.innerText = 'invalid response object';
+            }
+        };
+        req.onerror = function() {
+            target.innerText = 'network error';
+        };
+        req.open('PUT', '/api/gallery');
+        req.send(new FormData(form));
+
+        return false;
+    }
+</script>
 </body>
 </html>

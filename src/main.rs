@@ -146,24 +146,24 @@ fn not_url_safe(string: &str) -> bool {
 
 fn gallery_put(secret: &[u8], request: &Request) -> Response {
     let params = try_or_400!(post_input!(request, {
-        user: String,
-        pass: String,
+        gallery: String,
+        key: String,
         image: String,
     }));
 
-    if not_url_safe(&params.user) || params.user.is_empty() || params.user.len() > 16 {
-        return bad_request("disallowed user");
+    if not_url_safe(&params.gallery) || params.gallery.is_empty() || params.gallery.len() > 16 {
+        return bad_request("disallowed gallery");
     }
 
-    if params.pass.len() < 4 {
-        return bad_request("disallowed pass");
+    if params.key.len() < 4 {
+        return bad_request("disallowed key");
     }
 
     if !IMAGE_ID.is_match(&params.image) {
         return bad_request("bad image id");
     }
 
-    match gallery::gallery_store(secret, &params.user, &params.pass, &params.image) {
+    match gallery::gallery_store(secret, &params.gallery, &params.key, &params.image) {
         Ok(gallery::StoreResult::Ok(public)) => data_response(resource_object(public, "gallery")),
         Ok(gallery::StoreResult::Duplicate) => error_object("duplicate image for gallery"),
         Err(e) => log_error("saving gallery item", request, &e),
@@ -210,11 +210,12 @@ fn main() -> Result<(), Error> {
             }
 
             router!(request,
-                (GET)  (/)            => { static_file("web/index.html")       },
-                (GET)  (/terms/)      => { static_file("web/terms/index.html") },
-                (GET)  (/dumb/)       => { static_file("web/dumb/index.html")  },
-                (POST) (/api/upload)  => { upload(request)                     },
-                (PUT)  (/api/gallery) => { gallery_put(&secret, request)       },
+                (GET)  (/)            => { static_file("web/index.html")         },
+                (GET)  (/terms/)      => { static_file("web/terms/index.html")   },
+                (GET)  (/dumb/)       => { static_file("web/dumb/index.html")    },
+                (GET)  (/gallery/)    => { static_file("web/gallery/index.html") },
+                (POST) (/api/upload)  => { upload(request)                       },
+                (PUT)  (/api/gallery) => { gallery_put(&secret, request)         },
 
                 (GET)  (/api/gallery/{public: String}) => {
                     gallery_get(request, &public)
