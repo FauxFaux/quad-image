@@ -1,11 +1,9 @@
 use std::env;
 use std::fs;
-use std::io::Write;
 
-use rouille::input::post;
 use tempdir;
 
-use store;
+use ingest::store;
 
 #[test]
 fn write_an_image() {
@@ -22,16 +20,7 @@ fn write_an_image() {
 
     let bytes = include_bytes!("test.png");
 
-    {
-        fs::File::create(&input).unwrap().write_all(bytes).unwrap();
-    }
-
-    store(&post::BufferedFile {
-        filename: None,
-        data: bytes.to_vec(),
-        mime: "image/png".to_string(),
-    })
-    .unwrap();
+    store(bytes).unwrap();
 
     assert_eq!(
         &["png"],
