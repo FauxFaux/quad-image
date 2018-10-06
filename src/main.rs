@@ -40,7 +40,7 @@ const BAD_REQUEST: u16 = 400;
 
 lazy_static! {
     static ref IMAGE_ID: regex::Regex =
-        regex::Regex::new("e/[a-zA-Z0-9]{10}\\.(?:png|jpg)").unwrap();
+        regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg)$").unwrap();
 }
 
 fn upload(request: &Request) -> Response {
@@ -168,6 +168,13 @@ fn gallery_put(secret: &[u8], request: &Request) -> Response {
         Ok(gallery::StoreResult::Duplicate) => error_object("duplicate image for gallery"),
         Err(e) => log_error("saving gallery item", request, &e),
     }
+}
+
+#[test]
+fn validate_image_id() {
+    assert!(IMAGE_ID.is_match("e/abcdefghij.png"));
+    assert!(!IMAGE_ID.is_match(" e/abcdefghij.png"));
+    assert!(!IMAGE_ID.is_match("e/abcdefghi.png"));
 }
 
 fn gallery_get(request: &Request, public: &str) -> Response {
