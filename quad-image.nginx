@@ -1,7 +1,7 @@
 # Example config *fragment* for quad-image. This must be placed in a server block.
 
 # commitment to self-hosting:
-add_header Content-Security-Policy "default-src 'none';" always;
+add_header Content-Security-Policy "default-src 'unsafe-inline' 'self';" always;
 
 # standard promise to act like a normal modern webapp:
 add_header Referrer-Policy "no-referrer-when-downgrade" always;
