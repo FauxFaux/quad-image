@@ -23,7 +23,7 @@ default-features = false
 features = ["gif_codec", "jpeg", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
 
 [dependencies.rusqlite]
-version = "0.14"
+version = "0.15"
 features = ["bundled"]
 
 [dev-dependencies]
