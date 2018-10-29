@@ -17,12 +17,12 @@ gallery char(10) not null,
 image char(15) not null,
 added datetime not null
 )",
-        &[],
+        rusqlite::NO_PARAMS,
     )?;
     conn.execute(
         "create unique index if not exists gal_img
 on gallery_images (gallery, image)",
-        &[],
+        rusqlite::NO_PARAMS,
     )?;
     Ok(())
 }
@@ -65,7 +65,7 @@ pub fn gallery_store(
 
     Ok(match gallery_db()?.execute(
         "insert into gallery_images (gallery, image, added) values (?, ?, current_timestamp)",
-        &[&public, &image],
+        &[&public.as_ref(), &image],
     ) {
         Ok(_) => StoreResult::Ok(public),
         Err(rusqlite::Error::SqliteFailure(ffi, _))
