@@ -1,7 +1,9 @@
 use base64;
+use cast::i64;
 use failure::Error;
 use hmac;
 use rusqlite;
+use rusqlite::types::ToSql;
 use rusqlite::Connection;
 use sha2;
 
@@ -44,39 +46,39 @@ where gallery=? order by added desc",
     Ok(resp)
 }
 
-pub enum StoreResult {
-    Ok(String),
-    Duplicate,
-}
-
 pub fn gallery_store(
-    secret: &[u8],
-    token: &str,
+    global_secret: &[u8],
+    gallery: &str,
     private: &str,
-    image: &str,
-) -> Result<StoreResult, Error> {
-    let user_details = mac(token.as_bytes(), private.as_bytes());
-    let trigger = mac(secret, &user_details);
+    images: &[&str],
+) -> Result<String, Error> {
+    let user_details = mac(gallery.as_bytes(), private.as_bytes());
+    let masked = mac(global_secret, &user_details);
     let public = format!(
         "{}:{}",
-        token,
-        base64::encode_config(&trigger[..7], base64::URL_SAFE_NO_PAD)
+        gallery,
+        base64::encode_config(&masked[..7], base64::URL_SAFE_NO_PAD)
     );
 
-    Ok(
-        match gallery_db()?.execute(
-            "insert into gallery_images (gallery, image, added) values (?, ?, current_timestamp)",
-            &[&public.as_ref(), &image],
-        ) {
-            Ok(_) => StoreResult::Ok(public),
+    let db = gallery_db()?;
+    let mut stat =
+        db.prepare("insert into gallery_images (gallery, image, added) values (?, ?, ?)")?;
+
+    let mut timestamp = epoch_millis();
+
+    for image in images {
+        match stat.execute(&[&public.as_str() as &ToSql, &image, &timestamp]) {
+            Ok(_) => timestamp += 1,
             Err(rusqlite::Error::SqliteFailure(ffi, _))
                 if rusqlite::ErrorCode::ConstraintViolation == ffi.code =>
             {
-                StoreResult::Duplicate
+                continue
             }
             Err(e) => bail!(e),
-        },
-    )
+        }
+    }
+
+    Ok(public)
 }
 
 fn mac(key: &[u8], val: &[u8]) -> Vec<u8> {
@@ -84,4 +86,14 @@ fn mac(key: &[u8], val: &[u8]) -> Vec<u8> {
     let mut mac = hmac::Hmac::<sha2::Sha512Trunc256>::new_varkey(key).expect("varkey");
     mac.input(val);
     mac.result().code().to_vec()
+}
+
+fn epoch_millis() -> i64 {
+    use std::time;
+    let start = time::SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(time::UNIX_EPOCH)
+        .unwrap_or_else(|_| time::Duration::new(0, 0));
+    i64(since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000)
+        .unwrap_or(std::i64::MAX)
 }

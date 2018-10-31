@@ -1,4 +1,5 @@
 extern crate base64;
+extern crate cast;
 #[macro_use]
 extern crate failure;
 extern crate hmac;
@@ -32,6 +33,8 @@ use std::path;
 
 use failure::Error;
 use rand::RngCore;
+use rouille::input::json::JsonError;
+use rouille::input::json_input;
 use rouille::input::post;
 use rouille::Request;
 use rouille::Response;
@@ -41,6 +44,8 @@ const BAD_REQUEST: u16 = 400;
 lazy_static! {
     static ref IMAGE_ID: regex::Regex =
         regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg)$").unwrap();
+    static ref GALLERY_SPEC: regex::Regex =
+        regex::Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").unwrap();
 }
 
 fn upload(request: &Request) -> Response {
@@ -140,32 +145,84 @@ fn log_error(location: &str, request: &Request, error: &Error) -> Response {
     error_object(location).with_status_code(500)
 }
 
-fn not_url_safe(string: &str) -> bool {
-    string.chars().any(|x| !x.is_ascii_alphanumeric())
-}
+fn gallery_put(global_secret: &[u8], request: &Request) -> Response {
+    let body: serde_json::Value = match json_input(request) {
+        Ok(body) => body,
+        Err(JsonError::WrongContentType) => return bad_request("missing/invalid content type"),
+        Err(other) => {
+            println!("invalid request: {:?}", other);
+            return bad_request("missing/invalid content type");
+        }
+    };
 
-fn gallery_put(secret: &[u8], request: &Request) -> Response {
-    let params = try_or_400!(post_input!(request, {
-        gallery: String,
-        key: String,
-        image: String,
-    }));
+    let body = match body.as_object() {
+        Some(body) => body,
+        None => return bad_request("non-object body"),
+    };
 
-    if not_url_safe(&params.gallery) || params.gallery.is_empty() || params.gallery.len() > 16 {
-        return bad_request("disallowed gallery");
+    if body.contains_key("errors") {
+        return bad_request("'errors' must be absent");
     }
 
-    if params.key.len() < 4 {
-        return bad_request("disallowed key");
+    let body = match body.get("data").and_then(|data| data.as_object()) {
+        Some(body) => body,
+        None => return bad_request("missing/invalid data attribute"),
+    };
+
+    if !body
+        .get("type")
+        .and_then(|ty| ty.as_str())
+        .map(|ty| "gallery" == ty)
+        .unwrap_or(false)
+    {
+        return bad_request("missing/invalid type: gallery");
     }
 
-    if !IMAGE_ID.is_match(&params.image) {
-        return bad_request("bad image id");
+    let body = match body.get("attributes").and_then(|body| body.as_object()) {
+        Some(body) => body,
+        None => return bad_request("missing/invalid type: attributes"),
+    };
+
+    let gallery_input = match body.get("gallery").and_then(|val| val.as_str()) {
+        Some(string) => string,
+        None => return bad_request("missing/invalid type: gallery attribute"),
+    };
+
+    let raw_images = match body.get("images").and_then(|val| val.as_array()) {
+        Some(raw_images) => raw_images,
+        None => return bad_request("missing/invalid type: images"),
+    };
+
+    let mut images = Vec::with_capacity(raw_images.len());
+
+    for image in raw_images {
+        let image = match image.as_str() {
+            Some(image) => image,
+            None => return bad_request("non-string image in list"),
+        };
+
+        if !IMAGE_ID.is_match(image) {
+            return bad_request("invalid image id");
+        }
+
+        images.push(image);
     }
 
-    match gallery::gallery_store(secret, &params.gallery, &params.key, &params.image) {
-        Ok(gallery::StoreResult::Ok(public)) => data_response(resource_object(public, "gallery")),
-        Ok(gallery::StoreResult::Duplicate) => error_object("duplicate image for gallery"),
+    let (gallery, private) = match GALLERY_SPEC.captures(gallery_input) {
+        Some(captures) => (
+            captures.get(1).unwrap().as_str(),
+            captures.get(2).unwrap().as_str(),
+        ),
+        None => {
+            return bad_request(concat!(
+                "gallery format: name!password, ",
+                "4-10 letters, pass: 4+ anything"
+            ))
+        }
+    };
+
+    match gallery::gallery_store(global_secret, gallery, private, &images) {
+        Ok(public) => data_response(resource_object(public, "gallery")),
         Err(e) => log_error("saving gallery item", request, &e),
     }
 }

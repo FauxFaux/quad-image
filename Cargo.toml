@@ -15,6 +15,7 @@ repository = "FauxFaux/quad-image"
 
 [dependencies]
 base64 = "0.9"
+cast = "0.2"
 failure = "0.1"
 hmac = "0.7"
 lazy_static = "1"
