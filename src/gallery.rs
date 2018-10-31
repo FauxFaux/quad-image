@@ -63,18 +63,20 @@ pub fn gallery_store(
         base64::encode_config(&trigger[..7], base64::URL_SAFE_NO_PAD)
     );
 
-    Ok(match gallery_db()?.execute(
-        "insert into gallery_images (gallery, image, added) values (?, ?, current_timestamp)",
-        &[&public.as_ref(), &image],
-    ) {
-        Ok(_) => StoreResult::Ok(public),
-        Err(rusqlite::Error::SqliteFailure(ffi, _))
-            if rusqlite::ErrorCode::ConstraintViolation == ffi.code =>
-        {
-            StoreResult::Duplicate
-        }
-        Err(e) => bail!(e),
-    })
+    Ok(
+        match gallery_db()?.execute(
+            "insert into gallery_images (gallery, image, added) values (?, ?, current_timestamp)",
+            &[&public.as_ref(), &image],
+        ) {
+            Ok(_) => StoreResult::Ok(public),
+            Err(rusqlite::Error::SqliteFailure(ffi, _))
+                if rusqlite::ErrorCode::ConstraintViolation == ffi.code =>
+            {
+                StoreResult::Duplicate
+            }
+            Err(e) => bail!(e),
+        },
+    )
 }
 
 fn mac(key: &[u8], val: &[u8]) -> Vec<u8> {
