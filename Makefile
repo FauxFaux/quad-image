@@ -1,7 +1,7 @@
 all: web/gallery/gallery.js
 
 %.js: node_modules tsconfig.json %.ts
-	node_modules/.bin/tsc $*.ts
+	node_modules/.bin/tsc
 
 node_modules: package.json
 	npm install

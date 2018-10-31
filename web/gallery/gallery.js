@@ -1,64 +1,115 @@
 "use strict";
-exports.__esModule = true;
-function load(body) {
-    var hash = window.location.hash || "#";
-    var parts = hash.split("#");
-    var gallery = parts[1];
-    var after;
-    if (parts.length > 1) {
-        after = parts[2];
+var State = (function () {
+    function State(gallery, images) {
+        this.gallery = gallery;
+        this.images = images;
     }
-    else {
-        after = null;
+    return State;
+}());
+var Hash = (function () {
+    function Hash() {
+        var hash = window.location.hash || "#";
+        var parts = hash.split("#");
+        if (parts.length < 2) {
+            throw new Error("no gallery provided");
+        }
+        this.gallery = parts[1];
+        if (parts.length > 1) {
+            this.after = parts[2];
+        }
+        else {
+            this.after = null;
+        }
     }
-    $.get("../api/gallery/" + gallery)
-        .done(function (data) { return fetch_complete(body, data, gallery, after); })["catch"](function () {
-        body.innerText = "network error fetching gallery";
-    });
-}
-function fetch_complete(body, resp, gallery, after) {
-    if ("errors" in resp) {
-        body.innerText = JSON.stringify(resp.errors);
+    return Hash;
+}());
+var state = null;
+function hashChanged() {
+    var target = document.getElementById("gallery");
+    if (null == target) {
+        console.log("script mis-loaded?");
         return;
+    }
+    var showError = function (msg) { return target.innerText = msg; };
+    var hash = new Hash();
+    if (state && state.gallery === hash.gallery) {
+        render(target, hash);
+        return;
+    }
+    state = null;
+    $.get("../api/gallery/" + hash.gallery)
+        .done(function (data) {
+        var images = fetch_complete(data, showError);
+        if (null === images) {
+            return;
+        }
+        state = new State(hash.gallery, images);
+        render(target, hash);
+    })
+        .catch(function () { return showError("network error fetching gallery"); });
+}
+function fetch_complete(resp, showError) {
+    if ("errors" in resp) {
+        showError(JSON.stringify(resp.errors));
+        return null;
     }
     if (!("data" in resp) || !Array.isArray(resp.data)) {
-        body.innerText = JSON.stringify(resp);
-        return;
+        showError(JSON.stringify(resp));
+        return null;
     }
-    // TYPE CHECKER
     var withData = resp;
-    body.innerText = "";
+    return imageIds(withData.data);
+}
+function imageIds(withData) {
     var ids = [];
-    for (var _i = 0, _a = withData.data; _i < _a.length; _i++) {
-        var img = _a[_i];
-        if ("image" !== img.type) {
-            body.innerText = "Invalid object in response";
-            return;
+    for (var _i = 0, withData_1 = withData; _i < withData_1.length; _i++) {
+        var img = withData_1[_i];
+        if ("image" !== img.type || undefined === img.id) {
+            console.log("invalid record", img);
+            continue;
         }
         ids.push(img.id);
     }
-    var start = 0;
-    if (after) {
-        var afterIdx = ids.indexOf(after);
+    return ids;
+}
+function render(body, hash) {
+    body.innerText = "";
+    if (null == state) {
+        console.log("impossible state");
+        return;
+    }
+    var itemsPerPage = 10;
+    var images = state.images;
+    var currentImage = 0;
+    if (null !== hash.after) {
+        var afterIdx = images.indexOf(hash.after);
         if (-1 !== afterIdx) {
-            start = afterIdx + 1;
+            currentImage = afterIdx + 1;
         }
     }
-    ids = ids.slice(start);
-    var more = ids.length > 10;
-    ids = ids.slice(0, Math.min(10, ids.length));
-    for (var _b = 0, ids_1 = ids; _b < ids_1.length; _b++) {
-        var id = ids_1[_b];
-        var tag = document.createElement("img");
-        tag.src = "../" + id;
-        body.appendChild(tag);
-        body.appendChild(document.createElement("hr"));
+    var thisPage = images.slice(currentImage, Math.min(currentImage + itemsPerPage, images.length));
+    for (var _i = 0, thisPage_1 = thisPage; _i < thisPage_1.length; _i++) {
+        var id = thisPage_1[_i];
+        var tag = $("<img/>", {
+            src: "../" + id,
+        }).appendTo(body);
+        $("<hr/>").appendTo(body);
     }
-    if (ids.length && more) {
-        var last = ids[ids.length - 1];
-        var next = document.createElement("a");
-        next.href = "#" + gallery + "#" + last;
-        next.innerText = "Next page";
-        body.appendChild(next);
+    var pages = Math.ceil(images.length / itemsPerPage);
+    var currentPage = Math.floor(currentImage / itemsPerPage);
+    for (var page = 0; page < pages; ++page) {
+        var active = page === currentPage;
+        $("<a/>", {
+            href: "#" + hash.gallery + "#" + images[page * itemsPerPage],
+        })
+            .addClass(active ? "active" : "inactive")
+            .append("" + (page + 1))
+            .appendTo(body);
     }
 }
+window.onhashchange = hashChanged;
+var module;
+if (undefined === module) {
+    module = {};
+}
+module.exports = 0;

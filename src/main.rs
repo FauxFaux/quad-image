@@ -217,14 +217,18 @@ fn main() -> Result<(), Error> {
             }
 
             router!(request,
-                (GET)  (/)            => { static_file("web/index.html")         },
-                (GET)  (/terms/)      => { static_file("web/terms/index.html")   },
-                (GET)  (/dumb/)       => { static_file("web/dumb/index.html")    },
-                (GET)  (/gallery/)    => { static_file("web/gallery/index.html") },
-                (POST) (/api/upload)  => { upload(request)                       },
-                (PUT)  (/api/gallery) => { gallery_put(&secret, request)         },
+                (GET)  ["/"]                    => { static_html("web/index.html")          },
+                (GET)  ["/dumb/"]               => { static_html("web/dumb/index.html")     },
+                (GET)  ["/terms/"]              => { static_html("web/terms/index.html")    },
+                (GET)  ["/gallery/"]            => { static_html("web/gallery/index.html")  },
+                (GET)  ["/gallery/gallery.js"]  => { static_js  ("web/gallery/gallery.js")  },
+                (GET)  ["/gallery/gallery.css"] => { static_css ("web/gallery/gallery.css") },
+                (GET)  ["/jquery-3.3.1.min.js"] => { static_js  ("web/jquery-3.3.1.min.js") },
 
-                (GET)  (/api/gallery/{public: String}) => {
+                (POST) ["/api/upload"]          => { upload(request)                        },
+                (PUT)  ["/api/gallery"]         => { gallery_put(&secret, request)          },
+
+                (GET)  ["/api/gallery/{public}", public: String] => {
                     gallery_get(request, &public)
                 },
 
@@ -234,6 +238,18 @@ fn main() -> Result<(), Error> {
     });
 }
 
-fn static_file(path: &'static str) -> Response {
-    Response::from_file("text/html", fs::File::open(path).expect("static"))
+fn static_html(path: &'static str) -> Response {
+    static_file("text/html", path)
+}
+
+fn static_css(path: &'static str) -> Response {
+    static_file("text/css", path)
+}
+
+fn static_js(path: &'static str) -> Response {
+    static_file("application/javascript", path)
+}
+
+fn static_file(content_type: &'static str, path: &'static str) -> Response {
+    Response::from_file(content_type, fs::File::open(path).expect("static"))
 }

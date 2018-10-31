@@ -1,38 +1,19 @@
 <!doctype html>
 <html>
 <meta charset="utf-8">
-<head><title>Gallery</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            background-color: #222222;
-            color: #ffffff;
-        }
-
-        a {
-            font-size: 2em;
-            color: #ffffff;
-        }
-
-        a:visited {
-            color: #ffffff;
-        }
-
-        img {
-            max-width: 100%;
-            max-height: 80vh;
-        }
-    </style>
-    <script src="../jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
-    <script src="gallery.js"></script>
+<head>
+    <title>Gallery</title>
+    <link href="gallery.css" rel="stylesheet" type="text/css"/>
 </head>
 <body>
-<div id="content"/>
-
-<div id="gallery">Loading...</div>
-
+<div id="content"></div>
+<div id="gallery">Loading JS...</div>
+<script src="../jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+<script src="gallery.js"></script>
 <script>
-    load(document.getElementById('gallery'));
+    hashChanged();
 </script>
 </body>
 </html>
