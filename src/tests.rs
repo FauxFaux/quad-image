@@ -21,19 +21,23 @@ fn write_an_image() {
     store(include_bytes!("test.png")).unwrap();
     store(include_bytes!("../tests/parrot.gif")).unwrap();
 
-    assert_eq!(
-        &["png"],
-        fs::read_dir(&e)
-            .unwrap()
-            .map(|e| e
-                .unwrap()
+    let mut now_extensions = fs::read_dir(&e)
+        .unwrap()
+        .map(|e| {
+            e.unwrap()
                 .path()
                 .extension()
                 .unwrap()
                 .to_string_lossy()
-                .to_string())
-            .collect::<Vec<String>>()
-            .as_slice(),
-        "created exactly one png file"
+                .to_string()
+        })
+        .collect::<Vec<String>>();
+
+    now_extensions.sort();
+
+    assert_eq!(
+        &["gif", "png"],
+        now_extensions.as_slice(),
+        "created one of each"
     );
 }
