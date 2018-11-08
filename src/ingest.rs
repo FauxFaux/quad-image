@@ -3,9 +3,11 @@ use std::io;
 use std::io::Seek;
 use std::io::SeekFrom;
 
+use failure::err_msg;
 use failure::Error;
 use failure::ResultExt;
 use image;
+use image::imageops;
 use image::ImageFormat;
 use libc;
 use rand;
@@ -23,30 +25,47 @@ fn make_readable(path: &str) -> io::Result<()> {
 
 pub type SavedImage = String;
 
-pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
-    let loaded: image::DynamicImage;
-    let guessed_format: image::ImageFormat;
+fn load_image(data: &[u8]) -> Result<(image::DynamicImage, image::ImageFormat), Error> {
+    let mut loaded;
+    let guessed_format;
     {
-        let file = io::Cursor::new(data);
-
         guessed_format = {
-            let bytes = file.get_ref();
             // the crate supports webp, but doesn't seem to detect it:
             // https://github.com/PistonDevelopers/image/issues/660
-            if bytes.len() >= 4 && b"RIFF"[..] == bytes[..4] {
+            if data.len() >= 4 && b"RIFF"[..] == data[..4] {
                 ImageFormat::WEBP
             } else {
-                image::guess_format(bytes).with_context(|_| {
+                image::guess_format(data).with_context(|_| {
                     format_err!(
                         "guess from {} bytes: {:?}",
-                        bytes.len(),
-                        &bytes[..30.min(bytes.len())]
+                        data.len(),
+                        &data[..30.min(data.len())]
                     )
                 })?
             }
         };
-        loaded = image::load(file, guessed_format).with_context(|_| format_err!("load"))?;
+        loaded = image::load_from_memory_with_format(data, guessed_format)
+            .with_context(|_| format_err!("load"))?;
     }
+
+    use image::ImageFormat::*;
+    let expect_exif = match guessed_format {
+        JPEG | WEBP | TIFF => true,
+        _ => false,
+    };
+
+    if expect_exif {
+        match exif_rotation(data) {
+            Ok(val) => apply_rotation(val, &mut loaded),
+            Err(e) => eprintln!("couldn't find exif info: {:?}", e),
+        }
+    }
+
+    Ok((loaded, guessed_format))
+}
+
+pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
+    let (loaded, guessed_format) = load_image(data)?;
 
     use image::ImageFormat::*;
     let mut target_format = match guessed_format {
@@ -116,4 +135,68 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
     }
 
     bail!("couldn't find a viable file name")
+}
+
+fn exif_rotation(from: &[u8]) -> Result<u32, Error> {
+    Ok(exif::Reader::new(&mut io::Cursor::new(from))?
+        .get_field(exif::Tag::Orientation, false)
+        .ok_or_else(|| err_msg("no such field"))?
+        .value
+        .get_uint(0)
+        .ok_or_else(|| err_msg("no uint in value"))?)
+}
+
+fn apply_rotation(rotation: u32, image: &mut image::DynamicImage) {
+    match rotation {
+        1 => (),
+        2 => {
+            *image = image::ImageRgba8(imageops::flip_horizontal(image));
+        }
+        3 => {
+            *image = image::ImageRgba8(imageops::rotate180(image));
+        }
+        4 => {
+            *image = image::ImageRgba8(imageops::flip_vertical(image));
+        }
+        other => eprintln!("crazy rot: {}", other),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn exif() {
+        use super::exif_rotation as rot;
+
+        assert!(rot(include_bytes!("../tests/orient.png")).is_err());
+        assert!(rot(include_bytes!("../tests/orient.jpg")).is_err());
+        assert_eq!(1, rot(include_bytes!("../tests/orient_1.jpg")).unwrap());
+        assert_eq!(3, rot(include_bytes!("../tests/orient_3.jpg")).unwrap());
+        assert_eq!(8, rot(include_bytes!("../tests/orient_8.jpg")).unwrap());
+    }
+
+    fn im(from: &[u8]) -> image::DynamicImage {
+        use super::load_image;
+        let (im, _) = load_image(from).unwrap();
+        im
+    }
+
+    #[test]
+    fn orientate() {
+        use image::GenericImageView;
+
+        let plain = im(include_bytes!("../tests/orient_1.jpg"));
+        assert_eq!(
+            plain.dimensions(),
+            im(include_bytes!("../tests/orient_2.jpg")).dimensions()
+        );
+        assert_eq!(
+            plain.dimensions(),
+            im(include_bytes!("../tests/orient_3.jpg")).dimensions()
+        );
+        assert_eq!(
+            plain.dimensions(),
+            im(include_bytes!("../tests/orient_4.jpg")).dimensions()
+        );
+    }
 }
