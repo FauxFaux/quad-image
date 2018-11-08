@@ -66,17 +66,36 @@ fn temp_file() -> Result<PersistableTempFile, Error> {
 }
 
 fn handle_gif(data: &[u8]) -> Result<SavedImage, Error> {
-    use image::gif;
-    use image::ImageDecoder;
+    // FYI: this does not deserve a trait
+    use gif::SetParameter;
 
-    let frames = gif::Decoder::new(io::Cursor::new(data))
-        .into_frames()
+    let mut reader = gif::Decoder::new(io::Cursor::new(data))
+        .read_info()
         .with_context(|_| err_msg("loading gif"))?;
 
     let mut temp = temp_file()?;
-    gif::Encoder::new(&mut temp)
-        .encode_frames(frames)
-        .with_context(|_| err_msg("writing gif"))?;
+
+    {
+        let mut encoder = gif::Encoder::new(
+            &mut temp,
+            reader.width(),
+            reader.height(),
+            reader.global_palette().unwrap_or(&[]),
+        )
+        .with_context(|_| err_msg("preparing gif"))?;
+
+        // TODO: clearly a lie, but... who even will notice?
+        encoder.set(gif::Repeat::Infinite)?;
+
+        while let Some(frame) = reader
+            .read_next_frame()
+            .with_context(|_| err_msg("reading frame"))?
+        {
+            encoder
+                .write_frame(frame)
+                .with_context(|_| err_msg("writing frame"))?;
+        }
+    }
 
     write_out(temp, "gif")
 }
