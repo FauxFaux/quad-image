@@ -25,31 +25,28 @@ fn make_readable(path: &str) -> io::Result<()> {
 
 pub type SavedImage = String;
 
-fn load_image(data: &[u8]) -> Result<(image::DynamicImage, image::ImageFormat), Error> {
-    let mut loaded;
-    let guessed_format;
-    {
-        guessed_format = {
-            // the crate supports webp, but doesn't seem to detect it:
-            // https://github.com/PistonDevelopers/image/issues/660
-            if data.len() >= 4 && b"RIFF"[..] == data[..4] {
-                ImageFormat::WEBP
-            } else {
-                image::guess_format(data).with_context(|_| {
-                    format_err!(
-                        "guess from {} bytes: {:?}",
-                        data.len(),
-                        &data[..30.min(data.len())]
-                    )
-                })?
-            }
-        };
-        loaded = image::load_from_memory_with_format(data, guessed_format)
-            .with_context(|_| format_err!("load"))?;
-    }
+/// the crate supports webp, but doesn't seem to detect it:
+/// https://github.com/PistonDevelopers/image/issues/660
+fn guess_format(data: &[u8]) -> Result<ImageFormat, Error> {
+    Ok(if data.len() >= 4 && b"RIFF"[..] == data[..4] {
+        ImageFormat::WEBP
+    } else {
+        image::guess_format(data).with_context(|_| {
+            format_err!(
+                "guess from {} bytes: {:?}",
+                data.len(),
+                &data[..30.min(data.len())]
+            )
+        })?
+    })
+}
+
+fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage, Error> {
+    let mut loaded =
+        image::load_from_memory_with_format(data, format).with_context(|_| format_err!("load"))?;
 
     use image::ImageFormat::*;
-    let expect_exif = match guessed_format {
+    let expect_exif = match format {
         JPEG | WEBP | TIFF => true,
         _ => false,
     };
@@ -61,11 +58,12 @@ fn load_image(data: &[u8]) -> Result<(image::DynamicImage, image::ImageFormat), 
         }
     }
 
-    Ok((loaded, guessed_format))
+    Ok(loaded)
 }
 
 pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
-    let (loaded, guessed_format) = load_image(data)?;
+    let guessed_format = guess_format(data)?;
+    let loaded = load_image(data, guessed_format)?;
 
     use image::ImageFormat::*;
     let mut target_format = match guessed_format {
@@ -176,9 +174,9 @@ mod tests {
     }
 
     fn im(from: &[u8]) -> image::DynamicImage {
+        use super::guess_format;
         use super::load_image;
-        let (im, _) = load_image(from).unwrap();
-        im
+        load_image(from, guess_format(from).unwrap()).unwrap()
     }
 
     #[test]
