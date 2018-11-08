@@ -18,9 +18,8 @@ fn write_an_image() {
     let mut input = d.path().to_path_buf();
     input.push("test.png");
 
-    let bytes = include_bytes!("test.png");
-
-    store(bytes).unwrap();
+    store(include_bytes!("test.png")).unwrap();
+    store(include_bytes!("../tests/parrot.gif")).unwrap();
 
     assert_eq!(
         &["png"],

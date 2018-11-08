@@ -61,17 +61,43 @@ fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage, E
     Ok(loaded)
 }
 
+fn temp_file() -> Result<PersistableTempFile, Error> {
+    Ok(PersistableTempFile::new_in("e").with_context(|_| format_err!("temp file"))?)
+}
+
+fn handle_gif(data: &[u8]) -> Result<SavedImage, Error> {
+    use image::gif;
+    use image::ImageDecoder;
+
+    let frames = gif::Decoder::new(io::Cursor::new(data))
+        .into_frames()
+        .with_context(|_| err_msg("loading gif"))?;
+
+    let mut temp = temp_file()?;
+    gif::Encoder::new(&mut temp)
+        .encode_frames(frames)
+        .with_context(|_| err_msg("writing gif"))?;
+
+    write_out(temp, "gif")
+}
+
 pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
     let guessed_format = guess_format(data)?;
-    let loaded = load_image(data, guessed_format)?;
 
     use image::ImageFormat::*;
+    if GIF == guessed_format {
+        return handle_gif(data);
+    }
+
+    let loaded = load_image(data, guessed_format)?;
+
     let mut target_format = match guessed_format {
-        PNG | PNM | TIFF | BMP | ICO | HDR | TGA | GIF => PNG,
+        PNG | PNM | TIFF | BMP | ICO | HDR | TGA => PNG,
         JPEG | WEBP => JPEG,
+        GIF => unreachable!(),
     };
 
-    let mut temp = PersistableTempFile::new_in("e").with_context(|_| format_err!("temp file"))?;
+    let mut temp = temp_file()?;
     loaded
         .write_to(temp.as_mut(), target_format)
         .with_context(|_| format_err!("save"))?;
@@ -115,6 +141,10 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
         _ => unreachable!(),
     };
 
+    write_out(temp, ext)
+}
+
+fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage, Error> {
     let mut rand = rand::thread_rng();
 
     for _ in 0..32768 {
