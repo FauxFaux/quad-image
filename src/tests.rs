@@ -3,7 +3,7 @@ use std::fs;
 
 use tempdir;
 
-use ingest::store;
+use crate::ingest::store;
 
 #[test]
 fn write_an_image() {
