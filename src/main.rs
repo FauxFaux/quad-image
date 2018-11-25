@@ -25,6 +25,7 @@ mod gallery;
 pub mod ingest;
 #[cfg(test)]
 mod tests;
+mod thumbs;
 
 use std::fs;
 use std::io;
@@ -44,7 +45,7 @@ const BAD_REQUEST: u16 = 400;
 
 lazy_static! {
     static ref IMAGE_ID: regex::Regex =
-        regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg)$").unwrap();
+        regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg|gif)$").unwrap();
     static ref GALLERY_SPEC: regex::Regex =
         regex::Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").unwrap();
 }
@@ -72,17 +73,21 @@ fn upload(request: &Request) -> Response {
     };
 
     match ingest::store(&image.data) {
-        Ok(img) => {
+        Ok(image_id) => {
             let remote_addr = request.remote_addr();
             let remote_forwarded = request.header("X-Forwarded-For");
 
-            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, img);
+            if let Err(e) = thumbs::thumbnail(&image_id) {
+                return log_error("thumbnailing just written", request, &e);
+            }
+
+            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, image_id);
 
             if return_json {
-                data_response(resource_object(img, "image"))
+                data_response(resource_object(image_id, "image"))
             } else {
                 // relative to api/upload
-                Response::redirect_303(format!("../{}", img))
+                Response::redirect_303(format!("../{}", image_id))
             }
         }
         Err(e) => log_error("storing image", request, &e),
@@ -266,6 +271,7 @@ fn app_secret() -> Result<[u8; 32], Error> {
 
 fn main() -> Result<(), Error> {
     gallery::migrate_gallery()?;
+    thumbs::generate_all_thumbs()?;
     let secret = app_secret()?;
 
     rouille::start_server("127.0.0.1:6699", move |request| {
