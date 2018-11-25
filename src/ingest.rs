@@ -15,7 +15,7 @@ use rand::distributions::Alphanumeric;
 use rand::distributions::Distribution;
 use tempfile_fast::PersistableTempFile;
 
-fn make_readable(path: &str) -> io::Result<()> {
+pub fn make_readable(path: &str) -> io::Result<()> {
     let mut perms = fs::File::open(path)?.metadata()?.permissions();
 
     use std::os::unix::fs::PermissionsExt;

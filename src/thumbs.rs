@@ -56,6 +56,7 @@ pub fn thumbnail(image_id: &str) -> Result<String, Error> {
     shrunk.write_to(&mut temp, image::ImageOutputFormat::JPEG(40))?;
 
     temp.persist_noclobber(&thumb_name).map_err(|e| e.error)?;
+    crate::ingest::make_readable(&thumb_name)?;
 
     Ok(thumb_name)
 }
