@@ -194,23 +194,46 @@ fn exif_rotation(from: &[u8]) -> Result<u32, Error> {
 }
 
 fn apply_rotation(rotation: u32, image: &mut image::DynamicImage) {
-    match rotation {
-        1 => (),
-        2 => {
-            *image = image::ImageRgba8(imageops::flip_horizontal(image));
-        }
-        3 => {
-            *image = image::ImageRgba8(imageops::rotate180(image));
-        }
-        4 => {
-            *image = image::ImageRgba8(imageops::flip_vertical(image));
-        }
-        other => eprintln!("crazy rot: {}", other),
+    if rotation == 0 || rotation > 8 {
+        eprintln!("crazy rot: {}", rotation);
+        return;
     }
+
+    let rotation = rotation - 1;
+
+    if 0 != rotation & 0b100 {
+        *image = flip_diagonal(image);
+    }
+
+    if 0 != rotation & 0b010 {
+        *image = image::ImageRgba8(imageops::rotate180(image));
+    }
+
+    if 0 != rotation & 0b001 {
+        *image = image::ImageRgba8(imageops::flip_horizontal(image));
+    }
+}
+
+fn flip_diagonal(image: &mut image::DynamicImage) -> image::DynamicImage {
+    use image::GenericImageView;
+
+    let (width, height) = image.dimensions();
+    let mut out = image::ImageBuffer::new(height, width);
+
+    for y in 0..height {
+        for x in 0..width {
+            let p = image.get_pixel(x, y);
+            out.put_pixel(y, x, p);
+        }
+    }
+
+    image::DynamicImage::ImageRgba8(out)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     #[test]
     fn exif() {
         use super::exif_rotation as rot;
@@ -228,22 +251,68 @@ mod tests {
         load_image(from, guess_format(from).unwrap()).unwrap()
     }
 
-    #[test]
-    fn orientate() {
+    fn assert_similar(expected: &image::DynamicImage, actual: &image::DynamicImage, rot: usize) {
         use image::GenericImageView;
 
+        assert_eq!(expected.dimensions(), actual.dimensions());
+
+        let (w, h) = expected.dimensions();
+
+        let mut diff = 0.;
+
+        // this is a really, really terrible diff algo if you care about visuals
+        // the input images are actually different, and the jpeg noise is horrendous
+        for x in 0..w {
+            for y in 0..h {
+                let e = expected.get_pixel(x, y);
+                let a = actual.get_pixel(x, y);
+                for c in 0..4 {
+                    diff += ((e.data[c] as f64) - (a.data[c] as f64)).abs() / 256. / 4.;
+                }
+            }
+        }
+
+        diff /= (w * h) as f64;
+
+        if diff > 0.02 {
+            panic!("too much difference in {}: {}", rot, diff);
+        }
+    }
+
+    #[test]
+    fn orientate() {
         let plain = im(include_bytes!("../tests/orient_1.jpg"));
-        assert_eq!(
-            plain.dimensions(),
-            im(include_bytes!("../tests/orient_2.jpg")).dimensions()
-        );
-        assert_eq!(
-            plain.dimensions(),
-            im(include_bytes!("../tests/orient_3.jpg")).dimensions()
-        );
-        assert_eq!(
-            plain.dimensions(),
-            im(include_bytes!("../tests/orient_4.jpg")).dimensions()
-        );
+
+        const FILES: [&'static [u8]; 9] = [
+            &[],
+            &[],
+            include_bytes!("../tests/orient_2.jpg"),
+            include_bytes!("../tests/orient_3.jpg"),
+            include_bytes!("../tests/orient_4.jpg"),
+            include_bytes!("../tests/orient_5.jpg"),
+            include_bytes!("../tests/orient_6.jpg"),
+            include_bytes!("../tests/orient_7.jpg"),
+            include_bytes!("../tests/orient_8.jpg"),
+        ];
+
+        for rot in 2..=8 {
+            let file = FILES[rot];
+            let output = im(file);
+
+            if false {
+                output
+                    .write_to(
+                        &mut fs::OpenOptions::new()
+                            .create(true)
+                            .write(true)
+                            .open(format!("/tmp/orient_fixed_{}.jpg", rot))
+                            .unwrap(),
+                        image::ImageFormat::JPEG,
+                    )
+                    .unwrap();
+            }
+
+            assert_similar(&plain, &output, rot);
+        }
     }
 }
