@@ -1,4 +1,4 @@
-all: web/gallery/gallery.js
+all: web/lollipop.js
 
 %.js: node_modules tsconfig.json %.ts
 	node_modules/.bin/tsc
