@@ -1,4 +1,3 @@
-import * as $ from "jquery";
 import * as JSONAPI from "jsonapi-typescript";
 
 namespace Lollipop {
@@ -28,12 +27,14 @@ namespace Lollipop {
     }
 
     function upload(fileBlob: Blob, cb: (success: boolean, msg: string) => void) {
+        const data = new FormData();
+        data.append("image", fileBlob);
+        data.append("return_json", true);
         $.ajax("/api/upload", {
             method: "POST",
-            data: {
-                image: fileBlob,
-                return_json: true,
-            },
+            data,
+            processData: false,
+            contentType: false,
             success: (resp: JSONAPI.Document) => {
                 const url = resp.data.id;
                 quadpees.push(url);
@@ -112,11 +113,11 @@ namespace Lollipop {
 
             const loadingItem = new Item(true);
 
-            upload(blob, (err, msg) => {
+            upload(blob, (success, msg) => {
 
-                if (err) {
+                if (!success) {
                     loadingItem.actionButton.onclick = () => {
-                        alert(err);
+                        alert(msg);
                     };
                     loadingItem.li.classList.add("failed");
                     loadingItem.li.classList.remove("loading");
@@ -124,13 +125,10 @@ namespace Lollipop {
                 }
 
                 makeLoadedItem(loadingItem, msg);
-
             });
-
         };
 
         reader.readAsArrayBuffer(file);
-
     }
 
     function setBodyActive() {
@@ -225,10 +223,12 @@ namespace Lollipop {
         doc.ondragexit = doc.ondragleave = () => {
             form.classList.remove("dragover");
         };
+
+        const errors = document.getElementById("errors") as HTMLElement;
+        errors.style.display = "none";
+        errors.innerHTML = "";
     });
-
 }
-
 
 namespace Gallery {
     let state: State | null = null;

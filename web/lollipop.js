@@ -1,5 +1,4 @@
 "use strict";
-var $ = require("jquery");
 var Lollipop;
 (function (Lollipop) {
     var quadpees = [];
@@ -20,12 +19,14 @@ var Lollipop;
         return Item;
     }());
     function upload(fileBlob, cb) {
+        var data = new FormData();
+        data.append("image", fileBlob);
+        data.append("return_json", true);
         $.ajax("/api/upload", {
             method: "POST",
-            data: {
-                image: fileBlob,
-                return_json: true,
-            },
+            data: data,
+            processData: false,
+            contentType: false,
             success: function (resp) {
                 var url = resp.data.id;
                 quadpees.push(url);
@@ -89,10 +90,10 @@ var Lollipop;
         reader.onload = function (e) {
             var blob = new Blob([e.target.result], { type: "image/jpeg" });
             var loadingItem = new Item(true);
-            upload(blob, function (err, msg) {
-                if (err) {
+            upload(blob, function (success, msg) {
+                if (!success) {
                     loadingItem.actionButton.onclick = function () {
-                        alert(err);
+                        alert(msg);
                     };
                     loadingItem.li.classList.add("failed");
                     loadingItem.li.classList.remove("loading");
@@ -184,6 +185,9 @@ var Lollipop;
         doc.ondragexit = doc.ondragleave = function () {
             form.classList.remove("dragover");
         };
+        var errors = document.getElementById("errors");
+        errors.style.display = "none";
+        errors.innerHTML = "";
     });
 })(Lollipop || (Lollipop = {}));
 var Gallery;

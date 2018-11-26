@@ -285,7 +285,9 @@ fn main() -> Result<(), Error> {
                 (GET)  ["/dumb/"]               => { static_html("web/dumb/index.html")     },
                 (GET)  ["/terms/"]              => { static_html("web/terms/index.html")    },
                 (GET)  ["/gallery/"]            => { static_html("web/gallery/index.html")  },
-                (GET)  ["/gallery/gallery.js"]  => { static_js  ("web/gallery/gallery.js")  },
+
+                (GET)  ["/root.css"]            => { static_css ("web/root.css")            },
+                (GET)  ["/lollipop.js"]         => { static_js  ("web/lollipop.js")         },
                 (GET)  ["/gallery/gallery.css"] => { static_css ("web/gallery/gallery.css") },
                 (GET)  ["/jquery-3.3.1.min.js"] => { static_js  ("web/jquery-3.3.1.min.js") },
 
