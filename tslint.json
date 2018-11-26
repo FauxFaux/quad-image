@@ -6,6 +6,7 @@
   "jsRules": {},
   "rules": {
     "no-console": false,
+    "no-namespace": false,
     "member-access": false,
     "max-classes-per-file": false,
     "object-literal-sort-keys": false
