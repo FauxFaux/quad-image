@@ -120,13 +120,15 @@ namespace Lollipop {
         setBodyActive();
 
         const reader = new FileReader();
-        reader.onload = function() {
+        reader.onload = function () {
             if (!this.result) {
                 error("file api acted unexpectedly, not sure why");
                 return;
             }
 
-            const blob = new Blob([this.result], {type: "image/jpeg"});
+            const type = file.type || "image/jpeg";
+
+            const blob = new Blob([this.result], {type});
 
             const loadingItem = new Item(true);
 

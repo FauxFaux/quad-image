@@ -106,7 +106,8 @@ var Lollipop;
                 error("file api acted unexpectedly, not sure why");
                 return;
             }
-            var blob = new Blob([this.result], { type: "image/jpeg" });
+            var type = file.type || "image/jpeg";
+            var blob = new Blob([this.result], { type: type });
             var loadingItem = new Item(true);
             upload(blob, function (success, msg) {
                 if (!success) {
