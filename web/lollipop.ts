@@ -29,20 +29,32 @@ namespace Lollipop {
     function upload(fileBlob: Blob, cb: (success: boolean, msg: string) => void) {
         const data = new FormData();
         data.append("image", fileBlob);
-        data.append("return_json", true);
+        data.append("return_json", "true");
         $.ajax("/api/upload", {
             method: "POST",
             data,
             processData: false,
             contentType: false,
             success: (resp: JSONAPI.Document) => {
-                const url = resp.data.id;
-                quadpees.push(url);
-                localStorage.setItem("quadpees", JSON.stringify(quadpees));
-                cb(true, url);
+                if ("data" in resp) {
+                    const doc = resp as JSONAPI.DocWithData<JSONAPI.ResourceObject>;
+                    const url = doc.data.id;
+                    if (!url) {
+                        cb(false, "empty id returned");
+                        return;
+                    }
+                    quadpees.push(url);
+                    localStorage.setItem("quadpees", JSON.stringify(quadpees));
+                    cb(true, url);
+                } else if ("errors" in resp) {
+                    const doc = resp as JSONAPI.DocWithErrors;
+                    cb(false, doc.errors.join(", "));
+                } else {
+                    cb(false, `unexpected object ${Object.keys(resp).join(", ")}`);
+                }
             },
-            error: (xhr, thrown, text) => {
-                cb(false, xhr.responseText || "Error.");
+            error: (xhr, status, errorThrown) => {
+                cb(false, `upload request failed: ${status} - ${errorThrown}`);
             },
         });
     }
@@ -80,7 +92,7 @@ namespace Lollipop {
                 }
                 if (removing) {
                     images.removeChild(i);
-                    const idx = quadpees.indexOf(i.dataset.miniUrl);
+                    const idx = quadpees.indexOf(i.dataset.miniUrl as string);
                     if (idx >= 0) {
                         quadpees.splice(idx, 1);
                     }
@@ -108,8 +120,13 @@ namespace Lollipop {
         setBodyActive();
 
         const reader = new FileReader();
-        reader.onload = (e) => {
-            const blob = new Blob([e.target.result], {type: "image/jpeg"});
+        reader.onload = function() {
+            if (!this.result) {
+                error("file api acted unexpectedly, not sure why");
+                return;
+            }
+
+            const blob = new Blob([this.result], {type: "image/jpeg"});
 
             const loadingItem = new Item(true);
 
@@ -147,6 +164,8 @@ namespace Lollipop {
             return;
         }
 
+        // FileList isn't iterable
+        // tslint:disable-next-line:prefer-for-of
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
             console.log(item);
@@ -352,7 +371,7 @@ namespace Gallery {
         const thisPage = images.slice(currentImage, Math.min(currentImage + itemsPerPage, images.length));
 
         for (const id of thisPage) {
-            const tag = $("<img/>", {
+            $("<img/>", {
                 src: "../" + id,
             }).appendTo(body);
             $("<hr/>").appendTo(body);

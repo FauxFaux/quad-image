@@ -21,20 +21,34 @@ var Lollipop;
     function upload(fileBlob, cb) {
         var data = new FormData();
         data.append("image", fileBlob);
-        data.append("return_json", true);
+        data.append("return_json", "true");
         $.ajax("/api/upload", {
             method: "POST",
             data: data,
             processData: false,
             contentType: false,
             success: function (resp) {
-                var url = resp.data.id;
-                quadpees.push(url);
-                localStorage.setItem("quadpees", JSON.stringify(quadpees));
-                cb(true, url);
+                if ("data" in resp) {
+                    var doc = resp;
+                    var url = doc.data.id;
+                    if (!url) {
+                        cb(false, "empty id returned");
+                        return;
+                    }
+                    quadpees.push(url);
+                    localStorage.setItem("quadpees", JSON.stringify(quadpees));
+                    cb(true, url);
+                }
+                else if ("errors" in resp) {
+                    var doc = resp;
+                    cb(false, doc.errors.join(", "));
+                }
+                else {
+                    cb(false, "unexpected object " + Object.keys(resp).join(", "));
+                }
             },
-            error: function (xhr, thrown, text) {
-                cb(false, xhr.responseText || "Error.");
+            error: function (xhr, status, errorThrown) {
+                cb(false, "upload request failed: " + status + " - " + errorThrown);
             },
         });
     }
@@ -87,8 +101,12 @@ var Lollipop;
     function process(file) {
         setBodyActive();
         var reader = new FileReader();
-        reader.onload = function (e) {
-            var blob = new Blob([e.target.result], { type: "image/jpeg" });
+        reader.onload = function () {
+            if (!this.result) {
+                error("file api acted unexpectedly, not sure why");
+                return;
+            }
+            var blob = new Blob([this.result], { type: "image/jpeg" });
             var loadingItem = new Item(true);
             upload(blob, function (success, msg) {
                 if (!success) {
@@ -284,7 +302,7 @@ var Gallery;
         var thisPage = images.slice(currentImage, Math.min(currentImage + itemsPerPage, images.length));
         for (var _i = 0, thisPage_1 = thisPage; _i < thisPage_1.length; _i++) {
             var id = thisPage_1[_i];
-            var tag = $("<img/>", {
+            $("<img/>", {
                 src: "../" + id,
             }).appendTo(body);
             $("<hr/>").appendTo(body);
