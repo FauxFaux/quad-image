@@ -23,6 +23,10 @@
             margin: 0.3em 0;
         }
     </style>
+
+    <script src="../jquery-3.3.1.min.js"
+            integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+            crossorigin="anonymous"></script>
 </head>
 <body>
 <h2>Upload file</h2>
@@ -46,16 +50,29 @@
 
 <script>
     function add_to_gallery(form) {
-        var req = new XMLHttpRequest();
         var target = document.getElementById('gallery-result');
         target.innerText = "Submitting...";
-        req.onload = function() {
-            target.innerText = '';
-            var resp = JSON.parse(this.response);
-            if ('errors' in resp) {
-                for (err of resp.errors) {
-                    target.innerText += 'Server error: ' + err.title + '\n';
+
+        var addErr = function(err) {
+            target.innerText += 'Server error: ' + err.title + '\n';
+        };
+
+        $.ajax('/api/gallery', {
+            type: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                data: {
+                    type: 'gallery',
+                    attributes: {
+                        gallery: form.gallery.value,
+                        images: [ form.image.value ]
+                    }
                 }
+            })
+        }).then(function(resp) {
+            target.innerText = '';
+            if ('errors' in resp) {
+                resp.errors.forEach(addErr);
             } else if ('data' in resp) {
                 if ('gallery' !== resp.data.type) {
                     target.innerText = "invalid response type";
@@ -67,23 +84,16 @@
                     target.appendChild(a);
                 }
             } else {
-                target.innerText = 'invalid response object';
+                target.innerText = 'invalid response object: ' + JSON.stringify(resp);
             }
-        };
-        req.onerror = function() {
-            target.innerText = 'network error';
-        };
-        req.open('PUT', '/api/gallery');
-        req.setRequestHeader('Content-Type', 'application/json');
-        req.send(JSON.stringify({
-            data: {
-                type: 'gallery',
-                attributes: {
-                    gallery: form.gallery.value,
-                    images: [ form.image.value ],
-                }
+        })
+        .catch(function(xhr, message) {
+            target.innerText = 'network error: ' + message + '\n';
+
+            if (xhr.responseJSON && 'errors' in xhr.responseJSON) {
+                xhr.responseJSON.errors.forEach(addErr);
             }
-        }));
+        });
 
         return false;
     }
