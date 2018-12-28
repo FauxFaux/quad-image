@@ -32,6 +32,8 @@ use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::path;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use failure::Error;
 use rand::RngCore;
@@ -42,6 +44,8 @@ use rouille::Request;
 use rouille::Response;
 
 const BAD_REQUEST: u16 = 400;
+
+type Conn = Arc<Mutex<rusqlite::Connection>>;
 
 lazy_static! {
     static ref IMAGE_ID: regex::Regex =
@@ -151,7 +155,7 @@ fn log_error(location: &str, request: &Request, error: &Error) -> Response {
     error_object(location).with_status_code(500)
 }
 
-fn gallery_put(global_secret: &[u8], request: &Request) -> Response {
+fn gallery_put(conn: Conn, global_secret: &[u8], request: &Request) -> Response {
     let body: serde_json::Value = match json_input(request) {
         Ok(body) => body,
         Err(JsonError::WrongContentType) => return bad_request("missing/invalid content type"),
@@ -223,11 +227,11 @@ fn gallery_put(global_secret: &[u8], request: &Request) -> Response {
             return bad_request(concat!(
                 "gallery format: name!password, ",
                 "4-10 letters, pass: 4+ anything"
-            ))
+            ));
         }
     };
 
-    match gallery::gallery_store(global_secret, gallery, private, &images) {
+    match gallery::gallery_store(conn, global_secret, gallery, private, &images) {
         Ok(public) => data_response(resource_object(public, "gallery")),
         Err(e) => log_error("saving gallery item", request, &e),
     }
@@ -240,12 +244,20 @@ fn validate_image_id() {
     assert!(!IMAGE_ID.is_match("e/abcdefghi.png"));
 }
 
-fn gallery_get(request: &Request, public: &str) -> Response {
+fn gallery_get(request: &Request, conn: Conn, public: &str) -> Response {
     if public.len() > 32 || public.find(|c: char| !c.is_ascii_graphic()).is_some() {
         return bad_request("invalid gallery id");
     }
 
-    match gallery::gallery_list_all(public) {
+    let mut conn = match conn.lock() {
+        Ok(conn) => conn,
+        Err(_posion) => {
+            println!("poisoned! {:?}", _posion);
+            return error_object("internal error").with_status_code(500);
+        }
+    };
+
+    match gallery::gallery_list_all(&mut *conn, public) {
         Ok(resp) => {
             let values: Vec<_> = resp
                 .into_iter()
@@ -269,10 +281,17 @@ fn app_secret() -> Result<[u8; 32], Error> {
     Ok(buf)
 }
 
+fn gallery_db() -> Result<rusqlite::Connection, Error> {
+    Ok(rusqlite::Connection::open("gallery.db")?)
+}
+
 fn main() -> Result<(), Error> {
-    gallery::migrate_gallery()?;
+    let mut conn = gallery_db()?;
+    gallery::migrate_gallery(&mut conn)?;
     thumbs::generate_all_thumbs()?;
     let secret = app_secret()?;
+
+    let conn = Arc::new(Mutex::new(conn));
 
     rouille::start_server("127.0.0.1:6699", move |request| {
         rouille::log(&request, io::stdout(), || {
@@ -292,10 +311,13 @@ fn main() -> Result<(), Error> {
                 (GET)  ["/jquery-3.3.1.min.js"] => { static_js  ("web/jquery-3.3.1.min.js") },
 
                 (POST) ["/api/upload"]          => { upload(request)                        },
-                (PUT)  ["/api/gallery"]         => { gallery_put(&secret, request)          },
+
+                (PUT)  ["/api/gallery"]         => {
+                    gallery_put(conn.clone(), &secret, request)
+                },
 
                 (GET)  ["/api/gallery/{public}", public: String] => {
-                    gallery_get(request, &public)
+                    gallery_get(request, conn.clone(), &public)
                 },
 
                 _ => rouille::Response::empty_404()

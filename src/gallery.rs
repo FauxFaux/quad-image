@@ -1,5 +1,6 @@
 use base64;
 use cast::i64;
+use failure::err_msg;
 use failure::Error;
 use hmac;
 use rusqlite;
@@ -7,12 +8,7 @@ use rusqlite::types::ToSql;
 use rusqlite::Connection;
 use sha2;
 
-fn gallery_db() -> Result<Connection, Error> {
-    Ok(Connection::open("gallery.db")?)
-}
-
-pub fn migrate_gallery() -> Result<(), Error> {
-    let conn = gallery_db()?;
+pub fn migrate_gallery(conn: &mut Connection) -> Result<(), Error> {
     conn.execute(
         "create table if not exists gallery_images (
 gallery char(10) not null,
@@ -29,9 +25,7 @@ on gallery_images (gallery, image)",
     Ok(())
 }
 
-pub fn gallery_list_all(public: &str) -> Result<Vec<String>, Error> {
-    let conn = gallery_db()?;
-
+pub fn gallery_list_all(conn: &mut Connection, public: &str) -> Result<Vec<String>, Error> {
     let mut stat = conn.prepare(
         "select image from gallery_images
 where gallery=? order by added desc",
@@ -47,6 +41,7 @@ where gallery=? order by added desc",
 }
 
 pub fn gallery_store(
+    conn: crate::Conn,
     global_secret: &[u8],
     gallery: &str,
     private: &str,
@@ -60,9 +55,9 @@ pub fn gallery_store(
         base64::encode_config(&masked[..7], base64::URL_SAFE_NO_PAD)
     );
 
-    let db = gallery_db()?;
+    let conn = conn.lock().map_err(|_| err_msg("poison"))?;
     let mut stat =
-        db.prepare("insert into gallery_images (gallery, image, added) values (?, ?, ?)")?;
+        conn.prepare("insert into gallery_images (gallery, image, added) values (?, ?, ?)")?;
 
     let mut timestamp = epoch_millis();
 
@@ -72,7 +67,7 @@ pub fn gallery_store(
             Err(rusqlite::Error::SqliteFailure(ffi, _))
                 if rusqlite::ErrorCode::ConstraintViolation == ffi.code =>
             {
-                continue
+                continue;
             }
             Err(e) => bail!(e),
         }
@@ -96,4 +91,31 @@ fn epoch_millis() -> i64 {
         .unwrap_or_else(|_| time::Duration::new(0, 0));
     i64(since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000)
         .unwrap_or(std::i64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::Mutex;
+
+    use failure::Error;
+
+    #[test]
+    fn mem_db() -> Result<(), Error> {
+        let mut conn = rusqlite::Connection::open_in_memory()?;
+        super::migrate_gallery(&mut conn)?;
+        let wrapped = Arc::new(Mutex::new(conn));
+        let public = super::gallery_store(
+            wrapped.clone(),
+            &[1],
+            "foo",
+            "bar",
+            &["e/img.jpg", "e/two.jpg"],
+        )?;
+        assert_eq!(
+            vec!["e/two.jpg", "e/img.jpg"],
+            super::gallery_list_all(&mut wrapped.lock().unwrap(), &public)?
+        );
+        Ok(())
+    }
 }
