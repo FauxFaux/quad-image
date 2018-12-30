@@ -18,9 +18,6 @@ extern crate serde_json;
 extern crate sha2;
 extern crate tempfile_fast;
 
-#[cfg(test)]
-extern crate tempdir;
-
 mod gallery;
 pub mod ingest;
 #[cfg(test)]

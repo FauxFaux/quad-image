@@ -1,28 +1,27 @@
 use std::env;
 use std::fs;
 
-use tempdir;
+use failure::Error;
 
 use crate::ingest::store;
 
 #[test]
-fn write_an_image() {
+fn write_an_image() -> Result<(), Error> {
     // TODO: race central
-    let d = tempdir::TempDir::new("quad-image").unwrap();
-    env::set_current_dir(d.path()).unwrap();
+    let d = tempfile::Builder::new().prefix("quad-image").tempdir()?;
+    env::set_current_dir(d.path())?;
 
     let mut e = d.path().to_path_buf();
     e.push("e");
-    fs::create_dir(&e).unwrap();
+    fs::create_dir(&e)?;
 
     let mut input = d.path().to_path_buf();
     input.push("test.png");
 
-    store(include_bytes!("test.png")).unwrap();
-    store(include_bytes!("../tests/parrot.gif")).unwrap();
+    store(include_bytes!("test.png"))?;
+    store(include_bytes!("../tests/parrot.gif"))?;
 
-    let mut now_extensions = fs::read_dir(&e)
-        .unwrap()
+    let mut now_extensions = fs::read_dir(&e)?
         .map(|e| {
             e.unwrap()
                 .path()
@@ -40,4 +39,6 @@ fn write_an_image() {
         now_extensions.as_slice(),
         "created one of each"
     );
+
+    Ok(())
 }

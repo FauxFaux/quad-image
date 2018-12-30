@@ -43,7 +43,7 @@ version = "0.16"
 features = ["bundled"]
 
 [dev-dependencies]
-tempdir = "0.3"
+tempfile = "3"
 
 [profile.release]
 lto = true
