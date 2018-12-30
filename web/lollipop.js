@@ -96,7 +96,7 @@ var Lollipop;
             loadingItem.li.classList.remove("loading");
             loadingItem.li.classList.add("loaded");
         };
-        img.src = a.href;
+        img.src = url + ".thumb.jpg";
     }
     function process(file) {
         setBodyActive();

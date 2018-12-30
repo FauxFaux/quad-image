@@ -112,7 +112,7 @@ namespace Lollipop {
             loadingItem.li.classList.add("loaded");
         };
 
-        img.src = a.href;
+        img.src = url + ".thumb.jpg";
     }
 
     function process(file: File) {
@@ -120,7 +120,7 @@ namespace Lollipop {
         setBodyActive();
 
         const reader = new FileReader();
-        reader.onload = function () {
+        reader.onload = function() {
             if (!this.result) {
                 error("file api acted unexpectedly, not sure why");
                 return;
