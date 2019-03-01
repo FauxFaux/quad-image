@@ -97,6 +97,7 @@ fn upload(request: &Request) -> Response {
 
 /// http://jsonapi.org/format/#errors
 fn error_object(message: &str) -> Response {
+    println!("error: {}", message);
     Response::json(&json!({ "errors": [
         { "title": message }
     ] }))
@@ -307,6 +308,7 @@ fn main() -> Result<(), Error> {
                 (GET)  ["/gallery/"]            => { static_html("web/gallery/index.html")  },
 
                 (GET)  ["/root.css"]            => { static_css ("web/root.css")            },
+                (GET)  ["/user.svg"]            => { static_svg ("web/user.svg")            },
                 (GET)  ["/lollipop.js"]         => { static_js  ("web/lollipop.js")         },
                 (GET)  ["/gallery/gallery.css"] => { static_css ("web/gallery/gallery.css") },
                 (GET)  ["/jquery-3.3.1.min.js"] => { static_js  ("web/jquery-3.3.1.min.js") },
@@ -337,6 +339,10 @@ fn static_css(path: &'static str) -> Response {
 
 fn static_js(path: &'static str) -> Response {
     static_file("application/javascript", path)
+}
+
+fn static_svg(path: &'static str) -> Response {
+    static_file("image/svg+xml", path)
 }
 
 fn static_file(content_type: &'static str, path: &'static str) -> Response {

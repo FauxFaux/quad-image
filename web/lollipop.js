@@ -2,6 +2,7 @@
 var Lollipop;
 (function (Lollipop) {
     var quadpees = [];
+    var targetGallery = null;
     var images = document.getElementById("images");
     var form = document.getElementById("form");
     var Item = (function () {
@@ -34,6 +35,9 @@ var Lollipop;
                     if (!url) {
                         cb(false, "empty id returned");
                         return;
+                    }
+                    if (targetGallery) {
+                        addImagesToGallery(targetGallery, [url]);
                     }
                     quadpees.push(url);
                     localStorage.setItem("quadpees", JSON.stringify(quadpees));
@@ -155,6 +159,56 @@ var Lollipop;
         span.innerHTML = msg;
         errors.insertBefore(span, errors.firstChild);
     }
+    function callGallery(gallery, images) {
+        return $.ajax('/api/gallery', {
+            type: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                data: {
+                    type: 'gallery',
+                    attributes: {
+                        gallery: gallery,
+                        images: images,
+                    }
+                }
+            })
+        });
+    }
+    function setCurrentPublic(id) {
+        $('#current-gallery')
+            .empty()
+            .append($('<a>')
+            .attr('href', '/gallery/#' + id)
+            .attr('target', 'none')
+            .text(id));
+    }
+    function addImagesToGallery(gallery, images) {
+        callGallery(gallery, images)
+            .then(function (resp) {
+            if ('errors' in resp) {
+                resp.errors.forEach(function (e) { return error("then: " + e.code + ": " + e.title); });
+            }
+            else if ('data' in resp) {
+                if ('gallery' !== resp.data.type) {
+                    error("invalid response type");
+                }
+                else {
+                    setCurrentPublic(resp.data.id);
+                    $('#new-gallery').val('');
+                    localStorage.setItem('gallery', gallery);
+                    targetGallery = gallery;
+                }
+            }
+            else {
+                error('invalid response object: ' + JSON.stringify(resp));
+            }
+        })
+            .catch(function (xhr) {
+            if (xhr.responseJSON && 'errors' in xhr.responseJSON) {
+                xhr.responseJSON.errors.forEach(function (e) { return error("http: " + e.code + ": " + e.title); });
+            }
+        });
+    }
     $(function () {
         var storage = localStorage.getItem("quadpees");
         if (storage) {
@@ -167,6 +221,7 @@ var Lollipop;
         else {
             localStorage.setItem("quadpees", "[]");
         }
+        targetGallery = localStorage.getItem('gallery');
     });
     $(function () {
         var doc = document.documentElement;
@@ -204,6 +259,26 @@ var Lollipop;
         doc.ondragexit = doc.ondragleave = function () {
             form.classList.remove("dragover");
         };
+        $('#user-button').on('click', function () {
+            $('#user-button').hide();
+            $('#user-settings').show();
+            if (targetGallery) {
+                addImagesToGallery(targetGallery, []);
+            }
+            else {
+                $('#current-gallery')
+                    .empty()
+                    .html('<i>not set</i>');
+            }
+        });
+        $('#user-settings .close').on('click', function () {
+            $('#user-button').show();
+            $('#user-settings').hide();
+        });
+        $('#user-form').submit(function () {
+            addImagesToGallery($('#new-gallery').val(), quadpees);
+            return false;
+        });
         var errors = document.getElementById("errors");
         errors.style.display = "none";
         errors.innerHTML = "";

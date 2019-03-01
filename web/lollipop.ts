@@ -2,6 +2,7 @@ import * as JSONAPI from "jsonapi-typescript";
 
 namespace Lollipop {
     let quadpees: string[] = [];
+    let targetGallery: string | null = null;
 
     const images = document.getElementById("images") as HTMLElement;
     const form = document.getElementById("form") as HTMLElement;
@@ -42,6 +43,9 @@ namespace Lollipop {
                     if (!url) {
                         cb(false, "empty id returned");
                         return;
+                    }
+                    if (targetGallery) {
+                        addImagesToGallery(targetGallery, [url]);
                     }
                     quadpees.push(url);
                     localStorage.setItem("quadpees", JSON.stringify(quadpees));
@@ -190,6 +194,57 @@ namespace Lollipop {
         errors.insertBefore(span, errors.firstChild);
     }
 
+    function callGallery(gallery: string, images: string[]) {
+        return $.ajax('/api/gallery', {
+            type: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                data: {
+                    type: 'gallery',
+                    attributes: {
+                        gallery,
+                        images,
+                    }
+                }
+            })
+        });
+    }
+
+    function setCurrentPublic(id: string) {
+        $('#current-gallery')
+          .empty()
+          .append(
+            $('<a>')
+              .attr('href', '/gallery/#' + id)
+              .attr('target', 'none')
+              .text(id));
+    }
+
+    function addImagesToGallery(gallery: string, images: string[]) {
+        callGallery(gallery, images)
+          .then(function (resp) {
+              if ('errors' in resp) {
+                  resp.errors.forEach((e: JSONAPI.ErrorObject) => error(`then: ${e.code}: ${e.title}`));
+              } else if ('data' in resp) {
+                  if ('gallery' !== resp.data.type) {
+                      error("invalid response type");
+                  } else {
+                      setCurrentPublic(resp.data.id);
+                      $('#new-gallery').val('');
+                      localStorage.setItem('gallery', gallery);
+                      targetGallery = gallery;
+                  }
+              } else {
+                  error('invalid response object: ' + JSON.stringify(resp));
+              }
+          })
+          .catch((xhr: any) => {
+              if (xhr.responseJSON && 'errors' in xhr.responseJSON) {
+                  xhr.responseJSON.errors.forEach((e: JSONAPI.ErrorObject) => error(`http: ${e.code}: ${e.title}`));
+              }
+          });
+    }
+
     $(() => {
         const storage: string | null = localStorage.getItem("quadpees");
         if (storage) {
@@ -201,6 +256,8 @@ namespace Lollipop {
         } else {
             localStorage.setItem("quadpees", "[]");
         }
+
+        targetGallery = localStorage.getItem('gallery');
     });
 
     $(() => {
@@ -244,6 +301,28 @@ namespace Lollipop {
         doc.ondragexit = doc.ondragleave = () => {
             form.classList.remove("dragover");
         };
+
+        $('#user-button').on('click', () => {
+            $('#user-button').hide();
+            $('#user-settings').show();
+            if (targetGallery) {
+                addImagesToGallery(targetGallery, []);
+            } else {
+                $('#current-gallery')
+                  .empty()
+                  .html('<i>not set</i>');
+            }
+        });
+
+        $('#user-settings .close').on('click', () => {
+            $('#user-button').show();
+            $('#user-settings').hide();
+        });
+
+        $('#user-form').submit(() => {
+            addImagesToGallery($('#new-gallery').val() as string, quadpees);
+            return false;
+        });
 
         const errors = document.getElementById("errors") as HTMLElement;
         errors.style.display = "none";

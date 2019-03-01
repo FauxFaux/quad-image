@@ -187,6 +187,51 @@ body.active-upload #images {
     color: white;
 }
 
+input[type=text] {
+    width: 100%;
+    padding: 0.4em 0.6em;
+    margin: 0.3em 0;
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+#menu {
+    position: fixed;
+    top: 1em;
+    left: 1em;
+    font-family: sans-serif;
+    color: black;
+    text-align: center;
+    z-index: 3;
+}
+
+#menu img {
+    border: 2px solid #a50f15;
+    padding: 8px;
+    border-radius: 20px;
+    cursor: pointer;
+}
+
+#user-settings {
+    display: none;
+    border: 1px solid black;
+    border-radius: 5px;
+    padding: 1em;
+    z-index: 3;
+    background: white;
+}
+
+#user-settings .close {
+    float: right;
+    cursor: pointer;
+}
+
+#user-settings p, #user-settings form {
+    margin: 12px;
+}
+
 #tcs {
     position: fixed;
     top: 1em;
