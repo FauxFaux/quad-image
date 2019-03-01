@@ -212,6 +212,10 @@ fn gallery_put(conn: Conn, global_secret: &[u8], request: &Request) -> Response 
             return bad_request("invalid image id");
         }
 
+        if !path::Path::new(image).exists() {
+            return bad_request("no such image");
+        }
+
         images.push(image);
     }
 
