@@ -34,9 +34,9 @@ tempfile-fast = "0.3"
 
 [dependencies.image]
 version = "0.21"
-# features -= "gif_codec" (which is buggy and we handle ourselves), "hdr", "dxt"
+# features -= "hdr", "dxt"
 default-features = false
-features = ["jpeg", "jpeg_rayon", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
+features = ["gif_codec", "jpeg", "jpeg_rayon", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
 
 [dependencies.rusqlite]
 version = "0.16"
