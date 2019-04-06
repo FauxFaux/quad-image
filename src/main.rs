@@ -78,11 +78,11 @@ fn upload(request: &Request) -> Response {
             let remote_addr = request.remote_addr();
             let remote_forwarded = request.header("X-Forwarded-For");
 
+            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, image_id);
+
             if let Err(e) = thumbs::thumbnail(&image_id) {
                 return log_error("thumbnailing just written", request, &e);
             }
-
-            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, image_id);
 
             if return_json {
                 data_response(resource_object(image_id, "image"))
