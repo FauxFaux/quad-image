@@ -231,7 +231,7 @@ var Lollipop;
         };
         doc.onpaste = function (e) {
             e.preventDefault();
-            onFiles(e.clipboardData.files, "pasted content");
+            onFiles(e.clipboardData && e.clipboardData.files, "pasted content");
         };
         doc.ondrop = function (e) {
             e.preventDefault();

@@ -1,7 +1,7 @@
 all: web/lollipop.js
 
 %.js: node_modules tsconfig.json %.ts
-	node_modules/.bin/tsc
+	npm run build
 
 node_modules: package.json
 	npm install

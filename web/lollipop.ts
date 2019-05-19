@@ -270,7 +270,7 @@ namespace Lollipop {
 
         doc.onpaste = (e) => {
             e.preventDefault();
-            onFiles(e.clipboardData.files, "pasted content");
+            onFiles(e.clipboardData && e.clipboardData.files, "pasted content");
         };
 
         doc.ondrop = (e) => {

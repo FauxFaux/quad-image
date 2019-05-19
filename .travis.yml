@@ -2,7 +2,14 @@ sudo: false
 dist: xenial
 
 language: rust
-cache: cargo
+cache:
+  - cargo
+  - npm
+
+script:
+  - cargo build --verbose
+  - cargo test --verbose
+  - make
 
 rust:
   - nightly

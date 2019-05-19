@@ -1,10 +1,14 @@
 {
   "name": "quad-image",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tslint --project ."
+  },
   "devDependencies": {
     "@types/jquery": "^3.3.29",
-    "jquery": "^3.3.1",
+    "jquery": "^3.4.1",
     "jsonapi-typescript": "0.0.9",
-    "tslint": "^5.13.1",
-    "typescript": "^3.3.3333"
+    "tslint": "^5.16.0",
+    "typescript": "^3.4.5"
   }
 }
