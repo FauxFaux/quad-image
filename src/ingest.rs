@@ -3,7 +3,9 @@ use std::io;
 use std::io::Seek;
 use std::io::SeekFrom;
 
+use failure::bail;
 use failure::err_msg;
+use failure::format_err;
 use failure::Error;
 use failure::ResultExt;
 use image;

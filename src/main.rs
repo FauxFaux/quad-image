@@ -1,22 +1,3 @@
-extern crate base64;
-#[macro_use]
-extern crate failure;
-extern crate exif;
-extern crate hmac;
-extern crate image;
-#[macro_use]
-extern crate lazy_static;
-extern crate libc;
-extern crate rand;
-extern crate regex;
-#[macro_use]
-extern crate rouille;
-extern crate rusqlite;
-#[macro_use]
-extern crate serde_json;
-extern crate sha2;
-extern crate tempfile_fast;
-
 mod gallery;
 pub mod ingest;
 #[cfg(test)]
@@ -32,12 +13,16 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use failure::Error;
+use lazy_static::lazy_static;
 use rand::RngCore;
 use rouille::input::json::JsonError;
 use rouille::input::json_input;
 use rouille::input::post;
+use rouille::post_input;
+use rouille::router;
 use rouille::Request;
 use rouille::Response;
+use serde_json::json;
 
 const BAD_REQUEST: u16 = 400;
 

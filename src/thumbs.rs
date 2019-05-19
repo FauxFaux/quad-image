@@ -2,6 +2,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
+use failure::format_err;
 use failure::Error;
 use failure::ResultExt;
 use image;

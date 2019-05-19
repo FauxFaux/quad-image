@@ -1,6 +1,7 @@
 use std::convert::TryInto;
 
 use base64;
+use failure::bail;
 use failure::err_msg;
 use failure::Error;
 use hmac;
