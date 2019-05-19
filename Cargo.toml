@@ -17,7 +17,6 @@ repository = "FauxFaux/quad-image"
 
 [dependencies]
 base64 = "0.10"
-cast = "0.2"
 failure = "0.1"
 gif = "0.10"
 hmac = "0.7"
@@ -39,7 +38,7 @@ default-features = false
 features = ["gif_codec", "jpeg", "jpeg_rayon", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
 
 [dependencies.rusqlite]
-version = "0.16"
+version = "0.18"
 features = ["bundled"]
 
 [dev-dependencies]

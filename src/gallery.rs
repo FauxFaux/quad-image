@@ -1,5 +1,6 @@
+use std::convert::TryInto;
+
 use base64;
-use cast::i64;
 use failure::err_msg;
 use failure::Error;
 use hmac;
@@ -89,7 +90,8 @@ fn epoch_millis() -> i64 {
     let since_the_epoch = start
         .duration_since(time::UNIX_EPOCH)
         .unwrap_or_else(|_| time::Duration::new(0, 0));
-    i64(since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000)
+    (since_the_epoch.as_secs() * 1000 + since_the_epoch.subsec_nanos() as u64 / 1_000_000)
+        .try_into()
         .unwrap_or(std::i64::MAX)
 }
 

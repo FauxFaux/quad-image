@@ -1,5 +1,4 @@
 extern crate base64;
-extern crate cast;
 #[macro_use]
 extern crate failure;
 extern crate exif;
