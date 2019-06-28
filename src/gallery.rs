@@ -64,7 +64,7 @@ pub fn gallery_store(
     let mut timestamp = epoch_millis();
 
     for image in images {
-        match stat.execute(&[&public.as_str() as &ToSql, &image, &timestamp]) {
+        match stat.execute(&[&public.as_str() as &dyn ToSql, &image, &timestamp]) {
             Ok(_) => timestamp += 1,
             Err(rusqlite::Error::SqliteFailure(ffi, _))
                 if rusqlite::ErrorCode::ConstraintViolation == ffi.code =>
