@@ -7,3 +7,4 @@ images
 .secret
 gallery.db
 node_modules/
+dist/
