@@ -293,7 +293,7 @@ fn main() -> Result<(), Error> {
 
                 (GET)  ["/root.css"]            => { static_css ("web/root.css")            },
                 (GET)  ["/user.svg"]            => { static_svg ("web/user.svg")            },
-                (GET)  ["/lollipop.js"]         => { static_js  ("web/lollipop.js")         },
+                (GET)  ["/bundle.js"  ]         => { static_js  ("web/bundle.js")           },
                 (GET)  ["/gallery/gallery.css"] => { static_css ("web/gallery/gallery.css") },
                 (GET)  ["/jquery-3.3.1.min.js"] => { static_js  ("web/jquery-3.3.1.min.js") },
 

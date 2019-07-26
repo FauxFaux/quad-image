@@ -9,13 +9,15 @@
 <body>
 <div id="content"></div>
 <div id="gallery">Loading JS...</div>
-<script src="../jquery-3.3.1.min.js"
-        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+<script
+        src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
         crossorigin="anonymous"></script>
-<script src="../lollipop.js"></script>
+<script src="../bundle.js"></script>
 <script>
-    window.onhashchange = Gallery.hashChanged;
-    Gallery.hashChanged();
+  var hc = quadImage.Gallery.hashChanged;
+  window.onhashchange = hc;
+  hc();
 </script>
 </body>
 </html>
