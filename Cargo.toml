@@ -23,19 +23,23 @@ hmac = "0.7"
 kamadak-exif = "0.3"
 lazy_static = "1"
 libc = "0.2"
-rand = "0.6"
+rand = "0.7"
 rayon = "1"
 regex = "1"
-rouille = "3"
 serde_json = "1"
 sha2 = "0.8"
 tempfile-fast = "0.3"
 
 [dependencies.image]
-version = "0.21"
+version = "0.22"
 # features -= "hdr", "dxt"
 default-features = false
 features = ["gif_codec", "jpeg", "jpeg_rayon", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
+
+[dependencies.rouille]
+# upstream master + bumps
+git = "https://github.com/FauxFaux/rouille"
+rev = "09ce37a7520489be8537aab859833f4adab4c321"
 
 [dependencies.rusqlite]
 version = "0.19"

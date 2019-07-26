@@ -269,7 +269,8 @@ mod tests {
                 let e = expected.get_pixel(x, y);
                 let a = actual.get_pixel(x, y);
                 for c in 0..4 {
-                    diff += ((e.data[c] as f64) - (a.data[c] as f64)).abs() / 256. / 4.;
+                    use image::Pixel;
+                    diff += ((e.channels()[c] as f64) - (a.channels()[c] as f64)).abs() / 256. / 4.;
                 }
             }
         }
