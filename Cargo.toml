@@ -17,7 +17,6 @@ repository = "FauxFaux/quad-image"
 
 [dependencies]
 base64 = "0.10"
-failure = "0.1"
 gif = "0.10"
 hmac = "0.7"
 kamadak-exif = "0.3"
@@ -30,6 +29,10 @@ serde_json = "1"
 sha2 = "0.8"
 tempfile-fast = "0.3"
 
+[dependencies.failure]
+default-features = false
+version = "0.1"
+
 [dependencies.image]
 version = "0.22"
 # features -= "hdr", "dxt"
@@ -37,12 +40,12 @@ default-features = false
 features = ["gif_codec", "jpeg", "jpeg_rayon", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
 
 [dependencies.rouille]
-# upstream master + bumps
-git = "https://github.com/FauxFaux/rouille"
-rev = "09ce37a7520489be8537aab859833f4adab4c321"
+# upstream master
+git = "https://github.com/tomaka/rouille"
+rev = "e9692e1b19c8d25a742129a16bbe826c686ab274"
 
 [dependencies.rusqlite]
-version = "0.19"
+version = "0.20"
 features = ["bundled"]
 
 [dev-dependencies]

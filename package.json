@@ -7,22 +7,22 @@
     "watch": "webpack --watch --mode=development"
   },
   "devDependencies": {
-    "@types/jquery": "^3.3.30",
-    "@typescript-eslint/eslint-plugin": "^1.13.0",
-    "@typescript-eslint/parser": "^1.13.0",
+    "@types/jquery": "^3.3.31",
+    "@typescript-eslint/eslint-plugin": "^2.2.0",
+    "@typescript-eslint/parser": "^2.2.0",
     "awesome-typescript-loader": "^5.2.1",
-    "eslint": "^6.1.0",
-    "eslint-config-prettier": "^6.0.0",
+    "eslint": "^6.3.0",
+    "eslint-config-prettier": "^6.3.0",
     "eslint-plugin-prettier": "^3.1.0",
     "ignore-loader": "^0.1.2",
-    "jest": "^24.8.0",
+    "jest": "^24.9.0",
     "jquery": "^3.4.1",
     "jsonapi-typescript": "0.1.3",
     "prettier": "^1.18.2",
     "source-map-loader": "^0.2.4",
-    "typescript": "^3.5.3",
+    "typescript": "^3.6.3",
     "url-loader": "^2.1.0",
-    "webpack": "^4.38.0",
-    "webpack-cli": "^3.3.6"
+    "webpack": "^4.40.1",
+    "webpack-cli": "^3.3.8"
   }
 }
