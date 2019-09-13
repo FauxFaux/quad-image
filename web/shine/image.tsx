@@ -1,7 +1,7 @@
 import { h, Component } from 'preact';
 import { writeText } from 'clipboard-polyfill';
 
-import { SavedImage } from './types';
+import { SavedImage } from '../types';
 
 export interface Props {
   id: SavedImage;
