@@ -1,35 +1,31 @@
 var path = require('path');
 
 module.exports = {
-  entry: "./web/index.tsx",
+  entry: './web/index.tsx',
   output: {
     path: path.join(process.cwd(), 'web'),
-    filename: "bundle.js",
-    library: "quadImage",
+    filename: 'bundle.js',
+    library: 'quadImage',
   },
 
   // Enable sourcemaps for debugging webpack's output.
-  devtool: "source-map",
+  devtool: 'source-map',
 
   resolve: {
     // Add '.ts' and '.tsx' as resolvable extensions.
-    extensions: [".ts", ".tsx", ".js", ".json"]
+    extensions: ['.ts', '.tsx', '.js', '.json'],
   },
 
   module: {
     rules: [
       // All files with a '.ts' or '.tsx' extension will be handled by 'awesome-typescript-loader'.
-      { test: /\.tsx?$/, loader: "awesome-typescript-loader" },
+      { test: /\.tsx?$/, loader: 'awesome-typescript-loader' },
 
       // Pack SVGs into base64 urls
       { test: /\.svg$/, loader: 'url-loader?mimetype=image/svg+xml&name=[name].[ext]' },
 
       // All output '.js' files will have any sourcemaps re-processed by 'source-map-loader'.
-      { enforce: "pre", test: /\.js$/, loader: "source-map-loader" }
-    ]
-  },
-
-  externals: {
-    jquery: 'jQuery',
+      { enforce: 'pre', test: /\.js$/, loader: 'source-map-loader' },
+    ],
   },
 };
