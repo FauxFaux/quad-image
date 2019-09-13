@@ -1,4 +1,3 @@
-import * as $ from 'jquery';
 import * as JSONAPI from 'jsonapi-typescript';
 
 let quadpees: string[] = [];
@@ -31,7 +30,7 @@ function upload(fileBlob: Blob, cb: (success: boolean, msg: string) => void) {
   const data = new FormData();
   data.append('image', fileBlob);
   data.append('return_json', 'true');
-  $.ajax('/api/upload', {
+  fetch('/api/upload', {
     method: 'POST',
     data,
     processData: false,

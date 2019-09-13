@@ -1,5 +1,8 @@
 import { h, Component, render } from 'preact';
 
+import { User } from './user';
+import { Images } from './images';
+
 export function init(element: HTMLElement) {
   render(<Shine />, element);
 }
@@ -12,26 +15,11 @@ class Shine extends Component {
           <p>
             <img id="user-button" src="user.svg" alt="user menu" />
           </p>
-          <div id="user-settings">
-            <div class="close">✖</div>
-            <p>
-              Current gallery:{' '}
-              <span id="current-gallery">
-                <i>thinking</i>
-              </span>
-            </p>
-            <form id="user-form">
-              <label>
-                New <abbr title="Gallery name and trigger (4-10 letter name, !, password)">gallery</abbr>:
-                <input id="new-gallery" name="gallery" required placeholder="green!battery staple"></input>
-              </label>
-              <button>sync</button>
-            </form>
-          </div>
+          <User />
         </div>
         <label for="realos" id="form"></label>
         <input type="file" multiple id="realos" />
-        <ul id="images"></ul>
+        <Images />
         <div id="errors">Waiting for Javascript to initialise...</div>
         <div id="tcs">
           <p>
