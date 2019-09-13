@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
     "strict": true,
-    "noImplicitAny": true,
+    "noImplicitAny": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "allowSyntheticDefaultImports": true,
 
     "module": "es6",
     "moduleResolution": "node",

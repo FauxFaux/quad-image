@@ -6,35 +6,10 @@
     <link rel="stylesheet" type="text/css" href="root.css"/>
 </head>
 <body>
-<div id="menu">
-    <p><img id='user-button' src="user.svg" alt="user menu"/></p>
-    <div id="user-settings">
-        <div class="close">✖</div>
-        <p>Current gallery: <span id="current-gallery"><i>thinking</i></span></p>
-        <form id="user-form">
-            <label>New <abbr title="Gallery name and trigger (4-10 letter name, !, password)">gallery</abbr>:
-                <input id='new-gallery' name="gallery" required placeholder="green!battery staple">
-            </label>
-            <button>sync</button>
-        </form>
-    </div>
-</div>
-<label for="realos" id="form"></label>
-<input type="file" multiple id="realos">
-<ul id="images"></ul>
-<div id="errors">
-    Waiting for Javascript to initialise...
-</div>
-<div id="tcs">
-    <p><a href="/terms/">T&amp;Cs</a></p>
-</div>
-<script
-        src="https://code.jquery.com/jquery-3.4.1.min.js"
-        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
-        crossorigin="anonymous"></script>
+<div id="app"></div>
 <script src="bundle.js"></script>
 <script>
-  quadImage.Lollipop.init();
+  quadImage.Shine.init(document.getElementById("app"));
 </script>
 </body>
 </html>
