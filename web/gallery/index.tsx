@@ -1,7 +1,7 @@
 import * as JSONAPI from 'jsonapi-typescript';
 import { h, Component, render } from 'preact';
 
-import { Loader, SavedImage } from './types';
+import { Loader, SavedImage } from '../types';
 import { Tiles } from './tiles';
 
 let state: State | null = null;

@@ -1,5 +1,5 @@
 import { h, Component, Fragment } from 'preact';
-import { SavedImage } from './types';
+import { SavedImage } from '../types';
 
 export interface Props {
   images: SavedImage[];
