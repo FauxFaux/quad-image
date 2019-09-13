@@ -301,7 +301,8 @@ fn main() -> anyhow::Result<()> {
 
                 (GET)  ["/root.css"]            => { static_css ("web/root.css")            },
                 (GET)  ["/user.svg"]            => { static_svg ("web/user.svg")            },
-                (GET)  ["/bundle.js"  ]         => { static_js  ("web/bundle.js")           },
+                (GET)  ["/bundle.js"]           => { static_js  ("web/bundle.js")           },
+                (GET)  ["/bundle.js.map"]       => { static_js  ("web/bundle.js.map")       },
                 (GET)  ["/gallery/gallery.css"] => { static_css ("web/gallery/gallery.css") },
                 (GET)  ["/jquery-3.3.1.min.js"] => { static_js  ("web/jquery-3.3.1.min.js") },
 

@@ -11,11 +11,14 @@ export interface State {
   copyDone: false;
 }
 
-class Image extends Component<Props> {
+export class Image extends Component<Props> {
   render(props: Readonly<Props>, state: Readonly<State>) {
     return (
       <li data-mini-url={props.id} class="loaded">
-        <button onClick={(_) => this.doCopy(props.id)} onMouseOut={(_) => this.setState({ copyDone: false })}>
+        <button
+          onClick={(_) => this.copyUrlToClipboard(props.id)}
+          onMouseOut={(_) => this.setState({ copyDone: false })}
+        >
           {state.copyDone ? 'copied' : 'copy'}
         </button>
         <button>🗑➡️</button>
@@ -26,7 +29,7 @@ class Image extends Component<Props> {
     );
   }
 
-  doCopy(id: SavedImage) {
+  copyUrlToClipboard(id: SavedImage) {
     const expandedUrl = new URL(id, document.location.href).href;
 
     writeText(expandedUrl)
