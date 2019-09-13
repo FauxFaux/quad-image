@@ -8,3 +8,9 @@ export type Loader<T> =
   | ({ code: 'ready' } & T)
   // error happened
   | { code: 'error'; message: string };
+
+export class AppError extends Error {
+  constructor(msg: string) {
+    super(msg);
+  }
+}
