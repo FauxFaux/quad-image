@@ -64,6 +64,7 @@ fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage, E
 }
 
 fn temp_file() -> Result<PersistableTempFile, Error> {
+    println!("in temp file: {:?}", std::env::current_dir());
     Ok(PersistableTempFile::new_in("e").with_context(|_| format_err!("temp file"))?)
 }
 
@@ -320,10 +321,10 @@ mod tests {
     }
 
     #[test]
-    fn problematic_android_image() {
-        use super::store;
+    fn problematic_android_image() -> Result<(), failure::Error> {
+        println!("{:?}", std::env::current_dir());
         let data = include_bytes!("../tests/no_exif.jpeg");
-        let res = store(data);
-        assert!(res.is_ok());
+        super::store(data)?;
+        Ok(())
     }
 }
