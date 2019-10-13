@@ -318,4 +318,12 @@ mod tests {
             assert_similar(&plain, &output, rot);
         }
     }
+
+    #[test]
+    fn problematic_android_image() {
+        use super::store;
+        let data = include_bytes!("../tests/no_exif.jpeg");
+        let res = store(data);
+        assert!(res.is_ok());
+    }
 }
