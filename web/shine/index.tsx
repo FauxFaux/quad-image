@@ -8,8 +8,6 @@ import { Errors } from './errors';
 import { JSXInternal } from 'preact/src/jsx';
 import EventHandler = JSXInternal.EventHandler;
 
-require('preact/debug');
-
 class Storage {
   targetGallery: string | null;
   images: string[];
