@@ -12,7 +12,10 @@
       "es2017.object",
       "dom"
     ],
-    "allowSyntheticDefaultImports": true,
-    "jsx": "react"
-  }
+    "jsx": "react",
+    "jsxFactory": "h"
+  },
+  "include": [
+    "./web/**/*.ts*"
+  ]
 }
