@@ -57,7 +57,7 @@ export function hashChanged() {
 
   $.get('../api/gallery/' + hash.gallery)
     .done((data) => {
-      const images = fetch_complete(data, showError);
+      const images = fetchComplete(data, showError);
       if (null === images) {
         return;
       }
@@ -67,7 +67,7 @@ export function hashChanged() {
     .catch(() => showError('network error fetching gallery'));
 }
 
-function fetch_complete(resp: JSONAPI.Document, showError: (msg: string) => void): string[] | null {
+function fetchComplete(resp: JSONAPI.Document, showError: (msg: string) => void): string[] | null {
   if ('errors' in resp) {
     showError(JSON.stringify(resp.errors));
     return null;

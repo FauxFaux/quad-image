@@ -51,7 +51,7 @@ function upload(fileBlob: Blob, cb: (success: boolean, msg: string) => void) {
         localStorage.setItem('quadpees', JSON.stringify(quadpees));
         cb(true, url);
       } else if ('errors' in resp) {
-        const doc = resp as JSONAPI.DocWithErrors;
+        const doc = resp;
         cb(false, doc.errors.join(', '));
       } else {
         cb(false, `unexpected object ${Object.keys(resp).join(', ')}`);
@@ -260,7 +260,7 @@ function loadStorage() {
 }
 
 function setEvents() {
-  const doc = document.documentElement as HTMLElement;
+  const doc = document.documentElement;
   const realos = document.getElementById('realos') as HTMLInputElement;
 
   realos.onchange = () => {

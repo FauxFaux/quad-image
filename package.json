@@ -2,9 +2,9 @@
   "name": "quad-image",
   "scripts": {
     "build": "webpack --mode=production",
-    "lint": "eslint web/**.tsx",
-    "lint-fix": "eslint --fix 'web/**/*.tsx'",
-    "format": "prettier --write 'web/**/*.tsx'",
+    "lint": "eslint             'web/**/*.ts*'",
+    "lint-fix": "eslint --fix   'web/**/*.ts*'",
+    "format": "prettier --write 'web/**/*.ts*'",
     "watch": "webpack --watch --mode=development"
   },
   "devDependencies": {
