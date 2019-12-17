@@ -2,11 +2,10 @@ import { h, Component, render } from 'preact';
 import cc from 'classcat';
 
 import { User } from './user';
-import { Images, MaybeImage } from './images';
+import { Images, isImage, MaybeImage } from './images';
 import { uploadFile } from './files';
 import { Errors } from './errors';
-import { JSXInternal } from 'preact/src/jsx';
-import EventHandler = JSXInternal.EventHandler;
+import { AppError } from '../types';
 
 class Storage {
   targetGallery: string | null;
@@ -22,6 +21,14 @@ class Storage {
     }
 
     this.targetGallery = localStorage.getItem('gallery');
+  }
+
+  setImages(images: string[]) {
+    localStorage.setItem('quadpees', JSON.stringify(images));
+  }
+
+  setGallery(gallery: string) {
+    localStorage.setItem('gallery', gallery);
   }
 }
 
@@ -103,7 +110,19 @@ class Shine extends Component<{}, State> {
       const item = items[i];
 
       if (item.type.match(/image.*/)) {
-        await uploadFile(item);
+        try {
+          const id = await uploadFile(item);
+          this.setState(({ images }) => {
+            images.push({ code: 'image', id });
+            storage.setImages(images.filter(isImage).map(({ id }) => id));
+            return { images };
+          });
+        } catch (e) {
+          if (!(e instanceof AppError)) {
+            throw e;
+          }
+          this.setState(({ images }) => ({ images: images.concat({ code: 'failed', message: e.message }) }));
+        }
       } else {
         this.error("Ignoring non-image item (of type '" + item.type + "') in " + context + ': ' + item.name);
       }

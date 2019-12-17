@@ -1,7 +1,7 @@
-import { AppError, SavedImage } from '../types';
+import { SavedImage } from '../types';
 import { upload } from './net';
 
-function readFile(file: File): Promise<ArrayBuffer> {
+async function readFile(file: File): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -29,25 +29,8 @@ export async function uploadFile(file: File): Promise<SavedImage> {
 
   const blob = new Blob([blobPart], { type });
 
-  // TODO: add placeholder
-
-  const imageId = await upload(blob);
-
-  return imageId;
+  return await upload(blob);
 }
-
-/*
-if (!success) {
-  loadingItem.actionButton.onclick = () => {
-    alert(msg);
-  };
-  loadingItem.li.classList.add('failed');
-  loadingItem.li.classList.remove('loading');
-  return;
-}
-
-makeLoadedItem(loadingItem, msg);
-*/
 
 // TODO: State somewhere
 function setBodyActive() {

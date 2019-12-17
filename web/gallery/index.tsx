@@ -4,8 +4,6 @@ import { h, Component, render } from 'preact';
 import { Loader, SavedImage } from '../types';
 import { Tiles } from './tiles';
 
-let state: State | null = null;
-
 export function init(el: HTMLElement) {
   render(<Gallery galleryId="green:p33qj9zIOw" />, el);
 }
@@ -30,7 +28,7 @@ export class Gallery extends Component<Props, State> {
         return;
       }
 
-      await this.setState({ images: { code: 'ready', images } });
+      this.setState({ images: { code: 'ready', images } });
     });
   }
 

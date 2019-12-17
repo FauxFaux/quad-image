@@ -35,6 +35,6 @@ export class Image extends Component<Props> {
     writeText(expandedUrl)
       .then((_) => this.setState({ copyDone: true }))
       // TODO: ? Does this really fail?
-      .catch(console.log);
+      .catch((e) => console.error(e));
   }
 }
