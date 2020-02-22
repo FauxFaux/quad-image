@@ -30,13 +30,15 @@ sha2 = "0.8"
 tempfile-fast = "0.3"
 
 [dependencies.failure]
+default-features = false
+features = ["std"]
 version = "0.1"
 
 [dependencies.image]
-version = "0.22"
-# features -= "hdr", "dxt"
+version = "0.23"
+# features -= "hdr", "dxt", "dds"
 default-features = false
-features = ["gif_codec", "jpeg", "jpeg_rayon", "ico", "png_codec", "pnm", "tga", "tiff", "webp", "bmp"]
+features = ["gif", "jpeg", "ico", "png", "pnm", "tga", "tiff", "webp", "bmp", "jpeg_rayon"]
 
 [dependencies.rouille]
 # upstream master

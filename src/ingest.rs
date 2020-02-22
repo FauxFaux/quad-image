@@ -31,7 +31,7 @@ pub type SavedImage = String;
 /// https://github.com/PistonDevelopers/image/issues/660
 fn guess_format(data: &[u8]) -> Result<ImageFormat, Error> {
     Ok(if data.len() >= 4 && b"RIFF"[..] == data[..4] {
-        ImageFormat::WEBP
+        ImageFormat::WebP
     } else {
         image::guess_format(data).with_context(|_| {
             format_err!(
@@ -49,7 +49,7 @@ fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage, E
 
     use image::ImageFormat::*;
     let expect_exif = match format {
-        JPEG | WEBP | TIFF => true,
+        Jpeg | WebP | Tiff => true,
         _ => false,
     };
 
@@ -106,16 +106,16 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
     let guessed_format = guess_format(data)?;
 
     use image::ImageFormat::*;
-    if GIF == guessed_format {
+    if Gif == guessed_format {
         return handle_gif(data);
     }
 
     let loaded = load_image(data, guessed_format)?;
 
     let mut target_format = match guessed_format {
-        PNG | PNM | TIFF | BMP | ICO | HDR | TGA => PNG,
-        JPEG | WEBP => JPEG,
-        GIF => unreachable!(),
+        Png | Pnm | Tiff | Bmp | Ico | Hdr | Tga => Png,
+        Gif => unreachable!(),
+        Jpeg | WebP | Dds | _ => Jpeg,
     };
 
     let mut temp = temp_file()?;
@@ -123,7 +123,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
         .write_to(temp.as_mut(), target_format)
         .with_context(|_| format_err!("save"))?;
 
-    if target_format == PNG {
+    if target_format == Png {
         // Chrome seems to convert everything pasted to png, even if it's huge.
         // So, if we see a png that's too big, down-convert it to a jpg,
         // and log about how proud we are of having ruined the internet.
@@ -140,7 +140,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
             temp.set_len(0)
                 .with_context(|_| format_err!("truncating temp file"))?;
 
-            target_format = JPEG;
+            target_format = Jpeg;
 
             loaded
                 .write_to(temp.as_mut(), target_format)
@@ -157,8 +157,8 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
         }
     }
     let ext = match target_format {
-        PNG => "png",
-        JPEG => "jpg",
+        Png => "png",
+        Jpeg => "jpg",
         _ => unreachable!(),
     };
 
@@ -209,11 +209,11 @@ fn apply_rotation(rotation: u32, image: &mut image::DynamicImage) {
     }
 
     if 0 != rotation & 0b010 {
-        *image = image::ImageRgba8(imageops::rotate180(image));
+        *image = image::DynamicImage::ImageRgba8(imageops::rotate180(image));
     }
 
     if 0 != rotation & 0b001 {
-        *image = image::ImageRgba8(imageops::flip_horizontal(image));
+        *image = image::DynamicImage::ImageRgba8(imageops::flip_horizontal(image));
     }
 }
 
@@ -311,7 +311,7 @@ mod tests {
                             .write(true)
                             .open(format!("/tmp/orient_fixed_{}.jpg", rot))
                             .unwrap(),
-                        image::ImageFormat::JPEG,
+                        image::ImageFormat::Jpeg,
                     )
                     .unwrap();
             }
