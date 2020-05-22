@@ -30,7 +30,6 @@ sha2 = "0.8"
 tempfile-fast = "0.3"
 
 [dependencies.failure]
-default-features = false
 version = "0.1"
 
 [dependencies.image]
