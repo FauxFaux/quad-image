@@ -450,8 +450,11 @@ dependencies = [
 
 [[package]]
 name = "kamadak-exif"
-version = "0.3.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "mutate_once 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "lazy_static"
@@ -565,6 +568,11 @@ dependencies = [
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "twoway 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "mutate_once"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "num-derive"
@@ -723,7 +731,7 @@ dependencies = [
  "gif 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "hmac 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.22.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "kamadak-exif 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "kamadak-exif 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1358,7 +1366,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum inflate 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)" = "1cdb29978cc5797bd8dcc8e5bf7de604891df2a8dc576973d71a281e916db2ff"
 "checksum itoa 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)" = "b8b7a7c0c47db5545ed3fef7468ee7bb5b74691498139e4b3f6a20685dc6dd8e"
 "checksum jpeg-decoder 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)" = "5b47b4c4e017b01abdc5bcc126d2d1002e5a75bbe3ce73f9f4f311a916363704"
-"checksum kamadak-exif 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6c316dd4d5adad2fa96d1db9a5983ff2bb618de926d6f9b20e117901541f97ad"
+"checksum kamadak-exif 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6a5e66d5b5469321038611f7f0e845a48989e4fd54987b6e5bb4c8ae3adbace7"
 "checksum lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 "checksum libc 0.2.70 (registry+https://github.com/rust-lang/crates.io-index)" = "3baa92041a6fec78c687fa0cc2b3fae8884f743d672cf551bed1d6dac6988d0f"
 "checksum libsqlite3-sys 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5e5b95e89c330291768dc840238db7f9e204fd208511ab6319b56193a7f2ae25"
@@ -1374,6 +1382,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum mime 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)" = "ba626b8a6de5da682e1caa06bdb42a335aee5a84db8e5046a3e8ab17ba0a3ae0"
 "checksum mime_guess 1.8.8 (registry+https://github.com/rust-lang/crates.io-index)" = "216929a5ee4dd316b1702eedf5e74548c123d370f47841ceaac38ca154690ca3"
 "checksum multipart 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)" = "136eed74cadb9edd2651ffba732b19a450316b680e4f48d6c79e905799e19d01"
+"checksum mutate_once 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "16cf681a23b4d0a43fc35024c176437f9dcd818db34e0f42ab456a0ee5ad497b"
 "checksum num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "eafd0b45c5537c3ba526f79d3e75120036502bebacbb3f3220914067ce39dbf2"
 "checksum num-integer 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)" = "3f6ea62e9d81a77cd3ee9a2a5b9b609447857f3d358704331e4ef39eb247fcba"
 "checksum num-iter 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)" = "dfb0800a0291891dd9f4fe7bd9c19384f98f7fbe0cd0f39a2c6b88b9868bbc00"

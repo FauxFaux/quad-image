@@ -187,8 +187,9 @@ fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage, Err
 }
 
 fn exif_rotation(from: &[u8]) -> Result<u32, Error> {
-    Ok(exif::Reader::new(&mut io::Cursor::new(from))?
-        .get_field(exif::Tag::Orientation, false)
+    Ok(exif::Reader::new()
+        .read_from_container(&mut io::Cursor::new(from))?
+        .get_field(exif::Tag::Orientation, exif::In::PRIMARY)
         .ok_or_else(|| err_msg("no such field"))?
         .value
         .get_uint(0)
