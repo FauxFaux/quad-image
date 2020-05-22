@@ -16,6 +16,7 @@ edition = "2018"
 repository = "FauxFaux/quad-image"
 
 [dependencies]
+anyhow = "1"
 base64 = "0.12"
 gif = "0.10"
 hmac = "0.7"
@@ -28,11 +29,6 @@ regex = "1"
 serde_json = "1"
 sha2 = "0.8"
 tempfile-fast = "0.3"
-
-[dependencies.failure]
-default-features = false
-features = ["std"]
-version = "0.1"
 
 [dependencies.image]
 version = "0.23"

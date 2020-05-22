@@ -1,12 +1,12 @@
 use std::env;
 use std::fs;
 
-use failure::Error;
+use anyhow::Result;
 
 use crate::ingest::store;
 
 #[test]
-fn write_an_image() -> Result<(), Error> {
+fn write_an_image() -> Result<()> {
     // TODO: race central
     let d = tempfile::Builder::new().prefix("quad-image").tempdir()?;
     env::set_current_dir(d.path())?;

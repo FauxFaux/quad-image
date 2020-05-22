@@ -12,7 +12,7 @@ use std::path;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use failure::Error;
+use anyhow::Error;
 use lazy_static::lazy_static;
 use rand::RngCore;
 use rouille::input::json::JsonError;
@@ -271,7 +271,7 @@ fn gallery_db() -> Result<rusqlite::Connection, Error> {
     Ok(rusqlite::Connection::open("gallery.db")?)
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> anyhow::Result<()> {
     let mut conn = gallery_db()?;
     gallery::migrate_gallery(&mut conn)?;
     thumbs::generate_all_thumbs()?;

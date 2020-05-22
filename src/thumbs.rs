@@ -2,9 +2,9 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-use failure::format_err;
-use failure::Error;
-use failure::ResultExt;
+use anyhow::anyhow;
+use anyhow::Result;
+use anyhow::Context;
 use image;
 use rayon::prelude::*;
 
@@ -12,7 +12,7 @@ fn thumb_name(image_id: &str) -> String {
     format!("{}.thumb.jpg", image_id)
 }
 
-pub fn generate_all_thumbs() -> Result<(), Error> {
+pub fn generate_all_thumbs() -> Result<()> {
     let mut needed = Vec::with_capacity(100);
 
     for path in Path::new("e").read_dir()? {
@@ -35,7 +35,7 @@ pub fn generate_all_thumbs() -> Result<(), Error> {
 
     needed
         .par_iter()
-        .map(|path| thumbnail(path).with_context(|_| format_err!("thumbnailing {:?}", path)))
+        .map(|path| thumbnail(path).with_context(|| anyhow!("thumbnailing {:?}", path)))
         .collect::<Result<Vec<_>, _>>()?;
 
     println!("thumbnailing complete");
@@ -43,7 +43,7 @@ pub fn generate_all_thumbs() -> Result<(), Error> {
     Ok(())
 }
 
-pub fn thumbnail(image_id: &str) -> Result<String, Error> {
+pub fn thumbnail(image_id: &str) -> Result<String> {
     let thumb_name = thumb_name(image_id);
 
     let mut bytes = Vec::with_capacity(1_000_000);

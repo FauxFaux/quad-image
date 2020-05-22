@@ -3,11 +3,10 @@ use std::io;
 use std::io::Seek;
 use std::io::SeekFrom;
 
-use failure::bail;
-use failure::err_msg;
-use failure::format_err;
-use failure::Error;
-use failure::ResultExt;
+use anyhow::bail;
+use anyhow::anyhow;
+use anyhow::Result;
+use anyhow::Context;
 use image;
 use image::imageops;
 use image::ImageFormat;
@@ -29,12 +28,12 @@ pub type SavedImage = String;
 
 /// the crate supports webp, but doesn't seem to detect it:
 /// https://github.com/PistonDevelopers/image/issues/660
-fn guess_format(data: &[u8]) -> Result<ImageFormat, Error> {
+fn guess_format(data: &[u8]) -> Result<ImageFormat> {
     Ok(if data.len() >= 4 && b"RIFF"[..] == data[..4] {
         ImageFormat::WebP
     } else {
-        image::guess_format(data).with_context(|_| {
-            format_err!(
+        image::guess_format(data).with_context(|| {
+            anyhow!(
                 "guess from {} bytes: {:?}",
                 data.len(),
                 &data[..30.min(data.len())]
@@ -43,9 +42,9 @@ fn guess_format(data: &[u8]) -> Result<ImageFormat, Error> {
     })
 }
 
-fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage, Error> {
+fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage> {
     let mut loaded =
-        image::load_from_memory_with_format(data, format).with_context(|_| format_err!("load"))?;
+        image::load_from_memory_with_format(data, format).with_context(|| anyhow!("load"))?;
 
     use image::ImageFormat::*;
     let expect_exif = match format {
@@ -63,17 +62,17 @@ fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage, E
     Ok(loaded)
 }
 
-fn temp_file() -> Result<PersistableTempFile, Error> {
-    Ok(PersistableTempFile::new_in("e").with_context(|_| format_err!("temp file"))?)
+fn temp_file() -> Result<PersistableTempFile> {
+    Ok(PersistableTempFile::new_in("e").with_context(|| anyhow!("temp file"))?)
 }
 
-fn handle_gif(data: &[u8]) -> Result<SavedImage, Error> {
+fn handle_gif(data: &[u8]) -> Result<SavedImage> {
     // FYI: this does not deserve a trait
     use gif::SetParameter;
 
     let mut reader = gif::Decoder::new(io::Cursor::new(data))
         .read_info()
-        .with_context(|_| err_msg("loading gif"))?;
+        .with_context(|| anyhow!("loading gif"))?;
 
     let mut temp = temp_file()?;
 
@@ -84,25 +83,25 @@ fn handle_gif(data: &[u8]) -> Result<SavedImage, Error> {
             reader.height(),
             reader.global_palette().unwrap_or(&[]),
         )
-        .with_context(|_| err_msg("preparing gif"))?;
+        .with_context(|| anyhow!("preparing gif"))?;
 
         // TODO: clearly a lie, but... who even will notice?
         encoder.set(gif::Repeat::Infinite)?;
 
         while let Some(frame) = reader
             .read_next_frame()
-            .with_context(|_| err_msg("reading frame"))?
+            .with_context(|| anyhow!("reading frame"))?
         {
             encoder
                 .write_frame(frame)
-                .with_context(|_| err_msg("writing frame"))?;
+                .with_context(|| anyhow!("writing frame"))?;
         }
     }
 
     write_out(temp, "gif")
 }
 
-pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
+pub fn store(data: &[u8]) -> Result<SavedImage> {
     let guessed_format = guess_format(data)?;
 
     use image::ImageFormat::*;
@@ -121,7 +120,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
     let mut temp = temp_file()?;
     loaded
         .write_to(temp.as_mut(), target_format)
-        .with_context(|_| format_err!("save"))?;
+        .with_context(|| anyhow!("save"))?;
 
     if target_format == Png {
         // Chrome seems to convert everything pasted to png, even if it's huge.
@@ -131,24 +130,24 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
 
         let png_length = temp
             .metadata()
-            .with_context(|_| format_err!("temp metadata"))?
+            .with_context(|| anyhow!("temp metadata"))?
             .len();
         if png_length > 1024 * 1024 {
             temp.seek(SeekFrom::Start(0))
-                .with_context(|_| format_err!("truncating temp file 2"))?;
+                .with_context(|| anyhow!("truncating temp file 2"))?;
 
             temp.set_len(0)
-                .with_context(|_| format_err!("truncating temp file"))?;
+                .with_context(|| anyhow!("truncating temp file"))?;
 
             target_format = Jpeg;
 
             loaded
                 .write_to(temp.as_mut(), target_format)
-                .with_context(|_| format_err!("save attempt 2"))?;
+                .with_context(|| anyhow!("save attempt 2"))?;
 
             let jpeg_length = temp
                 .metadata()
-                .with_context(|_| format_err!("temp metadata 2"))?
+                .with_context(|| anyhow!("temp metadata 2"))?
                 .len();
             println!(
                 "png came out too big so we jpeg'd it: {} -> {}",
@@ -165,7 +164,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage, Error> {
     write_out(temp, ext)
 }
 
-fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage, Error> {
+fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
     let mut rand = rand::thread_rng();
 
     for _ in 0..32768 {
@@ -186,14 +185,14 @@ fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage, Err
     bail!("couldn't find a viable file name")
 }
 
-fn exif_rotation(from: &[u8]) -> Result<u32, Error> {
+fn exif_rotation(from: &[u8]) -> Result<u32> {
     Ok(exif::Reader::new()
         .read_from_container(&mut io::Cursor::new(from))?
         .get_field(exif::Tag::Orientation, exif::In::PRIMARY)
-        .ok_or_else(|| err_msg("no such field"))?
+        .ok_or_else(|| anyhow!("no such field"))?
         .value
         .get_uint(0)
-        .ok_or_else(|| err_msg("no uint in value"))?)
+        .ok_or_else(|| anyhow!("no uint in value"))?)
 }
 
 fn apply_rotation(rotation: u32, image: &mut image::DynamicImage) {

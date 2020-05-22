@@ -1,16 +1,16 @@
 use std::convert::TryInto;
 
 use base64;
-use failure::bail;
-use failure::err_msg;
-use failure::Error;
+use anyhow::bail;
+use anyhow::anyhow;
+use anyhow::Error;
 use hmac;
 use rusqlite;
 use rusqlite::types::ToSql;
 use rusqlite::Connection;
 use sha2;
 
-pub fn migrate_gallery(conn: &mut Connection) -> Result<(), Error> {
+pub fn migrate_gallery(conn: &mut Connection) -> anyhow::Result<()> {
     conn.execute(
         "create table if not exists gallery_images (
 gallery char(10) not null,
@@ -57,7 +57,7 @@ pub fn gallery_store(
         base64::encode_config(&masked[..7], base64::URL_SAFE_NO_PAD)
     );
 
-    let conn = conn.lock().map_err(|_| err_msg("poison"))?;
+    let conn = conn.lock().map_err(|_| anyhow!("poison"))?;
     let mut stat =
         conn.prepare("insert into gallery_images (gallery, image, added) values (?, ?, ?)")?;
 
@@ -101,10 +101,10 @@ mod tests {
     use std::sync::Arc;
     use std::sync::Mutex;
 
-    use failure::Error;
+    use anyhow::Result;
 
     #[test]
-    fn mem_db() -> Result<(), Error> {
+    fn mem_db() -> Result<()> {
         let mut conn = rusqlite::Connection::open_in_memory()?;
         super::migrate_gallery(&mut conn)?;
         let wrapped = Arc::new(Mutex::new(conn));
