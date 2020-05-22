@@ -16,7 +16,7 @@ edition = "2018"
 repository = "FauxFaux/quad-image"
 
 [dependencies]
-base64 = "0.11"
+base64 = "0.12"
 gif = "0.10"
 hmac = "0.7"
 kamadak-exif = "0.5"
