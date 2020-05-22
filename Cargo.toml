@@ -44,7 +44,7 @@ git = "https://github.com/tomaka/rouille"
 rev = "e9692e1b19c8d25a742129a16bbe826c686ab274"
 
 [dependencies.rusqlite]
-version = "0.20"
+version = "0.23"
 features = ["bundled"]
 
 [dev-dependencies]
