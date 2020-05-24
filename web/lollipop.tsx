@@ -122,7 +122,7 @@ function process(file: File) {
   setBodyActive();
 
   const reader = new FileReader();
-  reader.onload = function() {
+  reader.onload = function () {
     if (!this.result) {
       error('file api acted unexpectedly, not sure why');
       return;
@@ -163,7 +163,7 @@ function onFiles(items: FileList | null, context: string) {
 
   if (0 === items.length) {
     error(
-      `No files, valid or not, were found in your ${context}. Maybe it wasn't a valid image, or your browser is confused about what it was?`,
+      `No files, valid or not, were found in your ${context}. Maybe it wasn't a valid image, or your browser is confused about what it was?`
     );
     return;
   }
@@ -215,13 +215,13 @@ function setCurrentPublic(id: string) {
       $('<a>')
         .attr('href', '/gallery/#' + id)
         .attr('target', 'none')
-        .text(id),
+        .text(id)
     );
 }
 
 function addImagesToGallery(gallery: string, images: string[]) {
   callGallery(gallery, images)
-    .then(function(resp) {
+    .then(function (resp) {
       if ('errors' in resp) {
         resp.errors.forEach((e: JSONAPI.ErrorObject) => error(`then: ${e.code}: ${e.title}`));
       } else if ('data' in resp) {
@@ -307,9 +307,7 @@ function setEvents() {
     if (targetGallery) {
       addImagesToGallery(targetGallery, []);
     } else {
-      $('#current-gallery')
-        .empty()
-        .html('<i>not set</i>');
+      $('#current-gallery').empty().html('<i>not set</i>');
     }
   });
 
