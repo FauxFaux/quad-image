@@ -3,8 +3,8 @@ use std::io::Read;
 use std::path::Path;
 
 use anyhow::anyhow;
-use anyhow::Result;
 use anyhow::Context;
+use anyhow::Result;
 use image;
 use rayon::prelude::*;
 

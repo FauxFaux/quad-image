@@ -1,9 +1,9 @@
 use std::convert::TryInto;
 
-use base64;
-use anyhow::bail;
 use anyhow::anyhow;
+use anyhow::bail;
 use anyhow::Error;
+use base64;
 use hmac;
 use rusqlite;
 use rusqlite::types::ToSql;

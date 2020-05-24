@@ -3,10 +3,10 @@ use std::io;
 use std::io::Seek;
 use std::io::SeekFrom;
 
-use anyhow::bail;
 use anyhow::anyhow;
-use anyhow::Result;
+use anyhow::bail;
 use anyhow::Context;
+use anyhow::Result;
 use image;
 use image::imageops;
 use image::ImageFormat;

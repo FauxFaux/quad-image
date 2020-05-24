@@ -12,6 +12,8 @@ use std::path;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use anyhow::anyhow;
+use anyhow::Context;
 use anyhow::Error;
 use lazy_static::lazy_static;
 use rand::RngCore;
@@ -272,6 +274,12 @@ fn gallery_db() -> Result<rusqlite::Connection, Error> {
 }
 
 fn main() -> anyhow::Result<()> {
+    fs::create_dir_all("e").with_context(|| {
+        anyhow!(
+            "creating storage directory inside {:?}",
+            std::env::current_dir()
+        )
+    })?;
     let mut conn = gallery_db()?;
     gallery::migrate_gallery(&mut conn)?;
     thumbs::generate_all_thumbs()?;
