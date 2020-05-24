@@ -7,6 +7,8 @@ import { uploadFile } from './files';
 import { Errors } from './errors';
 import { AppError } from '../types';
 
+let loadingImageToken = 1;
+
 class Storage {
   targetGallery: string | null;
   images: string[];
@@ -109,26 +111,45 @@ class Shine extends Component<{}, State> {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
 
-      if (item.type.match(/image.*/)) {
-        try {
-          const id = await uploadFile(item);
-          this.setState(({ images }) => {
-            images.push({ code: 'image', id });
-            storage.setImages(images.filter(isImage).map(({ id }) => id));
-            return { images };
-          });
-        } catch (e) {
-          if (!(e instanceof AppError)) {
-            throw e;
-          }
-          this.setState(({ images }) => ({ images: images.concat({ code: 'failed', message: e.message }) }));
-        }
-      } else {
+      if (!item.type.match(/image.*/)) {
         this.error("Ignoring non-image item (of type '" + item.type + "') in " + context + ': ' + item.name);
+        continue;
+      }
+
+      const ourLoadingToken = loadingImageToken++;
+
+      try {
+        this.setState(({ images }) => {
+          images.push({ code: 'loading', token: ourLoadingToken });
+          return { images };
+        });
+        const id = await uploadFile(item);
+        this.setState(({ images }) => {
+          const placeholder: MaybeImage | undefined = images.find(
+            (image) => 'loading' === image.code && ourLoadingToken === image.token
+          );
+          if (!placeholder) {
+            return {};
+          }
+
+          // transmute the placeholder into a real image
+          placeholder.code = 'image';
+          if (placeholder.code === 'image') {
+            placeholder.id = id;
+          }
+          storage.setImages(images.filter(isImage).map(({ id }) => id));
+          return { images };
+        });
+      } catch (e) {
+        if (!(e instanceof AppError)) {
+          throw e;
+        }
+        this.setState(({ images }) => ({
+          images: images.concat({ code: 'failed', message: e.message }),
+          uploading: false,
+        }));
       }
     }
-
-    // TODO: form.classList.remove('dragover');
   }
 
   onFilesOrError(items: FileList | null, context: string) {

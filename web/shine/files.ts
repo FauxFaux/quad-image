@@ -21,8 +21,6 @@ async function readFile(file: File): Promise<ArrayBuffer> {
 }
 
 export async function uploadFile(file: File): Promise<SavedImage> {
-  setBodyActive();
-
   const blobPart = await readFile(file);
 
   const type = file.type || 'image/jpeg';
@@ -30,9 +28,4 @@ export async function uploadFile(file: File): Promise<SavedImage> {
   const blob = new Blob([blobPart], { type });
 
   return await upload(blob);
-}
-
-// TODO: State somewhere
-function setBodyActive() {
-  document.body.classList.add('active-upload');
 }
