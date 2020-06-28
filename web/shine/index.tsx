@@ -46,8 +46,8 @@ interface State {
   errors: string[];
 }
 
-class Shine extends Component<{}, State> {
-  constructor(props: {}) {
+class Shine extends Component<unknown, State> {
+  constructor(props: unknown) {
     super(props);
 
     this.setupDoc();
