@@ -18,12 +18,7 @@ module.exports = {
   },
 
   module: {
-    rules: [
-      { test: /\.tsx?$/, use: [{ loader: 'ts-loader' }], exclude: /node_modules/ },
-
-      // Pack SVGs into base64 urls
-      { test: /\.svg$/, use: [{ loader: 'url-loader?mimetype=image/svg+xml&name=[name].[ext]' }] },
-    ],
+    rules: [{ test: /\.tsx?$/, use: [{ loader: 'ts-loader' }], exclude: /node_modules/ }],
   },
 };
 
