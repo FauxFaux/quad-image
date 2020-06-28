@@ -1,11 +1,11 @@
 {
   "name": "quad-image",
   "scripts": {
-    "build": "webpack --mode=production",
+    "build": "NODE_ENV= webpack --mode=production",
     "lint": "eslint             'web/**/*.ts*'",
     "lint-fix": "eslint --fix   'web/**/*.ts*'",
     "format": "prettier --write 'web/**/*.ts*'",
-    "watch": "webpack --watch --mode=development"
+    "watch": "NODE_ENV= webpack --watch --mode=development"
   },
   "dependencies": {
     "classcat": "^5.0.3",
