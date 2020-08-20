@@ -14,7 +14,7 @@ export class User extends Component {
         <form id="user-form">
           <label>
             New <abbr title="Gallery name and trigger (4-10 letter name, !, password)">gallery</abbr>:
-            <input id="new-gallery" name="gallery" required placeholder="green!battery staple"></input>
+            <input id="new-gallery" name="gallery" required placeholder="green!battery staple" />
           </label>
           <button>sync</button>
         </form>

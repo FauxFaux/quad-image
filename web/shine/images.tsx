@@ -17,9 +17,9 @@ export class Images extends Component<Props> {
       <ul id="images">
         {[...props.images].reverse().map((image) => {
           if ('image' === image.code) {
-            return <Image id={image.id} />;
+            return <Image id={image.id} key={image.id} />;
           }
-          return <li class={'loading'} />;
+          return <li class={'loading'} key={image.id} />;
         })}
       </ul>
     );
