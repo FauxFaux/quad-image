@@ -19,7 +19,7 @@ repository = "FauxFaux/quad-image"
 anyhow = "1"
 base64 = "0.12"
 gif = "0.10"
-hmac = "0.7"
+hmac = "0.9"
 kamadak-exif = "0.5"
 lazy_static = "1"
 libc = "0.2"
@@ -27,7 +27,7 @@ rand = "0.7"
 rayon = "1"
 regex = "1"
 serde_json = "1"
-sha2 = "0.8"
+sha2 = "0.9"
 tempfile-fast = "0.3"
 
 [dependencies.image]
@@ -42,7 +42,7 @@ git = "https://github.com/tomaka/rouille"
 rev = "e9692e1b19c8d25a742129a16bbe826c686ab274"
 
 [dependencies.rusqlite]
-version = "0.23"
+version = "0.24"
 features = ["bundled"]
 
 [dev-dependencies]

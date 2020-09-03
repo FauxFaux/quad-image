@@ -4,7 +4,6 @@ use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
 use base64;
-use hmac;
 use rusqlite;
 use rusqlite::types::ToSql;
 use rusqlite::Connection;
@@ -85,9 +84,10 @@ fn public_id_for(global_secret: &[u8], gallery: &str, private: &str) -> String {
 
 fn mac(key: &[u8], val: &[u8]) -> Vec<u8> {
     use hmac::Mac;
+    use hmac::NewMac;
     let mut mac = hmac::Hmac::<sha2::Sha512Trunc256>::new_varkey(key).expect("varkey");
-    mac.input(val);
-    mac.result().code().to_vec()
+    mac.update(val);
+    mac.finalize().into_bytes().to_vec()
 }
 
 fn epoch_millis() -> i64 {
