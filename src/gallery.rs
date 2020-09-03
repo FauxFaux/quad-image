@@ -49,13 +49,7 @@ pub fn gallery_store(
     private: &str,
     images: &[&str],
 ) -> Result<String, Error> {
-    let user_details = mac(gallery.as_bytes(), private.as_bytes());
-    let masked = mac(global_secret, &user_details);
-    let public = format!(
-        "{}:{}",
-        gallery,
-        base64::encode_config(&masked[..7], base64::URL_SAFE_NO_PAD)
-    );
+    let public = public_id_for(global_secret, gallery, private);
 
     let conn = conn.lock().map_err(|_| anyhow!("poison"))?;
     let mut stat =
@@ -76,6 +70,17 @@ pub fn gallery_store(
     }
 
     Ok(public)
+}
+
+fn public_id_for(global_secret: &[u8], gallery: &str, private: &str) -> String {
+    let user_details = mac(gallery.as_bytes(), private.as_bytes());
+    let masked = mac(global_secret, &user_details);
+    let public = format!(
+        "{}:{}",
+        gallery,
+        base64::encode_config(&masked[..7], base64::URL_SAFE_NO_PAD)
+    );
+    public
 }
 
 fn mac(key: &[u8], val: &[u8]) -> Vec<u8> {
@@ -120,5 +125,26 @@ mod tests {
             super::gallery_list_all(&mut wrapped.lock().unwrap(), &public)?
         );
         Ok(())
+    }
+
+    #[test]
+    fn maccies() {
+        use super::mac;
+        assert_eq!(
+            &[
+                69, 81, 173, 148, 113, 165, 126, 52, 75, 48, 237, 138, 72, 157, 60, 106, 202, 216,
+                180, 255, 254, 145, 123, 127, 3, 4, 127, 36, 18, 57, 21, 51
+            ],
+            mac(&[1, 2, 3, 4], &[5, 6]).as_slice()
+        );
+    }
+
+    #[test]
+    fn public_id() {
+        use super::public_id_for;
+        assert_eq!(
+            "potato:GTc-2ixSLg",
+            public_id_for(&[5, 6], "potato", "carrots")
+        );
     }
 }
