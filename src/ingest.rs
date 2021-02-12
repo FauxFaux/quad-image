@@ -67,11 +67,7 @@ fn temp_file() -> Result<PersistableTempFile> {
 }
 
 fn handle_gif(data: &[u8]) -> Result<SavedImage> {
-    // FYI: this does not deserve a trait
-    use gif::SetParameter;
-
     let mut reader = gif::Decoder::new(io::Cursor::new(data))
-        .read_info()
         .with_context(|| anyhow!("loading gif"))?;
 
     let mut temp = temp_file()?;
@@ -86,7 +82,7 @@ fn handle_gif(data: &[u8]) -> Result<SavedImage> {
         .with_context(|| anyhow!("preparing gif"))?;
 
         // TODO: clearly a lie, but... who even will notice?
-        encoder.set(gif::Repeat::Infinite)?;
+        encoder.set_repeat(gif::Repeat::Infinite)?;
 
         while let Some(frame) = reader
             .read_next_frame()

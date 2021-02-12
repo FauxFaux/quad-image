@@ -396,16 +396,6 @@ dependencies = [
 
 [[package]]
 name = "gif"
-version = "0.10.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "471d90201b3b223f3451cd4ad53e34295f16a1df17b1edf3736d47761c3981af"
-dependencies = [
- "color_quant",
- "lzw",
-]
-
-[[package]]
-name = "gif"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02efba560f227847cb41463a7395c514d127d4f74fff12ef0137fff1b84b96c4"
@@ -497,7 +487,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "color_quant",
- "gif 0.11.1",
+ "gif",
  "jpeg-decoder",
  "num-iter",
  "num-rational",
@@ -570,12 +560,6 @@ checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if",
 ]
-
-[[package]]
-name = "lzw"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d947cbb889ed21c2a84be6ffbaebf5b4e0f4340638cba0444907e38b56be084"
 
 [[package]]
 name = "matches"
@@ -815,7 +799,7 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64 0.13.0",
- "gif 0.10.3",
+ "gif",
  "hmac",
  "image",
  "kamadak-exif",
