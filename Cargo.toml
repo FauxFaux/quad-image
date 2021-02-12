@@ -17,9 +17,9 @@ repository = "FauxFaux/quad-image"
 
 [dependencies]
 anyhow = "1"
-base64 = "0.12"
+base64 = "0.13"
 gif = "0.10"
-hmac = "0.9"
+hmac = "0.10"
 kamadak-exif = "0.5"
 lazy_static = "1"
 libc = "0.2"
