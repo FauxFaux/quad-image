@@ -168,7 +168,11 @@ fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
     let mut rand = rand::thread_rng();
 
     for _ in 0..32768 {
-        let rand_bit: String = Alphanumeric.sample_iter(&mut rand).take(10).collect();
+        let rand_bit: String = Alphanumeric
+            .sample_iter(&mut rand)
+            .map(char::from)
+            .take(10)
+            .collect();
         let cand = format!("e/{}.{}", rand_bit, ext);
         temp = match temp.persist_noclobber(&cand) {
             Ok(_) => {
