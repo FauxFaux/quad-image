@@ -59,7 +59,7 @@ fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage> {
         }
     }
 
-    Ok(loaded)
+    Ok(down_to_8bit(loaded))
 }
 
 fn temp_file() -> Result<PersistableTempFile> {
@@ -232,8 +232,22 @@ fn flip_diagonal(image: &mut image::DynamicImage) -> image::DynamicImage {
     image::DynamicImage::ImageRgba8(out)
 }
 
+fn down_to_8bit(image: image::DynamicImage) -> image::DynamicImage {
+    use image::DynamicImage as DI;
+    match image {
+        DI::ImageLuma16(_) | DI::ImageRgb16(_) | DI::ImageLuma8(_) | DI::ImageBgr8(_) => {
+            DI::ImageRgb8(image.to_rgb8())
+        }
+        DI::ImageLumaA16(_) | DI::ImageRgba16(_) | DI::ImageLumaA8(_) | DI::ImageBgra8(_) => {
+            DI::ImageRgba8(image.to_rgba8())
+        }
+        DI::ImageRgb8(_) | DI::ImageRgba8(_) => image,
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use image::{ImageError, ImageFormat};
     use std::fs;
 
     #[test]
@@ -316,6 +330,27 @@ mod tests {
             }
 
             assert_similar(&plain, &output, rot);
+        }
+    }
+
+    #[test]
+    fn sixteen() {
+        let png = im(include_bytes!("../tests/16-bit.png"));
+        png.write_to(&mut vec![], image::ImageOutputFormat::Jpeg(40))
+            .expect("able to write a loaded image, even if it was naughty");
+    }
+
+    #[test]
+    fn sixteen_not_supported() {
+        let png = image::load_from_memory_with_format(
+            include_bytes!("../tests/16-bit.png"),
+            ImageFormat::Png,
+        )
+        .unwrap();
+        match png.write_to(&mut vec![], image::ImageOutputFormat::Jpeg(40)) {
+            Ok(_) => panic!("woo, image now supports this, delete down_to_8bit maybe"),
+            Err(ImageError::Unsupported(_)) => (),
+            Err(other) => panic!("unexpected failure: {:?}", other),
         }
     }
 }
