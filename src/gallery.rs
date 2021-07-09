@@ -85,7 +85,7 @@ fn public_id_for(global_secret: &[u8], gallery: &str, private: &str) -> String {
 fn mac(key: &[u8], val: &[u8]) -> Vec<u8> {
     use hmac::Mac;
     use hmac::NewMac;
-    let mut mac = hmac::Hmac::<sha2::Sha512Trunc256>::new_varkey(key).expect("varkey");
+    let mut mac = hmac::Hmac::<sha2::Sha512Trunc256>::new_from_slice(key).expect("varkey");
     mac.update(val);
     mac.finalize().into_bytes().to_vec()
 }

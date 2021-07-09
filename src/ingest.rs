@@ -67,8 +67,8 @@ fn temp_file() -> Result<PersistableTempFile> {
 }
 
 fn handle_gif(data: &[u8]) -> Result<SavedImage> {
-    let mut reader = gif::Decoder::new(io::Cursor::new(data))
-        .with_context(|| anyhow!("loading gif"))?;
+    let mut reader =
+        gif::Decoder::new(io::Cursor::new(data)).with_context(|| anyhow!("loading gif"))?;
 
     let mut temp = temp_file()?;
 
