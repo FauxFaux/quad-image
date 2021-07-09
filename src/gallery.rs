@@ -16,12 +16,12 @@ gallery char(10) not null,
 image char(15) not null,
 added datetime not null
 )",
-        rusqlite::NO_PARAMS,
+        [],
     )?;
     conn.execute(
         "create unique index if not exists gal_img
 on gallery_images (gallery, image)",
-        rusqlite::NO_PARAMS,
+        [],
     )?;
     Ok(())
 }
