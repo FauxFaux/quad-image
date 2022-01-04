@@ -19,7 +19,7 @@ repository = "FauxFaux/quad-image"
 anyhow = "1"
 base64 = "0.13"
 gif = "0.11"
-hmac = "0.11"
+hmac = "0.12"
 kamadak-exif = "0.5"
 lazy_static = "1"
 libc = "0.2"
@@ -28,7 +28,7 @@ rayon = "1"
 regex = "1"
 rouille = "3.5"
 serde_json = "1"
-sha2 = "0.9"
+sha2 = "0.10"
 tempfile-fast = "0.3"
 
 [dependencies.image]
@@ -38,7 +38,7 @@ default-features = false
 features = ["gif", "jpeg", "ico", "png", "pnm", "tga", "tiff", "webp", "bmp", "jpeg_rayon"]
 
 [dependencies.rusqlite]
-version = "0.25"
+version = "0.26"
 features = ["bundled"]
 
 [dev-dependencies]
