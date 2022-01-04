@@ -5,7 +5,6 @@ use std::path::Path;
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
-use image;
 use rayon::prelude::*;
 
 fn thumb_name(image_id: &str) -> String {

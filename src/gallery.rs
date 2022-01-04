@@ -3,11 +3,8 @@ use std::convert::TryInto;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
-use base64;
-use rusqlite;
 use rusqlite::types::ToSql;
 use rusqlite::Connection;
-use sha2;
 
 pub fn migrate_gallery(conn: &mut Connection) -> anyhow::Result<()> {
     conn.execute(

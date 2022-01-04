@@ -47,10 +47,7 @@ fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage> {
         image::load_from_memory_with_format(data, format).with_context(|| anyhow!("load"))?;
 
     use image::ImageFormat::*;
-    let expect_exif = match format {
-        Jpeg | WebP | Tiff => true,
-        _ => false,
-    };
+    let expect_exif = matches!(format, Jpeg | WebP | Tiff);
 
     if expect_exif {
         match exif_rotation(data) {
@@ -63,7 +60,7 @@ fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage> {
 }
 
 fn temp_file() -> Result<PersistableTempFile> {
-    Ok(PersistableTempFile::new_in("e").with_context(|| anyhow!("temp file"))?)
+    PersistableTempFile::new_in("e").with_context(|| anyhow!("temp file"))
 }
 
 fn handle_gif(data: &[u8]) -> Result<SavedImage> {
@@ -110,7 +107,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
     let mut target_format = match guessed_format {
         Png | Pnm | Tiff | Bmp | Ico | Hdr | Tga => Png,
         Gif => unreachable!(),
-        Jpeg | WebP | Dds | _ => Jpeg,
+        _ => Jpeg,
     };
 
     let mut temp = temp_file()?;
@@ -186,13 +183,13 @@ fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
 }
 
 fn exif_rotation(from: &[u8]) -> Result<u32> {
-    Ok(exif::Reader::new()
+    exif::Reader::new()
         .read_from_container(&mut io::Cursor::new(from))?
         .get_field(exif::Tag::Orientation, exif::In::PRIMARY)
         .ok_or_else(|| anyhow!("no such field"))?
         .value
         .get_uint(0)
-        .ok_or_else(|| anyhow!("no uint in value"))?)
+        .ok_or_else(|| anyhow!("no uint in value"))
 }
 
 fn apply_rotation(rotation: u32, image: &mut image::DynamicImage) {
