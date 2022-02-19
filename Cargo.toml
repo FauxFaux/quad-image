@@ -32,7 +32,7 @@ sha2 = "0.10"
 tempfile-fast = "0.3"
 
 [dependencies.image]
-version = "0.23"
+version = "0.24"
 # features -= "hdr", "dxt", "dds"
 default-features = false
 features = ["gif", "jpeg", "ico", "png", "pnm", "tga", "tiff", "webp", "bmp", "jpeg_rayon"]

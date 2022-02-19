@@ -232,20 +232,24 @@ fn flip_diagonal(image: &mut image::DynamicImage) -> image::DynamicImage {
 fn down_to_8bit(image: image::DynamicImage) -> image::DynamicImage {
     use image::DynamicImage as DI;
     match image {
-        DI::ImageLuma16(_) | DI::ImageRgb16(_) | DI::ImageLuma8(_) | DI::ImageBgr8(_) => {
+        DI::ImageLuma16(_) | DI::ImageRgb16(_) | DI::ImageLuma8(_) | DI::ImageRgb32F(_) => {
             DI::ImageRgb8(image.to_rgb8())
         }
-        DI::ImageLumaA16(_) | DI::ImageRgba16(_) | DI::ImageLumaA8(_) | DI::ImageBgra8(_) => {
+        DI::ImageLumaA16(_) | DI::ImageRgba16(_) | DI::ImageLumaA8(_) | DI::ImageRgba32F(_) => {
             DI::ImageRgba8(image.to_rgba8())
         }
         DI::ImageRgb8(_) | DI::ImageRgba8(_) => image,
+        other => {
+            println!("unhandled dynamic image variant {:?}", other);
+            other
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use image::{ImageError, ImageFormat};
-    use std::fs;
+    use std::{fs, io};
 
     #[test]
     fn exif() {
@@ -333,8 +337,11 @@ mod tests {
     #[test]
     fn sixteen() {
         let png = im(include_bytes!("../tests/16-bit.png"));
-        png.write_to(&mut vec![], image::ImageOutputFormat::Jpeg(40))
-            .expect("able to write a loaded image, even if it was naughty");
+        png.write_to(
+            &mut io::Cursor::new(vec![]),
+            image::ImageOutputFormat::Jpeg(40),
+        )
+        .expect("able to write a loaded image, even if it was naughty");
     }
 
     #[test]
@@ -344,7 +351,10 @@ mod tests {
             ImageFormat::Png,
         )
         .unwrap();
-        match png.write_to(&mut vec![], image::ImageOutputFormat::Jpeg(40)) {
+        match png.write_to(
+            &mut io::Cursor::new(vec![]),
+            image::ImageOutputFormat::Jpeg(40),
+        ) {
             Ok(_) => panic!("woo, image now supports this, delete down_to_8bit maybe"),
             Err(ImageError::Unsupported(_)) => (),
             Err(other) => panic!("unexpected failure: {:?}", other),
