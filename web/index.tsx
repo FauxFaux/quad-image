@@ -1,4 +1,2 @@
-import * as Gallery from './gallery';
-import * as Lollipop from './lollipop';
-
-export = { Gallery, Lollipop };
+export * as Gallery from './gallery';
+export * as Lollipop from './lollipop';
