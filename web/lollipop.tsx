@@ -20,9 +20,11 @@ class Item {
     }
 
     this.actionButton = document.createElement('button');
+    this.actionButton.className = 'action';
     this.li.appendChild(this.actionButton);
 
     this.binButton = document.createElement('button');
+    this.binButton.className = 'bin';
     this.li.appendChild(this.binButton);
   }
 }

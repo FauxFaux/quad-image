@@ -137,17 +137,22 @@ ul#images li button {
     z-index: 2;
 }
 
-ul#images li button + button {
+button.action {
     top: 0;
     left: 0;
 }
 
-ul#images li button:hover {
-    background: #ddd;
+button.bin {
+    top: 0;
+    righgt: 0;
 }
 
-ul#images li button + button:hover {
-    background: #d77;
+button.action:hover {
+    background: #ddd !important;
+}
+
+button.bin:hover {
+    background: #d77 !important;
 }
 
 ul#images li input {
