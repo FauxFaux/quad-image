@@ -297,7 +297,7 @@ function setEvents() {
     form.classList.add('dragover');
   };
 
-  doc.ondragexit = doc.ondragleave = () => {
+  (doc as any).ondragexit = doc.ondragleave = () => {
     form.classList.remove('dragover');
   };
 
