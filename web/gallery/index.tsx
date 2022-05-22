@@ -1,14 +1,65 @@
-import * as JSONAPI from 'jsonapi-typescript/index';
+import * as JSONAPI from 'jsonapi-typescript';
+import { h, Component, render } from 'preact';
 
-let state: State | null = null;
+import { AppError, Loader, SavedImage } from '../types';
+import { Tiles } from './tiles';
+import { useEffect } from 'preact/compat';
 
-class State {
-  gallery: string;
-  images: string[];
+export function init(el: HTMLElement) {
+  el.innerHTML = '';
+  render(<Gallery galleryId="green:z25E-PzBTg" />, el);
+}
 
-  constructor(gallery: string, images: string[]) {
-    this.gallery = gallery;
-    this.images = images;
+export interface Props {
+  galleryId: string;
+}
+
+export interface State {
+  images: Loader<{ images: SavedImage[] }>;
+}
+
+export class Gallery extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { images: { code: 'loading' } };
+
+    this.orFatal(async () => {
+      const response = await fetch('../api/gallery/' + new Hash().gallery);
+      const data = await response.json();
+      const images = extractImages(data);
+      this.setState({ images: { code: 'ready', images } });
+    });
+  }
+
+  render(props: Props, state: State) {
+    const hashChange = (ev: HashChangeEvent) => {
+      // look, this needs to be a different component
+    };
+
+    useEffect(() => {
+      window.addEventListener('hashchange', hashChange);
+      return () => window.removeEventListener('hashchange', hashChange);
+    });
+
+    const images = state.images;
+    switch (images.code) {
+      case 'loading':
+        return <span>Loading...</span>;
+      case 'error':
+        return <span>Failed: {images.message}</span>;
+      case 'ready':
+        return <Tiles images={images.images} />;
+    }
+  }
+
+  orFatal(f: () => Promise<void>) {
+    f().catch((e) => {
+      if (e instanceof AppError) {
+        // TODO: UI-ise?
+        console.error(e.message, e.body);
+      }
+      this.setState({ images: { code: 'error', message: e.message } });
+    });
   }
 }
 
@@ -35,52 +86,20 @@ class Hash {
   }
 }
 
-export function hashChanged() {
-  const target: null | HTMLElement = document.getElementById('gallery');
-  if (null == target) {
-    console.log('script mis-loaded?');
-    return;
-  }
-
-  const showError = (msg: string) => (target.innerText = msg);
-
-  // throws on failure
-  const hash = new Hash();
-
-  if (state && state.gallery === hash.gallery) {
-    render(target, hash);
-    return;
-  }
-
-  // the data we have saved is useless now
-  state = null;
-
-  $.get('../api/gallery/' + hash.gallery)
-    .done((data) => {
-      const images = fetchComplete(data, showError);
-      if (null === images) {
-        return;
-      }
-      state = new State(hash.gallery, images);
-      render(target, hash);
-    })
-    .catch(() => showError('network error fetching gallery'));
+function unpackJson(resp: any): resp is JSONAPI.DocWithData<JSONAPI.ResourceObject[]> | JSONAPI.DocWithErrors {
+  return ('data' in resp && Array.isArray(resp.data)) || 'errors' in resp;
 }
 
-function fetchComplete(resp: JSONAPI.Document, showError: (msg: string) => void): string[] | null {
+function extractImages(resp: unknown): string[] {
+  if (!unpackJson(resp)) {
+    throw new AppError('invalid JSONAPI response', resp);
+  }
+
   if ('errors' in resp) {
-    showError(JSON.stringify(resp.errors));
-    return null;
+    throw new AppError('server returned unexpected errors', resp.errors);
   }
 
-  if (!('data' in resp) || !Array.isArray(resp.data)) {
-    showError(JSON.stringify(resp));
-    return null;
-  }
-
-  const withData = resp as JSONAPI.DocWithData<JSONAPI.ResourceObject[]>;
-
-  return imageIds(withData.data);
+  return imageIds(resp.data);
 }
 
 function imageIds(withData: JSONAPI.ResourceObject[]): string[] {
@@ -98,18 +117,7 @@ function imageIds(withData: JSONAPI.ResourceObject[]): string[] {
   return ids;
 }
 
-function render(body: HTMLElement, hash: Hash) {
-  // clear
-  body.innerText = '';
-
-  if (null == state) {
-    console.log('impossible state');
-    return;
-  }
-
-  const itemsPerPage = 10;
-  const images: string[] = state.images;
-
+/*
   let currentImage = 0;
   if (null !== hash.after) {
     const afterIdx = images.indexOf(hash.after);
@@ -150,3 +158,4 @@ function render(body: HTMLElement, hash: Hash) {
       .appendTo(body);
   }
 }
+*/
