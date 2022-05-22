@@ -2,50 +2,54 @@ import { AppError, Loader, SavedImage } from '../types';
 import { Component } from 'preact';
 import * as JSONAPI from 'jsonapi-typescript';
 import { Tiles } from './tiles';
+import { useQuery } from 'preact-fetching';
+import { Paging } from './paging';
 
 export interface Props {
   galleryId: string;
   afterImage?: string;
+  perPage: number;
 }
 
-export interface State {
-  images: Loader<{ images: SavedImage[] }>;
-}
+export interface State {}
 
 export class ImageList extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-
-    this.state = { images: { code: 'loading' } };
-
-    this.orFatal(async () => {
-      const response = await fetch('../api/gallery/' + props.galleryId);
-      const data = await response.json();
-      const images = extractImages(data);
-      this.setState({ images: { code: 'ready', images } });
-    });
+    if (props.perPage < 1) throw new Error('impossible paging');
   }
 
   render(props: Props, state: State) {
-    const images = state.images;
-    switch (images.code) {
-      case 'loading':
-        return <span>Loading...</span>;
-      case 'error':
-        return <span>Failed: {images.message}</span>;
-      case 'ready':
-        return <Tiles images={images.images} />;
-    }
-  }
-
-  orFatal(f: () => Promise<void>) {
-    f().catch((e) => {
-      if (e instanceof AppError) {
-        // TODO: UI-ise?
-        console.error(e.message, e.body);
-      }
-      this.setState({ images: { code: 'error', message: e.message } });
+    const { isLoading, error, data } = useQuery(props.galleryId, async () => {
+      const response = await fetch('../api/gallery/' + props.galleryId);
+      const data = await response.json();
+      return extractImages(data);
     });
+
+    if (error) {
+      console.error(error);
+      return <span>Failed: {error.message}</span>;
+    }
+
+    if (isLoading || !data) {
+      return <span>Loading...</span>;
+    }
+
+    let offset = 0;
+    if (props.afterImage) {
+      offset = data.indexOf(props.afterImage);
+      if (offset === -1) {
+        return <span>Image not found in gallery (bad url?).</span>;
+      }
+    }
+
+    return (
+      <>
+        <Tiles images={data.slice(offset, offset + props.perPage)} />
+        <hr />
+        <Paging images={data} galleryId={props.galleryId} current={offset} perPage={props.perPage} />
+      </>
+    );
   }
 }
 

@@ -36,7 +36,7 @@ export class Gallery extends Component<Props, State> {
       return <span>No gallery provided.</span>;
     }
 
-    return <ImageList galleryId={state.galleryId} afterImage={state.afterImage} />;
+    return <ImageList galleryId={state.galleryId} afterImage={state.afterImage} perPage={4} />;
   }
 }
 

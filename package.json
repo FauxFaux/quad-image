@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "classcat": "^5.0.3",
-    "preact": "^10.7.2"
+    "preact": "^10.7.2",
+    "preact-fetching": "0.1.1"
   },
   "devDependencies": {
     "@types/jquery": "^3.3.31",

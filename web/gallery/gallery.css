@@ -4,7 +4,7 @@ body {
     color: #ffffff;
 }
 
-a {
+a.gallery__paging {
     display: inline-block;
     border: 1px solid #888888;
     font-size: 2em;
@@ -14,8 +14,15 @@ a {
     margin: 0.2em;
 }
 
-a.active {
+a.gallery__paging--active {
     background-color: #444444;
+}
+
+a.gallery__thumb {
+    max-width: 300px;
+    width: 100%;
+    height: 200px;
+    display: inline-block;
 }
 
 a:visited {
