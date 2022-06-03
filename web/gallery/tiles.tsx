@@ -8,9 +8,11 @@ export interface Props {
 export class Tiles extends Component<Props> {
   render(props: Props) {
     return props.images.map((id) => (
-      <a className="gallery__thumb" href={`../${id}`}>
-        <img src={`../${id}.thumb.jpg`} />
-      </a>
+      <div className="gallery__thumb">
+        <a className="gallery__thumb" href={`../${id}`}>
+          <img className="gallery__thumb" src={`../${id}.thumb.jpg`} />
+        </a>
+      </div>
     ));
   }
 }

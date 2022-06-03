@@ -36,23 +36,17 @@ export class Gallery extends Component<Props, State> {
       return <span>No gallery provided.</span>;
     }
 
-    return <ImageList galleryId={state.galleryId} afterImage={state.afterImage} perPage={4} />;
+    return <ImageList galleryId={state.galleryId} afterImage={state.afterImage} perPage={24} />;
   }
 }
 
 function readHash(hash: string = window.location.hash || '#'): {
-  galleryId: string;
+  galleryId?: string;
   afterImage?: string;
 } {
-  const parts: string[] = hash.split('#');
-
-  if (parts.length < 2) {
-    throw new Error('no gallery provided');
-  }
+  const parts: (string | undefined)[] = hash.split('#');
 
   const galleryId = parts[1];
-
-  const afterImage: string | undefined = parts[2];
-
+  const afterImage = parts[2];
   return { galleryId, afterImage };
 }
