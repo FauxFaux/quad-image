@@ -74,6 +74,7 @@ function makeLoadedItem(loadingItem: Item, url: string) {
 
   const copyInput = document.createElement('input');
   copyInput.value = a.href;
+  copyInput.readOnly = true;
 
   const label = 'copy';
   loadingItem.actionButton.innerHTML = label;
