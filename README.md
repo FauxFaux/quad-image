@@ -1,6 +1,5 @@
 # quad-image
 
-[![Build status](https://api.travis-ci.org/FauxFaux/quad-image.png)](https://travis-ci.org/FauxFaux/quad-image)
 [![](https://img.shields.io/crates/v/quad-image.svg)](https://crates.io/crates/quad-image)
 
 A very, very simple image hosting API, plus support files.
