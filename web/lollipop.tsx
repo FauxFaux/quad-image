@@ -166,7 +166,7 @@ function onFiles(items: FileList | null, context: string) {
 
   if (0 === items.length) {
     error(
-      `No files, valid or not, were found in your ${context}. Maybe it wasn't a valid image, or your browser is confused about what it was?`
+      `No files, valid or not, were found in your ${context}. Maybe it wasn't a valid image, or your browser is confused about what it was?`,
     );
     return;
   }
@@ -180,7 +180,14 @@ function onFiles(items: FileList | null, context: string) {
     if (item.type.match(/image.*/)) {
       process(item);
     } else {
-      error("Ignoring non-image item (of type '" + item.type + "') in " + context + ': ' + item.name);
+      error(
+        "Ignoring non-image item (of type '" +
+          item.type +
+          "') in " +
+          context +
+          ': ' +
+          item.name,
+      );
     }
   }
 
@@ -218,7 +225,7 @@ function setCurrentPublic(id: string) {
       $('<a>')
         .attr('href', '/gallery/#' + id)
         .attr('target', 'none')
-        .text(id)
+        .text(id),
     );
 }
 
@@ -226,7 +233,9 @@ function addImagesToGallery(gallery: string, images: string[]) {
   callGallery(gallery, images)
     .then(function (resp) {
       if ('errors' in resp) {
-        resp.errors.forEach((e: JSONAPI.ErrorObject) => error(`then: ${e.code}: ${e.title}`));
+        resp.errors.forEach((e: JSONAPI.ErrorObject) =>
+          error(`then: ${e.code}: ${e.title}`),
+        );
       } else if ('data' in resp) {
         if ('gallery' !== resp.data.type) {
           error('invalid response type');
@@ -242,7 +251,9 @@ function addImagesToGallery(gallery: string, images: string[]) {
     })
     .catch((xhr: any) => {
       if (xhr.responseJSON && 'errors' in xhr.responseJSON) {
-        xhr.responseJSON.errors.forEach((e: JSONAPI.ErrorObject) => error(`http: ${e.code}: ${e.title}`));
+        xhr.responseJSON.errors.forEach((e: JSONAPI.ErrorObject) =>
+          error(`http: ${e.code}: ${e.title}`),
+        );
       }
     });
 }

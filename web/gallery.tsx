@@ -67,7 +67,10 @@ export function hashChanged() {
     .catch(() => showError('network error fetching gallery'));
 }
 
-function fetchComplete(resp: JSONAPI.Document, showError: (msg: string) => void): string[] | null {
+function fetchComplete(
+  resp: JSONAPI.Document,
+  showError: (msg: string) => void,
+): string[] | null {
   if ('errors' in resp) {
     showError(JSON.stringify(resp.errors));
     return null;
@@ -118,7 +121,10 @@ function render(body: HTMLElement, hash: Hash) {
     }
   }
 
-  const thisPage = images.slice(currentImage, Math.min(currentImage + itemsPerPage, images.length));
+  const thisPage = images.slice(
+    currentImage,
+    Math.min(currentImage + itemsPerPage, images.length),
+  );
 
   for (const id of thisPage) {
     $('<img/>', {
