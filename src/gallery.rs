@@ -3,6 +3,7 @@ use std::convert::TryInto;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
+use base64::Engine;
 use rusqlite::types::ToSql;
 use rusqlite::Connection;
 
@@ -74,7 +75,7 @@ fn public_id_for(global_secret: &[u8], gallery: &str, private: &str) -> String {
     let public = format!(
         "{}:{}",
         gallery,
-        base64::encode_config(&masked[..7], base64::URL_SAFE_NO_PAD)
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&masked[..7]),
     );
     public
 }
@@ -94,7 +95,7 @@ fn epoch_millis() -> i64 {
         .unwrap_or_else(|_| time::Duration::new(0, 0));
     (since_the_epoch.as_secs() * 1000 + u64::from(since_the_epoch.subsec_nanos()) / 1_000_000)
         .try_into()
-        .unwrap_or(std::i64::MAX)
+        .unwrap_or(i64::MAX)
 }
 
 #[cfg(test)]
