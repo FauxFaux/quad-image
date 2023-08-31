@@ -18,8 +18,7 @@ module.exports = {
 
   module: {
     rules: [
-      // All files with a '.ts' or '.tsx' extension will be handled by 'awesome-typescript-loader'.
-      { test: /\.tsx?$/, use: [ { loader: "ts-loader" } ], exclude: /node_modules/ },
+      { test: /\.tsx?$/, use: [ { loader: "babel-loader" } ], exclude: /node_modules/ },
 
       // Pack SVGs into base64 urls
       { test: /\.svg$/, use: [ { loader: 'url-loader?mimetype=image/svg+xml&name=[name].[ext]' } ] },
