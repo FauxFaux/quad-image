@@ -1,40 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="root.css"/>
+    <title></title>
 </head>
 <body>
-<div id="menu">
-    <p><img id='user-button' src="user.svg" alt="user menu"/></p>
-    <div id="user-settings">
-        <div class="close">✖</div>
-        <p>Current gallery: <span id="current-gallery"><i>thinking</i></span></p>
-        <form id="user-form">
-            <label>New <abbr title="Gallery name and trigger (4-10 letter name, !, password)">gallery</abbr>:
-                <input id='new-gallery' name="gallery" required placeholder="green!battery staple">
-            </label>
-            <button>sync</button>
-        </form>
-    </div>
-</div>
-<label for="realos" id="form"></label>
-<input type="file" multiple id="realos">
-<ul id="images"></ul>
-<div id="errors">
-    Waiting for Javascript to initialise...
-</div>
-<div id="tcs">
-    <p><a href="/terms/">T&amp;Cs</a></p>
-</div>
-<script
-        src="https://code.jquery.com/jquery-3.4.1.min.js"
-        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
-        crossorigin="anonymous"></script>
-<script src="bundle.js"></script>
-<script>
-  quadImage.Lollipop.init();
-</script>
+<div id="app">Waiting for JS to boot</div>
 </body>
 </html>

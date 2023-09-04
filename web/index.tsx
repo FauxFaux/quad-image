@@ -1,2 +1,2 @@
-export * as Gallery from './gallery';
-export * as Lollipop from './lollipop';
+import './main.scss';
+import 'bootstrap';
