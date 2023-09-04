@@ -1,0 +1,35 @@
+.home--sign_in {
+    text-align: center;
+    margin-top: 0.2em;
+    margin-bottom: 0.2em;
+}
+
+.home--sign_in div {
+    background-color: #a50f15;
+    padding: 0.6em;
+    border-radius: 10px;
+    margin: 0.8em;
+}
+
+.home--upload_drop {
+    min-width: 16em;
+    min-height: 10em;
+    background-color: #888888;
+    text-align: center;
+    padding: 4em;
+    border-radius: 4px;
+}
+
+.home--upload_drop span {
+    text-align: center;
+    padding: 1em;
+}
+
+.home--upload_paste button {
+    width: 100%;
+}
+
+.home--upload_pick input,.home--upload_paste button {
+    margin-top: 1em;
+    margin-bottom: 1em;
+}

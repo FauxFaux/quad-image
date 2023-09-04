@@ -1,31 +1,39 @@
-var path = require('path');
+const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
-  entry: "./web/index.tsx",
+  entry: './web/index.tsx',
   output: {
-    path: path.join(process.cwd(), 'web'),
-    filename: "bundle.js",
-    library: "quadImage",
+    path: path.resolve(__dirname, './dist'),
+    filename: 'bundle.[contenthash].js',
+    library: 'app',
   },
 
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: './web/index.html',
+    }),
+  ],
+
   // Enable sourcemaps for debugging webpack's output.
-  devtool: "inline-source-map",
+  devtool: 'source-map',
 
   resolve: {
     // Add '.ts' and '.tsx' as resolvable extensions.
-    extensions: [".ts", ".tsx", ".js", ".json"]
+    extensions: ['.ts', '.tsx', '.js', '.json'],
   },
 
   module: {
     rules: [
-      { test: /\.tsx?$/, use: [ { loader: "babel-loader" } ], exclude: /node_modules/ },
-
-      // Pack SVGs into base64 urls
-      { test: /\.svg$/, use: [ { loader: 'url-loader?mimetype=image/svg+xml&name=[name].[ext]' } ] },
-    ]
-  },
-
-  externals: {
-    jquery: 'jQuery',
+      {
+        test: /\.tsx?$/,
+        use: [{ loader: 'babel-loader' }],
+        exclude: /node_modules/,
+      },
+      {
+        test: /\.css$/i,
+        use: ['style-loader', 'css-loader'],
+      },
+    ],
   },
 };

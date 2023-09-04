@@ -294,16 +294,12 @@ fn main() -> anyhow::Result<()> {
             }
 
             router!(request,
-                (GET)  ["/"]                    => { static_html("web/index.html")          },
+                (GET)  ["/"]                    => { static_html("dist/index.html")          },
                 (GET)  ["/dumb/"]               => { static_html("web/dumb/index.html")     },
                 (GET)  ["/terms/"]              => { static_html("web/terms/index.html")    },
                 (GET)  ["/gallery/"]            => { static_html("web/gallery/index.html")  },
 
-                (GET)  ["/root.css"]            => { static_css ("web/root.css")            },
-                (GET)  ["/user.svg"]            => { static_svg ("web/user.svg")            },
-                (GET)  ["/bundle.js"  ]         => { static_js  ("web/bundle.js")           },
-                (GET)  ["/gallery/gallery.css"] => { static_css ("web/gallery/gallery.css") },
-                (GET)  ["/jquery-3.3.1.min.js"] => { static_js  ("web/jquery-3.3.1.min.js") },
+                (GET)  ["/{other}", other: String]  => { static_js(&format!("dist/{other}"))},
 
                 (POST) ["/api/upload"]          => { upload(request)                        },
 
@@ -329,7 +325,7 @@ fn static_css(path: &'static str) -> Response {
     static_file("text/css", path)
 }
 
-fn static_js(path: &'static str) -> Response {
+fn static_js(path: &str) -> Response {
     static_file("application/javascript", path)
 }
 
@@ -337,6 +333,6 @@ fn static_svg(path: &'static str) -> Response {
     static_file("image/svg+xml", path)
 }
 
-fn static_file(content_type: &'static str, path: &'static str) -> Response {
+fn static_file(content_type: &'static str, path: &str) -> Response {
     Response::from_file(content_type, fs::File::open(path).expect("static"))
 }

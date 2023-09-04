@@ -1,20 +1,26 @@
 {
   "compilerOptions": {
-    "strict": true,
-    "noImplicitAny": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-
-    "module": "es6",
-    "moduleResolution": "node",
-    "target": "es6",
+    "target": "es2019",
     "lib": [
-      "es2015",
-      "es2017.object",
+      "es2019",
       "dom"
     ],
-    "allowSyntheticDefaultImports": true,
+    "module": "commonjs",
     "sourceMap": true,
-    "jsx": "react"
-  }
+    "outDir": ".lint/dist",
+    "incremental": true,
+    "pretty": true,
+
+    "strict": true,
+
+    "noUnusedLocals": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "resolveJsonModule": true,
+
+    "isolatedModules": true,
+    "esModuleInterop": true
+  },
+  "include": ["./web/**/*", "./scripts/**/*", "./test/**/*", "./types/**/*"],
 }

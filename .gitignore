@@ -9,3 +9,4 @@ gallery.db
 node_modules/
 dist/
 web/bundle.js*
+garbage/
