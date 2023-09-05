@@ -1,71 +1,38 @@
 import { Component, createRef } from 'preact';
-import { useEffect, useMemo } from 'preact/compat';
-import { ThumbList } from './thumb-list';
+import { useEffect, useMemo } from 'preact/hooks';
+
+import { ThumbList } from './components/thumb-list';
+import { Upload } from './components/upload';
+import { serializeError } from 'serialize-error';
+
+export type OurFile = Blob & { name?: string };
+
+type PendingItem = { ctx: string } & (
+  | { state: 'queued'; file: OurFile }
+  | { state: 'starting' }
+  | { state: 'uploading'; progress: number }
+  | { state: 'done'; base: string }
+  | { state: 'error'; error: Error }
+);
 
 interface HomeState {
   imRightWidth?: number;
+  messages: ['warn' | 'error', string][];
+  uploads: PendingItem[];
 }
 
 export class Home extends Component<{}, HomeState> {
   imRight = createRef<HTMLDivElement>();
-  refPickFiles = createRef<HTMLInputElement>();
 
-  onDrop = (ev: DragEvent) => {};
-
-  dropClick = () => {
-    this.refPickFiles.current?.click();
-  };
-
-  pasteClick = async () => {
-    try {
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        for (const type of item.types) {
-          const blob = await item.getType(type);
-          console.log(type, URL.createObjectURL(blob));
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Failed to paste from clipboard: ' + err);
-    }
+  state: HomeState = {
+    messages: [],
+    uploads: [],
   };
 
   render(props: {}, state: Readonly<HomeState>) {
     const existing: string[] = useMemo(
       () => JSON.parse(localStorage.getItem('quadpees') ?? '[]'),
       [],
-    );
-
-    const upload = (
-      <div class={'container-fluid'}>
-        <div class={'row'}>
-          <div
-            class={'col home--upload_drop'}
-            onDrop={this.onDrop}
-            onClick={this.dropClick}
-          >
-            <span>drop files here</span>
-          </div>
-        </div>
-        <div class={'row'}>
-          <div class={'col-9 home--upload_pick'}>
-            <input
-              class={'form-control'}
-              type={'file'}
-              ref={this.refPickFiles}
-            />
-          </div>
-          <div class={'col-3 home--upload_paste'}>
-            <button
-              class={'btn btn-secondary home--upload_button'}
-              onClick={this.pasteClick}
-            >
-              paste
-            </button>
-          </div>
-        </div>
-      </div>
     );
 
     const onResize = () => {
@@ -84,6 +51,20 @@ export class Home extends Component<{}, HomeState> {
     const existingRight = existing.slice(0, rightCount);
     const existingBottom = existing.slice(rightCount);
 
+    const triggerUploads = (files: OurFile[], ctx: string) => {
+      const additional: PendingItem[] = files.map((file) => ({
+        file,
+        ctx,
+        state: 'queued',
+      }));
+      this.setState(({ uploads }) => {
+        for (let i = 0; i < additional.length; ++i) {
+          void this.uploadWrapper(uploads.length + i, additional[i]);
+        }
+        return { uploads: [...uploads, ...additional] };
+      });
+    };
+
     return (
       <div class={'container-fluid'}>
         <div class={'row'}>
@@ -91,8 +72,34 @@ export class Home extends Component<{}, HomeState> {
             <div>Gallery backup: off; local only</div>
           </div>
         </div>
+        {state.messages.length > 0 && (
+          <div class={'row'}>
+            <div class={'col'}>
+              {state.messages.map(([type, msg], i) => (
+                <div
+                  key={`warning-${i}`}
+                  className={`alert alert-${
+                    type === 'warn' ? 'warning' : 'danger'
+                  } home--alert`}
+                  role="alert"
+                  onClick={() => {
+                    this.setState(({ messages }) => {
+                      const newMessages = [...messages];
+                      newMessages.splice(i, 1);
+                      return { messages: newMessages };
+                    });
+                  }}
+                >
+                  {msg}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div class={'row'}>
-          <div class={'col-md'}>{upload}</div>
+          <div class={'col-md'}>
+            <Upload printer={this.printer} triggerUploads={triggerUploads} />
+          </div>
           {existingRight.length > 0 && (
             <div class={'col-md'} ref={this.imRight}>
               <ThumbList items={existingRight} />
@@ -109,4 +116,73 @@ export class Home extends Component<{}, HomeState> {
       </div>
     );
   }
+
+  uploadWrapper = async (i: number, initial: PendingItem) => {
+    try {
+      const { ctx } = initial;
+
+      const formData = new FormData();
+      {
+        if (initial.state !== 'queued') {
+          throw new Error(`Invalid state: ${initial.state}`);
+        }
+        formData.append('image', initial.file, initial.file.name);
+        formData.append('ctx', initial.ctx);
+        formData.append('return_json', 'true');
+      }
+
+      const updateState = (next: PendingItem) => {
+        this.setState(({ uploads }) => {
+          const newUploads = [...uploads];
+          newUploads[i] = next;
+          return { uploads: newUploads };
+        });
+      };
+
+      const xhr = new XMLHttpRequest();
+      xhr.responseType = 'json';
+      xhr.open('POST', '/api/upload');
+      xhr.upload.addEventListener('progress', (e) => {
+        updateState({
+          state: 'uploading',
+          progress: e.lengthComputable ? e.loaded / e.total : NaN,
+          ctx: ctx,
+        });
+      });
+      await new Promise((resolve) => {
+        xhr.addEventListener('loadend', resolve);
+        xhr.send(formData);
+        updateState({ state: 'starting', ctx: ctx });
+      });
+
+      if (xhr.status !== 200) {
+        throw new Error(`Unexpected status ${xhr.status}: ${xhr.statusText}.`);
+      }
+
+      const response = xhr.response;
+      updateState({ state: 'done', ctx: ctx, base: response.data.id });
+    } catch (err) {
+      this.printer.error(err);
+    }
+  };
+
+  printer = {
+    warn: (msg: string) => {
+      this.setState(({ messages }) => ({
+        messages: [...messages, ['warn', msg]],
+      }));
+    },
+    error: (err: Error | unknown) => {
+      console.error(err);
+      this.setState(({ messages }) => ({
+        messages: [
+          ...messages,
+          [
+            'error',
+            'Unexpected internal error: ' + JSON.stringify(serializeError(err)),
+          ],
+        ],
+      }));
+    },
+  };
 }

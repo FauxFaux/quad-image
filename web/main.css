@@ -35,6 +35,10 @@
     margin-bottom: 1em;
 }
 
+.home--alert {
+    cursor: pointer;
+}
+
 .thumb--frame li {
     display: inline-block;
     list-style: none;
