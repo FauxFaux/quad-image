@@ -8,6 +8,28 @@ interface HomeState {
 
 export class Home extends Component<{}, HomeState> {
   imRight = createRef<HTMLDivElement>();
+  refPickFiles = createRef<HTMLInputElement>();
+
+  onDrop = (ev: DragEvent) => {};
+
+  dropClick = () => {
+    this.refPickFiles.current?.click();
+  };
+
+  pasteClick = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          const blob = await item.getType(type);
+          console.log(type, URL.createObjectURL(blob));
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to paste from clipboard: ' + err);
+    }
+  };
 
   render(props: {}, state: Readonly<HomeState>) {
     const existing: string[] = useMemo(
@@ -18,16 +40,27 @@ export class Home extends Component<{}, HomeState> {
     const upload = (
       <div class={'container-fluid'}>
         <div class={'row'}>
-          <div class={'col home--upload_drop'}>
+          <div
+            class={'col home--upload_drop'}
+            onDrop={this.onDrop}
+            onClick={this.dropClick}
+          >
             <span>drop files here</span>
           </div>
         </div>
         <div class={'row'}>
           <div class={'col-9 home--upload_pick'}>
-            <input class={'form-control'} type={'file'} />
+            <input
+              class={'form-control'}
+              type={'file'}
+              ref={this.refPickFiles}
+            />
           </div>
           <div class={'col-3 home--upload_paste'}>
-            <button class={'btn btn-secondary home--upload_button'}>
+            <button
+              class={'btn btn-secondary home--upload_button'}
+              onClick={this.pasteClick}
+            >
               paste
             </button>
           </div>
@@ -60,15 +93,19 @@ export class Home extends Component<{}, HomeState> {
         </div>
         <div class={'row'}>
           <div class={'col-md'}>{upload}</div>
-          <div class={'col-md'} ref={this.imRight}>
-            <ThumbList items={existingRight} />
-          </div>
+          {existingRight.length > 0 && (
+            <div class={'col-md'} ref={this.imRight}>
+              <ThumbList items={existingRight} />
+            </div>
+          )}
         </div>
-        <div class={'row'}>
-          <div class={'col'}>
-            <ThumbList items={existingBottom} />
+        {existingBottom.length > 0 && (
+          <div class={'row'}>
+            <div class={'col'}>
+              <ThumbList items={existingBottom} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }

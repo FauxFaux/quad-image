@@ -13,11 +13,12 @@
 
 .home--upload_drop {
     min-width: 16em;
-    min-height: 10em;
+    min-height: 6em;
     background-color: #888888;
     text-align: center;
     padding: 4em;
     border-radius: 4px;
+    cursor: pointer;
 }
 
 .home--upload_drop span {
@@ -32,4 +33,36 @@
 .home--upload_pick input,.home--upload_paste button {
     margin-top: 1em;
     margin-bottom: 1em;
+}
+
+.thumb--frame li {
+    display: inline-block;
+    list-style: none;
+    width: 290px;
+    margin-left: 10px;
+    margin-bottom: 1em;
+    position: relative;
+    padding: 2px;
+    background-color: var(--bs-secondary-bg);
+    border-radius: 4px;
+}
+
+.thumb--frame a {
+    display: flex;
+    height: 140px;
+    width: 100%;
+    margin: 2px;
+    border-radius: 4px;
+    justify-content: center;
+    align-items: center;
+}
+
+.thumb--frame img {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.thumb--frame li button {
+    margin-top: 4px;
+    width: 100%;
 }
