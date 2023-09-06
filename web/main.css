@@ -4,11 +4,42 @@
     margin-bottom: 0.2em;
 }
 
-.home--sign_in div {
-    background-color: #a50f15;
+.home--sign_in {
     padding: 0.6em;
     border-radius: 10px;
     margin: 0.8em;
+}
+
+.home--sign_in input {
+    margin-left: 0.5em;
+    margin-top: 0.3em;
+    margin-bottom: 0.3em;
+}
+
+.home--sign_in button {
+    margin-left: 0.5em;
+    margin-top: 0.3em;
+    margin-bottom: 0.3em;
+}
+
+.home--sign_in-warn {
+    background-color: var(--bs-warning-bg-subtle);
+}
+
+.home--sign_in-info {
+    background-color: var(--bs-info-bg-subtle);
+}
+
+.home--sign_in-divider {
+    color: var(--bs-secondary);
+    margin-left: 1em;
+    margin-right: 1em;
+    font-weight: bold;
+}
+
+.home--sign_in input {
+    width: auto;
+    display: inline-block;
 }
 
 .home--upload_drop {

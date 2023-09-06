@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'preact/hooks';
 import { ThumbList } from './components/thumb-list';
 import { Upload } from './components/upload';
 import { serializeError } from 'serialize-error';
+import { SignIn } from './components/sign-in';
 
 export type OurFile = Blob & { name?: string };
 
@@ -35,6 +36,11 @@ export class Home extends Component<{}, HomeState> {
       [],
     );
 
+    const gallery: string | undefined = useMemo(
+      () => localStorage.getItem('gallery') ?? undefined,
+      [],
+    );
+
     const onResize = () => {
       this.setState({
         imRightWidth: this.imRight.current?.getBoundingClientRect()?.width,
@@ -47,7 +53,7 @@ export class Home extends Component<{}, HomeState> {
       return () => window.removeEventListener('resize', onResize);
     }, []);
 
-    const rightCount = Math.floor((state.imRightWidth ?? 1000) / 300);
+    const rightCount = Math.floor((state.imRightWidth ?? 1000) / 330);
     const existingRight = existing.slice(0, rightCount);
     const existingBottom = existing.slice(rightCount);
 
@@ -67,10 +73,8 @@ export class Home extends Component<{}, HomeState> {
 
     return (
       <div class={'container-fluid'}>
-        <div class={'row'}>
-          <div class={'col home--sign_in'}>
-            <div>Gallery backup: off; local only</div>
-          </div>
+        <div className={'row home--sign_in'}>
+          <SignIn gallery={gallery} />
         </div>
         {state.messages.length > 0 && (
           <div class={'row'}>
