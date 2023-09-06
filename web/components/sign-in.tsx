@@ -18,7 +18,7 @@ export class SignIn extends Component<SignInProps, SignInState> {
         <div className={'col home--sign_in-info'}>
           <div>
             <label>
-              New backup gallery, in <i>public-name!secret passphrase</i>{' '}
+              new backup gallery, in <i>public-name!secret passphrase</i>{' '}
               format:
               <input
                 type={'text'}
@@ -52,27 +52,13 @@ export class SignIn extends Component<SignInProps, SignInState> {
       </span>
     );
 
-    if (props.gallery) {
-      const { data } = useQuery(`gallery-${props.gallery}`, async () => {
-        const resp = await fetch('/api/gallery', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            data: {
-              type: 'gallery',
-              attributes: {
-                gallery: props.gallery,
-                images: [],
-              },
-            },
-          }),
-        });
-        return await resp.json();
-      });
+    const existing = props.gallery;
+    if (existing) {
+      const { data } = useQuery(`gallery-${existing}-id`, async () =>
+        callGallery(existing, []),
+      );
 
-      const id = data?.data?.id;
+      const id = data?.id;
 
       const status = id ? (
         <span>
@@ -97,4 +83,31 @@ export class SignIn extends Component<SignInProps, SignInState> {
       </div>
     );
   }
+}
+
+async function callGallery(gallery: string, images: string[]) {
+  const resp = await fetch('/api/gallery', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        type: 'gallery',
+        attributes: {
+          gallery,
+          images,
+        },
+      },
+    }),
+  });
+  if (!resp.ok) {
+    throw new Error(`failed to call gallery: ${resp.status}`);
+  }
+  const body: any = await resp.json();
+  if (!body?.data) {
+    throw new Error(`missing data in response: ${JSON.stringify(body)}`);
+  }
+
+  return body.data;
 }
