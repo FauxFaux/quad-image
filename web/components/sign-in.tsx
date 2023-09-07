@@ -2,7 +2,7 @@ import { Component } from 'preact';
 import { useQuery } from 'preact-fetching';
 
 import IconSettings from 'mdi-preact/SettingsIcon';
-import {putGallery} from "../locket/client";
+import { putGallery } from '../locket/client';
 
 interface SignInProps {
   gallery: string | undefined;

@@ -1,4 +1,6 @@
-export async function getGallery(gallery: string): Promise<{ id: string, type: 'image' }> {
+export async function getGallery(
+  gallery: string,
+): Promise<{ id: string; type: 'image' }[]> {
   const resp = await fetch(`/api/gallery/${gallery}`);
   const body: any = await resp.json();
   if (!body?.data) {

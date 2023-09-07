@@ -112,8 +112,9 @@ export class Home extends Component<{}, HomeState> {
         </div>
         {existingBottom.length > 0 && (
           <div class={'row'}>
-            <div class={'col'}>
+            <div className={'col'}>
               <ThumbList items={existingBottom} />
+              <div className={'util--clear'} />
             </div>
           </div>
         )}
