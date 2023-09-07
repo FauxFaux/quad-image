@@ -1,13 +1,19 @@
-import { render } from 'preact';
+import './main.css';
 
-import { App } from './app';
-
-export function init(element: HTMLElement) {
+export function init(element: HTMLElement, mode: string | null) {
   element.innerHTML = 'JS App booting...';
   (async () => {
+    const { render } = await import('preact');
     await new Promise((r) => setTimeout(r));
     element.innerHTML = '';
-    render(<App />, element);
+    switch (mode) {
+      case 'gallery':
+        const { Gallery } = await import('./gallery');
+        return render(<Gallery />, element);
+      default:
+        const { Home } = await import('./home');
+        return render(<Home />, element);
+    }
   })().catch(async (e) => {
     const { serializeError } = await import('serialize-error');
     console.error(e);
@@ -19,4 +25,4 @@ export function init(element: HTMLElement) {
   });
 }
 
-init(document.getElementById('app')!);
+init(document.getElementById('app')!, document.body.getAttribute('data-mode'));

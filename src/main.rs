@@ -297,9 +297,9 @@ fn main() -> anyhow::Result<()> {
                 (GET)  ["/"]                    => { static_html("dist/index.html")          },
                 (GET)  ["/dumb/"]               => { static_html("web/dumb/index.html")     },
                 (GET)  ["/terms/"]              => { static_html("web/terms/index.html")    },
-                (GET)  ["/gallery/"]            => { static_html("web/gallery/index.html")  },
+                (GET)  ["/gallery/"]            => { static_html("dist/gallery/index.html")  },
 
-                (GET)  ["/{other}", other: String]  => { static_js(&format!("dist/{other}"))},
+                (GET)  ["/static/{other}", other: String]  => { static_js(&format!("dist/static/{other}"))},
 
                 (POST) ["/api/upload"]          => { upload(request)                        },
 

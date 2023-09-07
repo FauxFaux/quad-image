@@ -5,13 +5,23 @@ module.exports = {
   entry: './web/index.tsx',
   output: {
     path: path.resolve(__dirname, './dist'),
-    filename: 'bundle.[contenthash].js',
+    filename: 'static/bundle.[contenthash].js',
     library: 'app',
   },
 
   plugins: [
     new HtmlWebpackPlugin({
-      template: './web/index.html',
+      template: './web/index.ejs',
+      templateParameters: {
+        mode: 'home',
+      }
+    }),
+    new HtmlWebpackPlugin({
+      template: './web/index.ejs',
+      filename: 'gallery/index.html',
+      templateParameters: {
+        mode: 'gallery',
+      }
     }),
   ],
 

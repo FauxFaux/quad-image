@@ -2,6 +2,7 @@ import { Component } from 'preact';
 import { useQuery } from 'preact-fetching';
 
 import IconSettings from 'mdi-preact/SettingsIcon';
+import {putGallery} from "../locket/client";
 
 interface SignInProps {
   gallery: string | undefined;
@@ -55,14 +56,14 @@ export class SignIn extends Component<SignInProps, SignInState> {
     const existing = props.gallery;
     if (existing) {
       const { data } = useQuery(`gallery-${existing}-id`, async () =>
-        callGallery(existing, []),
+        putGallery(existing, []),
       );
 
       const id = data?.id;
 
       const status = id ? (
         <span>
-          backing up to <a href={`/gallery/${id}`}>{id}</a>
+          backing up to <a href={`/gallery/#${id}`}>{id}</a>
         </span>
       ) : (
         <span>backups configured but we're offline</span>
@@ -83,31 +84,4 @@ export class SignIn extends Component<SignInProps, SignInState> {
       </div>
     );
   }
-}
-
-async function callGallery(gallery: string, images: string[]) {
-  const resp = await fetch('/api/gallery', {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      data: {
-        type: 'gallery',
-        attributes: {
-          gallery,
-          images,
-        },
-      },
-    }),
-  });
-  if (!resp.ok) {
-    throw new Error(`failed to call gallery: ${resp.status}`);
-  }
-  const body: any = await resp.json();
-  if (!body?.data) {
-    throw new Error(`missing data in response: ${JSON.stringify(body)}`);
-  }
-
-  return body.data;
 }
