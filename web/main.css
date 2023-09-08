@@ -106,7 +106,7 @@
 }
 
 .thumb--frame-message img {
-    opacity: 0.9;
+    opacity: 0.4;
     position: absolute;
 
     max-width: 100%;
@@ -114,6 +114,10 @@
 }
 .thumb--frame-message span {
     position: relative;
+    text-align: center;
+    background-color: rgba(var(--bs-secondary-bg-rgb), 0.8);
+    padding: 0.2em;
+    border-radius: 4px;
 }
 
 .thumb--frame li button {

@@ -5,7 +5,6 @@ import { ThumbList } from './components/thumb-list';
 import { Upload } from './components/upload';
 import { serializeError } from 'serialize-error';
 import { SignIn } from './components/sign-in';
-import { mockThumbs } from './mocks/thumbs';
 
 export type OurFile = Blob & { name?: string };
 
@@ -56,8 +55,11 @@ export class Home extends Component<{}, HomeState> {
 
     // non-finished uploads, followed by real items munged to look like uploads
     const displayItems: PendingItem[] = [
-      ...mockThumbs(),
-      ...state.uploads.filter((u) => u.state !== 'done').map((u) => u),
+      // ...(require('./mocks/thumbs').mockThumbs()),
+      ...state.uploads
+        .filter((u) => u.state !== 'done')
+        .map((u) => u)
+        .reverse(),
       ...existing.map(
         (base) =>
           ({ base, state: 'done', ctx: 'local-storage' }) as PendingItem,

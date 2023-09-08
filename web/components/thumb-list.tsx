@@ -1,4 +1,4 @@
-import { Component, JSX } from 'preact';
+import { Component } from 'preact';
 import type { ImageId } from '../types';
 import type { PendingItem } from '../home';
 
@@ -12,6 +12,7 @@ export class ThumbList extends Component<ThumbProps, ThumbState> {
     return (
       <ul class={'thumb--frame'}>
         {props.items.map((item) => {
+          // I think I split these because Done is the most common case (by far), but I don't think I like it
           switch (item.state) {
             case 'done':
               return <ThumbDone bare={item.base} />;
@@ -78,25 +79,41 @@ export class ThumbUpload extends Component<ThumbUploadProps> {
       throw new Error('ThumbUpload should not be used for done items');
     }
 
-    const preview = (nest: JSX.Element) => (
+    const preview = (msg: string) => (
       <div class={'thumb--frame-imgbox thumb--frame-message'}>
         <img
           src={URL.createObjectURL(item.file)}
           alt={item.file.name ? `preview of ${item.file.name}` : 'preview'}
         />
-        {nest}
+        <span>
+          {item.ctx}
+          <br />
+          {item.file.name}
+          <br />
+          {msg}
+        </span>
       </div>
     );
 
     // this is such garbage
 
     if (item.state === 'error') {
-      return preview(<span>error: {item.error}</span>);
+      return (
+        <li>
+          {preview(`error: ${item.error}`)}
+          <div class={'embarrassment'}>&nbsp;</div>
+        </li>
+      );
     }
 
     const msg = simpleMessage(item);
     if (msg) {
-      return preview(<span>{msg}</span>);
+      return (
+        <li>
+          {preview(msg)}
+          <div class={'embarrassment'}>&nbsp;</div>
+        </li>
+      );
     }
 
     if (item.state !== 'uploading' || Number.isNaN(item.progress)) {
@@ -107,7 +124,7 @@ export class ThumbUpload extends Component<ThumbUploadProps> {
     // pct < 100
     return (
       <li>
-        {preview(<span>transferring</span>)}
+        {preview(`transferring: ${pct}% complete`)}
         <div
           className="progress"
           role="progressbar"
@@ -130,7 +147,7 @@ const simpleMessage = (item: PendingItem) => {
       return 'starting';
     case 'uploading': {
       if (Number.isNaN(item.progress)) {
-        return 'upload progress not available';
+        return 'transferring (progress not available)';
       }
       const pct = Math.round(item.progress * 100);
       if (pct === 100) {
