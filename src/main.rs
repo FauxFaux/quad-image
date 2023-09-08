@@ -293,13 +293,15 @@ fn main() -> anyhow::Result<()> {
                 return rouille::match_assets(&e, "e");
             }
 
+            if let Some(e) = request.remove_prefix("/static") {
+                return rouille::match_assets(&e, "dist/static");
+            }
+
             router!(request,
                 (GET)  ["/"]                    => { static_html("dist/index.html")          },
                 (GET)  ["/dumb/"]               => { static_html("web/dumb/index.html")     },
                 (GET)  ["/terms/"]              => { static_html("web/terms/index.html")    },
                 (GET)  ["/gallery/"]            => { static_html("dist/gallery/index.html")  },
-
-                (GET)  ["/static/{other}", other: String]  => { static_js(&format!("dist/static/{other}"))},
 
                 (POST) ["/api/upload"]          => { upload(request)                        },
 
@@ -319,18 +321,6 @@ fn main() -> anyhow::Result<()> {
 
 fn static_html(path: &'static str) -> Response {
     static_file("text/html", path)
-}
-
-fn static_css(path: &'static str) -> Response {
-    static_file("text/css", path)
-}
-
-fn static_js(path: &str) -> Response {
-    static_file("application/javascript", path)
-}
-
-fn static_svg(path: &'static str) -> Response {
-    static_file("image/svg+xml", path)
 }
 
 fn static_file(content_type: &'static str, path: &str) -> Response {

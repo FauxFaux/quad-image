@@ -53,7 +53,7 @@ export class ThumbDone extends Component<ThumbDoneProps, ThumbDoneState> {
     return (
       <li>
         <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
-          <img src={`${bare}.thumb.jpg`} />
+          <img src={`${bare}.thumb.jpg`} loading={'lazy'} />
         </a>
         <button
           class={`btn btn-${!this.state.copied ? 'secondary' : 'success'}`}

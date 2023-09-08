@@ -79,7 +79,7 @@ export class SignIn extends Component<SignInProps, SignInState> {
 
     return (
       <div className={'col home--sign_in-warn'}>
-        Gallery backup: off; stored in this browser only
+        gallery backup: off; stored in this browser only
         {configure}
       </div>
     );
