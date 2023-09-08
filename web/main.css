@@ -82,7 +82,7 @@
     border-radius: 4px;
 }
 
-.thumb--frame a {
+.thumb--frame-imgbox {
     display: flex;
     height: 140px;
     width: 100%;
@@ -92,9 +92,28 @@
     align-items: center;
 }
 
+/*.thumb--frame-message {*/
+/*    background-position: center;*/
+/*    background-repeat: no-repeat;*/
+/*    background-size: contain;*/
+/*    opacity: 50%;*/
+/*}*/
+
+
 .thumb--frame img {
     max-width: 100%;
     max-height: 100%;
+}
+
+.thumb--frame-message img {
+    opacity: 0.9;
+    position: absolute;
+
+    max-width: 100%;
+    max-height: 80%;
+}
+.thumb--frame-message span {
+    position: relative;
 }
 
 .thumb--frame li button {

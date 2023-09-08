@@ -5,6 +5,7 @@ import { ThumbList } from './components/thumb-list';
 import { Upload } from './components/upload';
 import { serializeError } from 'serialize-error';
 import { SignIn } from './components/sign-in';
+import { mockThumbs } from './mocks/thumbs';
 
 export type OurFile = Blob & { name?: string };
 
@@ -13,7 +14,7 @@ export type PendingItem = { ctx: string } & (
   | { state: 'starting'; file: OurFile }
   | { state: 'uploading'; progress: number; file: OurFile }
   | { state: 'done'; base: string }
-  | { state: 'error'; error: string }
+  | { state: 'error'; error: string; file: OurFile }
 );
 
 interface HomeState {
@@ -55,6 +56,7 @@ export class Home extends Component<{}, HomeState> {
 
     // non-finished uploads, followed by real items munged to look like uploads
     const displayItems: PendingItem[] = [
+      ...mockThumbs(),
       ...state.uploads.filter((u) => u.state !== 'done').map((u) => u),
       ...existing.map(
         (base) =>
@@ -181,7 +183,12 @@ export class Home extends Component<{}, HomeState> {
         } else {
           msg += `${xhr.status}: ${xhr.statusText}`;
         }
-        updateState({ state: 'error', error: msg, ctx: initial.ctx });
+        updateState({
+          state: 'error',
+          error: msg,
+          ctx: initial.ctx,
+          file: initial.file,
+        });
         return;
       }
 

@@ -1,4 +1,4 @@
-import { Component } from 'preact';
+import { Component, JSX } from 'preact';
 import type { ImageId } from '../types';
 import type { PendingItem } from '../home';
 
@@ -15,37 +15,8 @@ export class ThumbList extends Component<ThumbProps, ThumbState> {
           switch (item.state) {
             case 'done':
               return <ThumbDone bare={item.base} />;
-            case 'error':
-              return <li>error: {item.error}</li>;
-            case 'queued':
-              return <li>queued: {item.file.name}</li>;
-            case 'starting':
-              return <li>starting...</li>;
-            case 'uploading': {
-              if (Number.isNaN(item.progress)) {
-                return <li>upload progress not available</li>;
-              }
-              const pct = Math.round(item.progress * 100);
-              if (pct < 100)
-                return (
-                  <li>
-                    <div className="progress">
-                      <div
-                        className="progress-bar"
-                        role="progressbar"
-                        aria-valuenow={pct}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                      >
-                        transferring...
-                      </div>
-                    </div>
-                  </li>
-                );
-              return <li>upload complete, waiting for server</li>;
-            }
             default:
-              return <li>unknown state: {(item as any).state}</li>;
+              return <ThumbUpload item={item} />;
           }
         })}
       </ul>
@@ -80,7 +51,7 @@ export class ThumbDone extends Component<ThumbDoneProps, ThumbDoneState> {
     const bare = props.bare;
     return (
       <li>
-        <a href={bare} target={'_blank'}>
+        <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
           <img src={`${bare}.thumb.jpg`} />
         </a>
         <button
@@ -94,3 +65,78 @@ export class ThumbDone extends Component<ThumbDoneProps, ThumbDoneState> {
     );
   }
 }
+
+interface ThumbUploadProps {
+  item: PendingItem;
+}
+
+export class ThumbUpload extends Component<ThumbUploadProps> {
+  render(props: Readonly<ThumbUploadProps>) {
+    const item = props.item;
+    if (item.state === 'done') {
+      //return <ThumbDone bare={item.base} />;
+      throw new Error('ThumbUpload should not be used for done items');
+    }
+
+    const preview = (nest: JSX.Element) => (
+      <div class={'thumb--frame-imgbox thumb--frame-message'}>
+        <img
+          src={URL.createObjectURL(item.file)}
+          alt={item.file.name ? `preview of ${item.file.name}` : 'preview'}
+        />
+        {nest}
+      </div>
+    );
+
+    // this is such garbage
+
+    if (item.state === 'error') {
+      return preview(<span>error: {item.error}</span>);
+    }
+
+    const msg = simpleMessage(item);
+    if (msg) {
+      return preview(<span>{msg}</span>);
+    }
+
+    if (item.state !== 'uploading' || Number.isNaN(item.progress)) {
+      throw new Error(`unreachable state ${item.state}`);
+    }
+
+    const pct = Math.round(item.progress * 100);
+    // pct < 100
+    return (
+      <li>
+        {preview(<span>transferring</span>)}
+        <div
+          className="progress"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div className="progress-bar" style={`width: ${pct}%`} />
+        </div>
+      </li>
+    );
+  }
+}
+
+const simpleMessage = (item: PendingItem) => {
+  switch (item.state) {
+    case 'queued':
+      return 'queued';
+    case 'starting':
+      return 'starting';
+    case 'uploading': {
+      if (Number.isNaN(item.progress)) {
+        return 'upload progress not available';
+      }
+      const pct = Math.round(item.progress * 100);
+      if (pct === 100) {
+        return 'upload complete, waiting for server';
+      }
+    }
+  }
+  return undefined;
+};
