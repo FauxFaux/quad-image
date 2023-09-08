@@ -8,12 +8,12 @@ import { SignIn } from './components/sign-in';
 
 export type OurFile = Blob & { name?: string };
 
-type PendingItem = { ctx: string } & (
+export type PendingItem = { ctx: string } & (
   | { state: 'queued'; file: OurFile }
-  | { state: 'starting' }
-  | { state: 'uploading'; progress: number }
+  | { state: 'starting'; file: OurFile }
+  | { state: 'uploading'; progress: number; file: OurFile }
   | { state: 'done'; base: string }
-  | { state: 'error'; error: Error }
+  | { state: 'error'; error: string }
 );
 
 interface HomeState {
@@ -53,9 +53,18 @@ export class Home extends Component<{}, HomeState> {
       return () => window.removeEventListener('resize', onResize);
     }, []);
 
+    // non-finished uploads, followed by real items munged to look like uploads
+    const displayItems: PendingItem[] = [
+      ...state.uploads.filter((u) => u.state !== 'done').map((u) => u),
+      ...existing.map(
+        (base) =>
+          ({ base, state: 'done', ctx: 'local-storage' }) as PendingItem,
+      ),
+    ];
+
     const rightCount = Math.floor((state.imRightWidth ?? 1000) / 330);
-    const existingRight = existing.slice(0, rightCount);
-    const existingBottom = existing.slice(rightCount);
+    const displayRight = displayItems.slice(0, rightCount);
+    const displayBottom = displayItems.slice(rightCount);
 
     const triggerUploads = (files: OurFile[], ctx: string) => {
       const additional: PendingItem[] = files.map((file) => ({
@@ -104,16 +113,16 @@ export class Home extends Component<{}, HomeState> {
           <div class={'col-md'}>
             <Upload printer={this.printer} triggerUploads={triggerUploads} />
           </div>
-          {existingRight.length > 0 && (
+          {displayRight.length > 0 && (
             <div class={'col-md'} ref={this.imRight}>
-              <ThumbList items={existingRight} />
+              <ThumbList items={displayRight} />
             </div>
           )}
         </div>
-        {existingBottom.length > 0 && (
+        {displayBottom.length > 0 && (
           <div class={'row'}>
             <div className={'col'}>
-              <ThumbList items={existingBottom} />
+              <ThumbList items={displayBottom} />
               <div className={'util--clear'} />
             </div>
           </div>
@@ -124,8 +133,6 @@ export class Home extends Component<{}, HomeState> {
 
   uploadWrapper = async (i: number, initial: PendingItem) => {
     try {
-      const { ctx } = initial;
-
       const formData = new FormData();
       {
         if (initial.state !== 'queued') {
@@ -151,21 +158,35 @@ export class Home extends Component<{}, HomeState> {
         updateState({
           state: 'uploading',
           progress: e.lengthComputable ? e.loaded / e.total : NaN,
-          ctx: ctx,
+          ctx: initial.ctx,
+          file: initial.file,
         });
       });
-      await new Promise((resolve) => {
-        xhr.addEventListener('loadend', resolve);
+      const code = await new Promise((resolve) => {
+        xhr.addEventListener('load', () => resolve('load'));
+        xhr.addEventListener('abort', () => resolve('error'));
+        xhr.addEventListener('error', () => resolve('error'));
         xhr.send(formData);
-        updateState({ state: 'starting', ctx: ctx });
+        updateState({
+          state: 'starting',
+          file: initial.file,
+          ctx: initial.ctx,
+        });
       });
 
-      if (xhr.status !== 200) {
-        throw new Error(`Unexpected status ${xhr.status}: ${xhr.statusText}.`);
+      if (xhr.status !== 200 || code !== 'load') {
+        let msg = 'unexpected request error: ';
+        if (code === 'error') {
+          msg += '[opaque networking failure]';
+        } else {
+          msg += `${xhr.status}: ${xhr.statusText}`;
+        }
+        updateState({ state: 'error', error: msg, ctx: initial.ctx });
+        return;
       }
 
       const response = xhr.response;
-      updateState({ state: 'done', ctx: ctx, base: response.data.id });
+      updateState({ state: 'done', ctx: initial.ctx, base: response.data.id });
     } catch (err) {
       this.printer.error(err);
     }

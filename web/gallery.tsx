@@ -57,7 +57,13 @@ export class Gallery extends Component<{}, GalleryState> {
         </div>
         <div class={'row'}>
           <div class={'col'}>
-            <ThumbList items={data.map(({ id }) => `../${id}`)} />
+            <ThumbList
+              items={data.map(({ id }) => ({
+                state: 'done',
+                base: `../${id}`,
+                ctx: 'gallery',
+              }))}
+            />
             <div class={'util--clear'} />
           </div>
         </div>
