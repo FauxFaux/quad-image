@@ -3,8 +3,9 @@ import { useEffect, useMemo } from 'preact/hooks';
 
 import { ThumbList } from './components/thumb-list';
 import { Upload } from './components/upload';
-import { serializeError } from 'serialize-error';
 import { SignIn } from './components/sign-in';
+import { driveUpload } from './locket/client';
+import { printer } from './locket/err';
 
 export type OurFile = Blob & { name?: string };
 
@@ -137,87 +138,21 @@ export class Home extends Component<{}, HomeState> {
 
   uploadWrapper = async (i: number, initial: PendingItem) => {
     try {
-      const formData = new FormData();
-      {
-        if (initial.state !== 'queued') {
-          throw new Error(`Invalid state: ${initial.state}`);
-        }
-        formData.append('image', initial.file, initial.file.name);
-        formData.append('ctx', initial.ctx);
-        formData.append('return_json', 'true');
-      }
-
-      const updateState = (next: PendingItem) => {
+      await driveUpload(initial, (next: PendingItem) => {
         this.setState(({ uploads }) => {
           const newUploads = [...uploads];
           newUploads[i] = next;
           return { uploads: newUploads };
         });
-      };
-
-      const xhr = new XMLHttpRequest();
-      xhr.responseType = 'json';
-      xhr.open('POST', '/api/upload');
-      xhr.upload.addEventListener('progress', (e) => {
-        updateState({
-          state: 'uploading',
-          progress: e.lengthComputable ? e.loaded / e.total : NaN,
-          ctx: initial.ctx,
-          file: initial.file,
-        });
       });
-      const code = await new Promise((resolve) => {
-        xhr.addEventListener('load', () => resolve('load'));
-        xhr.addEventListener('abort', () => resolve('error'));
-        xhr.addEventListener('error', () => resolve('error'));
-        xhr.send(formData);
-        updateState({
-          state: 'starting',
-          file: initial.file,
-          ctx: initial.ctx,
-        });
-      });
-
-      if (xhr.status !== 200 || code !== 'load') {
-        let msg = 'unexpected request error: ';
-        if (code === 'error') {
-          msg += '[opaque networking failure]';
-        } else {
-          msg += `${xhr.status}: ${xhr.statusText}`;
-        }
-        updateState({
-          state: 'error',
-          error: msg,
-          ctx: initial.ctx,
-          file: initial.file,
-        });
-        return;
-      }
-
-      const response = xhr.response;
-      updateState({ state: 'done', ctx: initial.ctx, base: response.data.id });
     } catch (err) {
       this.printer.error(err);
     }
   };
 
-  printer = {
-    warn: (msg: string) => {
-      this.setState(({ messages }) => ({
-        messages: [...messages, ['warn', msg]],
-      }));
-    },
-    error: (err: Error | unknown) => {
-      console.error(err);
-      this.setState(({ messages }) => ({
-        messages: [
-          ...messages,
-          [
-            'error',
-            'Unexpected internal error: ' + JSON.stringify(serializeError(err)),
-          ],
-        ],
-      }));
-    },
-  };
+  printer = printer((msg) =>
+    this.setState(({ messages }) => ({
+      messages: [...messages, msg],
+    })),
+  );
 }
