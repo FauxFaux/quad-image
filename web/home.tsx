@@ -5,7 +5,7 @@ import { ThumbList } from './components/thumb-list';
 import { Upload } from './components/upload';
 import { SignIn } from './components/sign-in';
 import { driveUpload } from './locket/client';
-import { printer } from './locket/err';
+import { Messages, printer } from './locket/err';
 
 export type OurFile = Blob & { name?: string };
 
@@ -90,30 +90,16 @@ export class Home extends Component<{}, HomeState> {
         <div className={'row home--sign_in'}>
           <SignIn gallery={gallery} />
         </div>
-        {state.messages.length > 0 && (
-          <div class={'row'}>
-            <div class={'col'}>
-              {state.messages.map(([type, msg], i) => (
-                <div
-                  key={`warning-${i}`}
-                  className={`alert alert-${
-                    type === 'warn' ? 'warning' : 'danger'
-                  } home--alert`}
-                  role="alert"
-                  onClick={() => {
-                    this.setState(({ messages }) => {
-                      const newMessages = [...messages];
-                      newMessages.splice(i, 1);
-                      return { messages: newMessages };
-                    });
-                  }}
-                >
-                  {msg}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <Messages
+          messages={state.messages}
+          removeMessage={(i) => {
+            this.setState(({ messages }) => {
+              const newMessages = [...messages];
+              newMessages.splice(i, 1);
+              return { messages: newMessages };
+            });
+          }}
+        />
         <div class={'row'}>
           <div class={'col-md'}>
             <Upload printer={this.printer} triggerUploads={triggerUploads} />
