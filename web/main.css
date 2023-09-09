@@ -42,6 +42,10 @@
     display: inline-block;
 }
 
+.home--sign_in-validation {
+    margin: 0.2em 0.5em;
+}
+
 .home--upload_drop {
     min-width: 16em;
     min-height: 6em;

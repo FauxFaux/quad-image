@@ -54,6 +54,7 @@ export class Upload extends Component<UploadProps, UploadState> {
   };
 
   onPasteDocument = (ev: ClipboardEvent) => {
+    if (document.activeElement?.tagName === 'INPUT') return;
     ev.preventDefault();
     this.onFiles(ev.clipboardData?.files, 'pasted');
   };

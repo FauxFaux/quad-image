@@ -1,11 +1,12 @@
 import { Component, createRef } from 'preact';
-import { useEffect, useMemo } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 
 import { ThumbList } from './components/thumb-list';
 import { Upload } from './components/upload';
 import { SignIn } from './components/sign-in';
-import { driveUpload } from './locket/client';
+import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
+import { GallerySecret } from './types';
 
 export type OurFile = Blob & { name?: string };
 
@@ -21,6 +22,9 @@ interface HomeState {
   imRightWidth?: number;
   messages: ['warn' | 'error', string][];
   uploads: PendingItem[];
+  pees: string[];
+  configuredGallery?: GallerySecret;
+  syncingNewGallery?: boolean;
 }
 
 export class Home extends Component<{}, HomeState> {
@@ -29,18 +33,38 @@ export class Home extends Component<{}, HomeState> {
   state: HomeState = {
     messages: [],
     uploads: [],
+    pees: [],
+    configuredGallery: undefined,
   };
 
   render(props: {}, state: Readonly<HomeState>) {
-    const existing: string[] = useMemo(
-      () => JSON.parse(localStorage.getItem('quadpees') ?? '[]'),
+    // copy-pasta localStorage management
+    useEffect(
+      () =>
+        this.setState({
+          pees: getLocalOr('quadpees', []),
+        }),
       [],
     );
+    useEffect(() => {
+      // try not to corrupt existing data
+      if (!Array.isArray(state.pees) || !(state.pees.length > 0)) return;
+      localStorage.setItem('quadpees', JSON.stringify(state.pees));
+    }, [state.pees]);
 
-    const gallery: string | undefined = useMemo(
-      () => localStorage.getItem('gallery') ?? undefined,
-      [],
-    );
+    // copy-pasta localStorage management
+    useEffect(() => {
+      this.setState({
+        configuredGallery: localStorage.getItem('gallery') ?? undefined,
+      });
+    }, []);
+    useEffect(() => {
+      if (state.configuredGallery?.includes('!')) {
+        localStorage.setItem('gallery', state.configuredGallery);
+      } else {
+        localStorage.removeItem('gallery');
+      }
+    }, [state.configuredGallery]);
 
     const onResize = () => {
       this.setState({
@@ -61,7 +85,7 @@ export class Home extends Component<{}, HomeState> {
         .filter((u) => u.state !== 'done')
         .map((u) => u)
         .reverse(),
-      ...existing.map(
+      ...state.pees.map(
         (base) =>
           ({ base, state: 'done', ctx: 'local-storage' }) as PendingItem,
       ),
@@ -85,10 +109,29 @@ export class Home extends Component<{}, HomeState> {
       });
     };
 
+    const setGallery = async (next: string | undefined) => {
+      this.setState({ configuredGallery: next });
+      if (next) {
+        this.setState({ configuredGallery: next, syncingNewGallery: true });
+
+        try {
+          await putGallery(next, state.pees);
+        } catch (err) {
+          this.printer.error(err);
+        }
+
+        this.setState({ syncingNewGallery: false });
+      }
+    };
+
     return (
       <div class={'container-fluid'}>
         <div className={'row home--sign_in'}>
-          <SignIn gallery={gallery} />
+          <SignIn
+            gallery={state.configuredGallery}
+            setGallery={setGallery}
+            syncingNewGallery={state.syncingNewGallery}
+          />
         </div>
         <Messages
           messages={state.messages}
@@ -141,4 +184,10 @@ export class Home extends Component<{}, HomeState> {
       messages: [...messages, msg],
     })),
   );
+}
+
+function getLocalOr<T>(key: string, def: T): T {
+  const value = localStorage.getItem(key);
+  if (!value) return def;
+  return JSON.parse(value);
 }

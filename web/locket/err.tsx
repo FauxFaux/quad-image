@@ -6,11 +6,13 @@ export function printer(
 ) {
   return {
     warn: (msg: string) => appendMessage(['warn', msg]),
-    error: (err: Error | unknown) =>
+    error: (err: Error | unknown) => {
+      console.error(err);
       appendMessage([
         'error',
         'Unexpected internal error: ' + JSON.stringify(serializeError(err)),
-      ]),
+      ]);
+    },
   };
 }
 
