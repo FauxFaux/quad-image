@@ -166,25 +166,23 @@ export class Home extends Component<{}, HomeState> {
   }
 
   uploadWrapper = async (i: number, initial: PendingItem) => {
-    const addToGallery = async (base: ImageId) => {
-      this.setState(({ pees }) => ({ pees: [base, ...pees] }));
-      if (!this.state.configuredGallery) {
-        return;
-      }
-      try {
-        await putGallery(this.state.configuredGallery, [base]);
-      } catch (err) {
-        this.printer.error(err);
-      }
+    const updateState = (next: PendingItem) => {
+      this.setState(({ uploads }) => {
+        const newUploads = [...uploads];
+        newUploads[i] = next;
+        return { uploads: newUploads };
+      });
     };
     try {
-      await driveUpload(initial, addToGallery, (next: PendingItem) => {
-        this.setState(({ uploads }) => {
-          const newUploads = [...uploads];
-          newUploads[i] = next;
-          return { uploads: newUploads };
-        });
-      });
+      const next = await driveUpload(initial, updateState);
+      if (!next) return;
+      const base = next.base;
+      // two synchronous setState calls must be merged for no flicker
+      this.setState(({ pees }) => ({ pees: [base, ...pees] }));
+      updateState(next);
+      if (this.state.configuredGallery) {
+        await putGallery(this.state.configuredGallery, [base]);
+      }
     } catch (err) {
       this.printer.error(err);
     }

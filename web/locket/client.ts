@@ -46,7 +46,6 @@ export async function putGallery(gallery: string, images: string[]) {
 
 export async function driveUpload(
   initial: PendingItem,
-  addToGallery: (base: ImageId) => Promise<void>,
   updateState: (next: PendingItem) => void,
 ) {
   const formData = new FormData();
@@ -100,6 +99,5 @@ export async function driveUpload(
 
   const response = xhr.response;
   const base = response.data.id;
-  await addToGallery(base);
-  updateState({ state: 'done', ctx: initial.ctx, base });
+  return { state: 'done', ctx: initial.ctx, base } as const;
 }
