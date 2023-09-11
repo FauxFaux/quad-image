@@ -114,7 +114,7 @@ export class Upload extends Component<UploadProps, UploadState> {
             onDragOver={setCanDrop}
             onClick={this.dropClick}
           >
-            <span>drop files here</span>
+            <span>drop, click, tap, or paste</span>
           </div>
         </div>
         <div class={'row'}>

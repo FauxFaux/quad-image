@@ -6,7 +6,7 @@ import { Upload } from './components/upload';
 import { SignIn } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
-import { GallerySecret } from './types';
+import { GallerySecret, ImageId } from './types';
 
 export type OurFile = Blob & { name?: string };
 
@@ -166,8 +166,19 @@ export class Home extends Component<{}, HomeState> {
   }
 
   uploadWrapper = async (i: number, initial: PendingItem) => {
+    const addToGallery = async (base: ImageId) => {
+      this.setState(({ pees }) => ({ pees: [base, ...pees] }));
+      if (!this.state.configuredGallery) {
+        return;
+      }
+      try {
+        await putGallery(this.state.configuredGallery, [base]);
+      } catch (err) {
+        this.printer.error(err);
+      }
+    };
     try {
-      await driveUpload(initial, (next: PendingItem) => {
+      await driveUpload(initial, addToGallery, (next: PendingItem) => {
         this.setState(({ uploads }) => {
           const newUploads = [...uploads];
           newUploads[i] = next;

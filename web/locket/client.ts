@@ -1,4 +1,5 @@
 import { PendingItem } from '../home';
+import type { ImageId } from '../types';
 
 export async function getGallery(
   gallery: string,
@@ -12,8 +13,8 @@ export async function getGallery(
   return body.data;
 }
 
-export async function putGallery(gallery: string, images: string[]) {
-  const resp = await fetch('/api/gallery', {
+export function putGalleryResp(gallery: string, images: string[]) {
+  return fetch('/api/gallery', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -28,6 +29,10 @@ export async function putGallery(gallery: string, images: string[]) {
       },
     }),
   });
+}
+
+export async function putGallery(gallery: string, images: string[]) {
+  const resp = await putGalleryResp(gallery, images);
   if (!resp.ok) {
     throw new Error(`failed to call gallery: ${resp.status}`);
   }
@@ -41,6 +46,7 @@ export async function putGallery(gallery: string, images: string[]) {
 
 export async function driveUpload(
   initial: PendingItem,
+  addToGallery: (base: ImageId) => Promise<void>,
   updateState: (next: PendingItem) => void,
 ) {
   const formData = new FormData();
@@ -93,5 +99,7 @@ export async function driveUpload(
   }
 
   const response = xhr.response;
-  updateState({ state: 'done', ctx: initial.ctx, base: response.data.id });
+  const base = response.data.id;
+  await addToGallery(base);
+  updateState({ state: 'done', ctx: initial.ctx, base });
 }

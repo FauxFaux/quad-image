@@ -1,11 +1,11 @@
-import { Component } from 'preact';
+import { Component, JSX } from 'preact';
 import { useQuery } from 'preact-fetching';
 
 import IconSettings from 'mdi-preact/SettingsIcon';
 import CheckCircleOutlineIcon from 'mdi-preact/CheckCircleOutlineIcon';
 import CircleOutlineIcon from 'mdi-preact/CircleOutlineIcon';
 
-import { putGallery } from '../locket/client';
+import { putGallery, putGalleryResp } from '../locket/client';
 import { plausibleGallerySecret } from '../types';
 
 interface SignInProps {
@@ -116,19 +116,35 @@ export class SignIn extends Component<SignInProps, SignInState> {
 
     const existing = props.gallery;
     if (existing) {
-      const { data } = useQuery(`gallery-${existing}-id`, async () =>
-        putGallery(existing, []),
+      const { data, isLoading, isError } = useQuery(
+        `gallery-${existing}-id`,
+        async () => {
+          const resp = await putGalleryResp(existing, []);
+          if (resp.status === 400) {
+            return { valid: false } as const;
+          }
+          if (!resp.ok) throw new Error(`unexpected response: ${resp.status}`);
+          const body = await resp.json();
+          return { valid: true, id: body?.data?.id as string } as const;
+        },
       );
 
       const id = data?.id;
 
-      const status = id ? (
-        <span>
-          backing up to <a href={`/gallery/#${id}`}>{id}</a>
-        </span>
-      ) : (
-        <span>backups configured but we're offline</span>
-      );
+      let status: JSX.Element;
+      if (isLoading) {
+        status = <span>backups configured, fetching gallery name</span>;
+      } else if (isError) {
+        status = <span>backups configured, but we're offline(?)</span>;
+      } else if (!data?.valid) {
+        status = <span>backups configured, but invalid</span>;
+      } else {
+        status = (
+          <span>
+            backing up to <a href={`/gallery/#${id}`}>{id}</a>
+          </span>
+        );
+      }
 
       return (
         <div className={'col home--sign_in-' + (id ? 'info' : 'warn')}>
