@@ -74,7 +74,9 @@ export class Home extends Component<unknown, HomeState> {
 
     useEffect(() => {
       window.addEventListener('resize', onResize);
-      onResize();
+      // massive hack, but failure isn't critical
+      // (it's not even clear that useEffect is valid in a class component, let alone for this)
+      setTimeout(onResize, 0);
       return () => window.removeEventListener('resize', onResize);
     }, []);
 
