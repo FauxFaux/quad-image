@@ -1,5 +1,4 @@
 import { PendingItem } from '../home';
-import type { ImageId } from '../types';
 
 export async function getGallery(
   gallery: string,

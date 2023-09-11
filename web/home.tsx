@@ -6,7 +6,7 @@ import { Upload } from './components/upload';
 import { SignIn } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
-import { GallerySecret, ImageId } from './types';
+import { GallerySecret } from './types';
 
 export type OurFile = Blob & { name?: string };
 

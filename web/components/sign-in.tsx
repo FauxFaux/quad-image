@@ -5,7 +5,7 @@ import IconSettings from 'mdi-preact/SettingsIcon';
 import CheckCircleOutlineIcon from 'mdi-preact/CheckCircleOutlineIcon';
 import CircleOutlineIcon from 'mdi-preact/CircleOutlineIcon';
 
-import { putGallery, putGalleryResp } from '../locket/client';
+import { putGalleryResp } from '../locket/client';
 import { plausibleGallerySecret } from '../types';
 
 interface SignInProps {
