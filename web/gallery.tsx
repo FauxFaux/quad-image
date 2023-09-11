@@ -8,8 +8,8 @@ interface GalleryState {
   hash?: string[];
 }
 
-export class Gallery extends Component<{}, GalleryState> {
-  render(props: Readonly<{}>, state: Readonly<GalleryState>) {
+export class Gallery extends Component<unknown, GalleryState> {
+  render(props: unknown, state: Readonly<GalleryState>) {
     useEffect(() => {
       const listener = () => {
         this.setState({

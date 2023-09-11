@@ -11,7 +11,6 @@ interface UploadProps {
   printer: Printer;
   triggerUploads: (files: Blob[], ctx: string) => void;
 }
-interface UploadState {}
 
 function acceptableMime(mime: string) {
   return mime.startsWith('image/');
@@ -19,7 +18,7 @@ function acceptableMime(mime: string) {
 
 type UploadContext = 'dropped' | 'picked' | 'pasted';
 
-export class Upload extends Component<UploadProps, UploadState> {
+export class Upload extends Component<UploadProps, unknown> {
   readonly refPickFiles = createRef<HTMLInputElement>();
 
   onFiles = (rawFileList: FileList | undefined | null, ctx: UploadContext) => {
@@ -90,7 +89,7 @@ export class Upload extends Component<UploadProps, UploadState> {
     this.refPickFiles.current?.click();
   };
 
-  render(props: Readonly<UploadProps>, state: Readonly<UploadState>) {
+  render() {
     const setCanDrop = (ev: JSX.TargetedDragEvent<HTMLDivElement>) => {
       ev.preventDefault();
       if (ev.dataTransfer) {

@@ -21,7 +21,7 @@ interface MessagesProps {
   removeMessage: (i: number) => void;
 }
 
-export class Messages extends Component<MessagesProps, {}> {
+export class Messages extends Component<MessagesProps, unknown> {
   render(props: Readonly<MessagesProps>) {
     if (props.messages.length === 0) return undefined;
     return (

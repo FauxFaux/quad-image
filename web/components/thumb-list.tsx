@@ -5,10 +5,9 @@ import type { PendingItem } from '../home';
 interface ThumbProps {
   items: PendingItem[];
 }
-interface ThumbState {}
 
-export class ThumbList extends Component<ThumbProps, ThumbState> {
-  render(props: Readonly<ThumbProps>, state: Readonly<ThumbState>) {
+export class ThumbList extends Component<ThumbProps, unknown> {
+  render(props: Readonly<ThumbProps>) {
     return (
       <ul class={'thumb--frame'}>
         {props.items.map((item) => {
@@ -56,11 +55,11 @@ export class ThumbDone extends Component<ThumbDoneProps, ThumbDoneState> {
           <img src={`${bare}.thumb.jpg`} loading={'lazy'} />
         </a>
         <button
-          class={`btn btn-${!this.state.copied ? 'secondary' : 'success'}`}
+          class={`btn btn-${!state.copied ? 'secondary' : 'success'}`}
           onClick={this.doCopy}
           onMouseLeave={this.clearCopy}
         >
-          {!this.state.copied ? 'copy' : 'copied!'}
+          {!state.copied ? 'copy' : 'copied!'}
         </button>
       </li>
     );

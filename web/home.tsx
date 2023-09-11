@@ -27,7 +27,7 @@ interface HomeState {
   syncingNewGallery?: boolean;
 }
 
-export class Home extends Component<{}, HomeState> {
+export class Home extends Component<unknown, HomeState> {
   imRight = createRef<HTMLDivElement>();
 
   state: HomeState = {
@@ -37,7 +37,7 @@ export class Home extends Component<{}, HomeState> {
     configuredGallery: undefined,
   };
 
-  render(props: {}, state: Readonly<HomeState>) {
+  render(props: unknown, state: Readonly<HomeState>) {
     // copy-pasta localStorage management
     useEffect(
       () =>

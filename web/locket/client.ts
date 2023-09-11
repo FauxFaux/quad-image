@@ -12,7 +12,7 @@ export async function getGallery(
   return body.data;
 }
 
-export function putGalleryResp(gallery: string, images: string[]) {
+export async function putGalleryResp(gallery: string, images: string[]) {
   return fetch('/api/gallery', {
     method: 'PUT',
     headers: {
