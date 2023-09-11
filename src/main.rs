@@ -299,8 +299,8 @@ fn main() -> anyhow::Result<()> {
 
             router!(request,
                 (GET)  ["/"]                    => { static_html("dist/index.html")          },
-                (GET)  ["/dumb/"]               => { static_html("web/dumb/index.html")     },
-                (GET)  ["/terms/"]              => { static_html("web/terms/index.html")    },
+                (GET)  ["/dumb/"]               => { static_html("dist/dumb/index.html")     },
+                (GET)  ["/terms/"]              => { static_html("dist/terms/index.html")    },
                 (GET)  ["/gallery/"]            => { static_html("dist/gallery/index.html")  },
 
                 (POST) ["/api/upload"]          => { upload(request)                        },

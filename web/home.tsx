@@ -91,7 +91,7 @@ export class Home extends Component<unknown, HomeState> {
       ),
     ];
 
-    const rightCount = Math.floor((state.imRightWidth ?? 1000) / 330);
+    const rightCount = Math.floor((state.imRightWidth ?? 330) / 330);
     const displayRight = displayItems.slice(0, rightCount);
     const displayBottom = displayItems.slice(rightCount);
 
@@ -161,6 +161,13 @@ export class Home extends Component<unknown, HomeState> {
             </div>
           </div>
         )}
+        <div class={'row'}>
+          <footer>
+            <p className="text-center text-body-secondary">
+              <a href={'/terms/'}>t&amp;cs</a>
+            </p>
+          </footer>
+        </div>
       </div>
     );
   }

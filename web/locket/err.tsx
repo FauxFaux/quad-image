@@ -1,5 +1,6 @@
 import { serializeError } from 'serialize-error';
 import { Component } from 'preact';
+import CloseIcon from 'mdi-preact/CloseIcon';
 
 export function printer(
   appendMessage: (msg: ['warn' | 'error', string]) => void,
@@ -36,7 +37,7 @@ export class Messages extends Component<MessagesProps, unknown> {
               role="alert"
               onClick={() => props.removeMessage(i)}
             >
-              {msg}
+              <CloseIcon /> {msg}
             </div>
           ))}
         </div>

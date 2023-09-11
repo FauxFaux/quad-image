@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simple upload</title>
+    <style>
+      body {
+        font-family: sans-serif;
+      }
+
+      input[type='file'],
+      input[type='text'],
+      input[type='password'] {
+        width: 100%;
+        padding: 0.4em 0.6em;
+        margin: 0.3em 0;
+        display: inline-block;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+
+      input[type='submit'] {
+        width: 100%;
+        padding: 0.4em 0.6em;
+        margin: 0.3em 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Upload file</h2>
+    <form method="post" action="/api/upload" enctype="multipart/form-data">
+      <input type="file" name="image" />
+      <input type="submit" />
+    </form>
+  </body>
+</html>

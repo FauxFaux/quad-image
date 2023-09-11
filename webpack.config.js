@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   entry: './web/index.tsx',
@@ -14,14 +15,17 @@ module.exports = {
       template: './web/index.ejs',
       templateParameters: {
         mode: 'home',
-      }
+      },
     }),
     new HtmlWebpackPlugin({
       template: './web/index.ejs',
       filename: 'gallery/index.html',
       templateParameters: {
         mode: 'gallery',
-      }
+      },
+    }),
+    new CopyPlugin({
+      patterns: [{ from: 'web/plain/dumb', to: 'dumb' }, { from: 'web/plain/terms', to: 'terms' }],
     }),
   ],
 
