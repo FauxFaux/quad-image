@@ -124,7 +124,6 @@ export class Upload extends Component<UploadProps, unknown> {
               ref={this.refPickFiles}
               multiple={true}
               accept={'image/*'}
-              capture={'environment'}
               onInput={this.onFilePicker}
             />
           </div>
