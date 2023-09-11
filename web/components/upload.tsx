@@ -1,6 +1,8 @@
 import { Component, createRef } from 'preact';
 import type { JSX } from 'preact';
 import { useEffect } from 'preact/hooks';
+import DeniedIcon from 'mdi-preact/DeniedIcon';
+import BrokenImageIcon from 'mdi-preact/BrokenImageIcon';
 
 interface Printer {
   warn: (msg: string) => void;
@@ -12,13 +14,17 @@ interface UploadProps {
   triggerUploads: (files: Blob[], ctx: string) => void;
 }
 
+interface UploadState {
+  clipboard?: 'unavailable' | 'denied';
+}
+
 function acceptableMime(mime: string) {
   return mime.startsWith('image/');
 }
 
 type UploadContext = 'dropped' | 'picked' | 'pasted';
 
-export class Upload extends Component<UploadProps, unknown> {
+export class Upload extends Component<UploadProps, UploadState> {
   readonly refPickFiles = createRef<HTMLInputElement>();
 
   onFiles = (rawFileList: FileList | undefined | null, ctx: UploadContext) => {
@@ -103,6 +109,26 @@ export class Upload extends Component<UploadProps, unknown> {
       return () => document.removeEventListener('paste', handle);
     }, []);
 
+    useEffect(() => {
+      guessClipboard()
+        .then((clipboard) => this.setState({ clipboard }))
+        .catch(console.warn);
+    }, []);
+
+    let pasteIcon: JSX.Element | null = null;
+    let pasteTitle = 'pull image(s) directly from the clipboard';
+    switch (this.state.clipboard) {
+      case 'unavailable':
+        pasteIcon = <BrokenImageIcon />;
+        pasteTitle = 'apparently unsupported by your browser';
+        break;
+      case 'denied':
+        pasteIcon = <DeniedIcon />;
+        pasteTitle =
+          "permissions have been revoked, you must manually edit 'site settings' to re-enable";
+        break;
+    }
+
     return (
       <div class={'container-fluid'}>
         <div class={'row'}>
@@ -131,8 +157,9 @@ export class Upload extends Component<UploadProps, unknown> {
             <button
               class={'btn btn-secondary home--upload_button'}
               onClick={this.onPasteButtonClick}
+              title={pasteTitle}
             >
-              paste
+              {pasteIcon} paste
             </button>
           </div>
         </div>
@@ -146,4 +173,22 @@ function preferredCodec(mimes: string[]): string {
     if (mimes.includes(pref)) return pref;
   }
   return mimes[0];
+}
+
+async function guessClipboard() {
+  try {
+    // non-standard, chrome only
+    const resp = await navigator.permissions.query({
+      name: 'clipboard-read',
+    } as any);
+    if (resp.state === 'denied') {
+      return 'denied';
+    }
+  } catch {}
+
+  if (!navigator?.clipboard?.read) {
+    return 'unavailable';
+  }
+
+  return undefined;
 }
