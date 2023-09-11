@@ -88,7 +88,7 @@ export class Home extends Component<unknown, HomeState> {
       ...state.pees.map(
         (base) =>
           ({ base, state: 'done', ctx: 'local-storage' }) as PendingItem,
-      ),
+      ).reverse(),
     ];
 
     const rightCount = Math.floor((state.imRightWidth ?? 330) / 330);
@@ -185,7 +185,7 @@ export class Home extends Component<unknown, HomeState> {
       if (!next) return;
       const base = next.base;
       // two synchronous setState calls must be merged for no flicker
-      this.setState(({ pees }) => ({ pees: [base, ...pees] }));
+      this.setState(({ pees }) => ({ pees: [...pees, base] }));
       updateState(next);
       if (this.state.configuredGallery) {
         await putGallery(this.state.configuredGallery, [base]);
