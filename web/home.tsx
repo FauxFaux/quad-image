@@ -85,10 +85,12 @@ export class Home extends Component<unknown, HomeState> {
         .filter((u) => u.state !== 'done')
         .map((u) => u)
         .reverse(),
-      ...state.pees.map(
-        (base) =>
-          ({ base, state: 'done', ctx: 'local-storage' }) as PendingItem,
-      ).reverse(),
+      ...state.pees
+        .map(
+          (base) =>
+            ({ base, state: 'done', ctx: 'local-storage' }) as PendingItem,
+        )
+        .reverse(),
     ];
 
     const rightCount = Math.floor((state.imRightWidth ?? 330) / 330);
