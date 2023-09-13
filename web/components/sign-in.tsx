@@ -106,7 +106,7 @@ export class SignIn extends Component<SignInProps, SignInState> {
       <span>
         <span className={'home--sign_in-divider'}>|</span>
         <button
-          className={'btn btn-dark'}
+          className={'btn btn-secondary'}
           onClick={() => this.setState({ configuring: true })}
         >
           <IconSettings /> configure

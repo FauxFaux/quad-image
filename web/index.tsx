@@ -6,6 +6,14 @@ import { Home } from './home';
 
 export function init(element: HTMLElement, mode: string | null) {
   element.innerHTML = 'JS App booting...';
+  void (async () => {
+    const mq = window?.matchMedia('(prefers-color-scheme: light)');
+    const handle = (mq?: { matches: boolean }) =>
+      document.body.setAttribute('data-bs-theme', mq?.matches ? 'light' : 'dark');
+    handle(mq);
+    mq?.addEventListener('change', handle);
+  })().catch(console.error);
+
   (async () => {
     await new Promise((r) => setTimeout(r));
     element.innerHTML = '';
