@@ -41,63 +41,70 @@ export class SignIn extends Component<SignInProps, SignInState> {
         ['secret is 4-99 characters', /!.{4,99}$/],
         ['matches the mystery regex', plausibleGallerySecret],
       ];
+      const galleryForm = (
+        <div>
+          <label>
+            new backup gallery, in <i>public-name!secret passphrase</i> format:
+            <input
+              type={'text'}
+              className={`form-control is-${valid ? 'valid' : 'invalid'}`}
+              placeholder={'horse!battery staple'}
+              onInput={(ev) => {
+                this.setState({ newGallery: (ev.target as any)?.value });
+              }}
+              onKeyDown={(ev) => {
+                switch (ev.key) {
+                  case 'Enter':
+                    this.syncClick();
+                    break;
+                  case 'Escape':
+                    this.doneConfiguring();
+                    break;
+                }
+              }}
+              value={state.newGallery ?? ''}
+            />
+          </label>
+          <button
+            className={'btn btn-primary'}
+            disabled={!valid}
+            onClick={this.syncClick}
+          >
+            sync
+          </button>
+          <button
+            className={'btn btn-secondary'}
+            onClick={this.doneConfiguring}
+          >
+            cancel
+          </button>
+        </div>
+      );
+      const validationView = (
+        <div>
+          {validations.map(([msg, re]) => {
+            const cand = state.newGallery ?? '';
+            const valid = 'test' in re ? re.test(cand) : re(cand);
+            return (
+              <span
+                class={
+                  'home--sign_in-validation ' +
+                  (valid ? 'text-success' : 'text-danger')
+                }
+              >
+                {valid ? <CheckCircleOutlineIcon /> : <CircleOutlineIcon />}{' '}
+                {msg}
+              </span>
+            );
+          })}
+        </div>
+      );
       return (
-        <div className={'col home--sign_in-info'}>
-          <div>
-            <label>
-              new backup gallery, in <i>public-name!secret passphrase</i>{' '}
-              format:
-              <input
-                type={'text'}
-                className={`form-control is-${valid ? 'valid' : 'invalid'}`}
-                placeholder={'horse!battery staple'}
-                onInput={(ev) => {
-                  this.setState({ newGallery: (ev.target as any)?.value });
-                }}
-                onKeyDown={(ev) => {
-                  switch (ev.key) {
-                    case 'Enter':
-                      this.syncClick();
-                      break;
-                    case 'Escape':
-                      this.doneConfiguring();
-                      break;
-                  }
-                }}
-                value={state.newGallery ?? ''}
-              />
-            </label>
-            <button
-              className={'btn btn-primary'}
-              disabled={!valid}
-              onClick={this.syncClick}
-            >
-              sync
-            </button>
-            <button
-              className={'btn btn-secondary'}
-              onClick={this.doneConfiguring}
-            >
-              cancel
-            </button>
-          </div>
-          <div>
-            {validations.map(([msg, re]) => {
-              const cand = state.newGallery ?? '';
-              const valid = 'test' in re ? re.test(cand) : re(cand);
-              return (
-                <span
-                  class={
-                    'home--sign_in-validation ' +
-                    (valid ? 'text-success' : 'text-danger')
-                  }
-                >
-                  {valid ? <CheckCircleOutlineIcon /> : <CircleOutlineIcon />}{' '}
-                  {msg}
-                </span>
-              );
-            })}{' '}
-          </div>
+        <div className={'row home--sign_in home--sign_in-info'}>
+        <div className={'col'}>
+          {galleryForm}
+          {validationView}
+        </div>
         </div>
       );
     }
@@ -147,18 +154,26 @@ export class SignIn extends Component<SignInProps, SignInState> {
       }
 
       return (
-        <div className={'col home--sign_in-' + (id ? 'info' : 'warn')}>
-          {status}
-          {props.syncingNewGallery && ' (syncing)'}
-          {configure}
+        <div
+          className={
+            'row home--sign_in home--sign_in-' + (id ? 'info' : 'warn')
+          }
+        >
+          <div className={'col'}>
+            {status}
+            {props.syncingNewGallery && ' (syncing)'}
+            {configure}
+          </div>
         </div>
       );
     }
 
     return (
-      <div className={'col home--sign_in-warn'}>
-        gallery backup: off; stored in this browser only
-        {configure}
+      <div className={'row home--sign_in home--sign_in-warn'}>
+        <div className={'col'}>
+          gallery backup: off; stored in this browser only
+          {configure}
+        </div>
       </div>
     );
   }

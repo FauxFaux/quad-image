@@ -130,13 +130,11 @@ export class Home extends Component<unknown, HomeState> {
 
     return (
       <div class={'container-fluid'}>
-        <div className={'row home--sign_in'}>
-          <SignIn
-            gallery={state.configuredGallery}
-            setGallery={setGallery}
-            syncingNewGallery={state.syncingNewGallery}
-          />
-        </div>
+        <SignIn
+          gallery={state.configuredGallery}
+          setGallery={setGallery}
+          syncingNewGallery={state.syncingNewGallery}
+        />
         <Messages
           messages={state.messages}
           removeMessage={(i) => {
