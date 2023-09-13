@@ -1,8 +1,7 @@
 import { Component, createRef } from 'preact';
 import type { JSX } from 'preact';
 import { useEffect } from 'preact/hooks';
-import DeniedIcon from 'mdi-preact/DeniedIcon';
-import BrokenImageIcon from 'mdi-preact/BrokenImageIcon';
+import ContentPasteIcon from 'mdi-preact/ContentPasteIcon';
 
 interface Printer {
   warn: (msg: string) => void;
@@ -115,18 +114,34 @@ export class Upload extends Component<UploadProps, UploadState> {
         .catch(console.warn);
     }, []);
 
-    let pasteIcon: JSX.Element | null = null;
-    let pasteTitle = 'pull image(s) directly from the clipboard';
+    let pasteContent: JSX.Element;
+    let pasteTitle: string;
+    let pasteClass: string;
     switch (this.state.clipboard) {
       case 'unavailable':
-        pasteIcon = <BrokenImageIcon />;
-        pasteTitle = 'apparently unsupported by your browser';
+        pasteContent = (
+          <>
+            <ContentPasteIcon /> unsupported
+          </>
+        );
+        pasteTitle =
+          'modern paste API is apparently unsupported by your browser';
+        pasteClass = 'home--upload_paste--disabled';
         break;
       case 'denied':
-        pasteIcon = <DeniedIcon />;
+        pasteContent = (
+          <>
+            <ContentPasteIcon /> denied
+          </>
+        );
         pasteTitle =
-          "permissions have been revoked, you must manually edit 'site settings' to re-enable";
+          "paste permissions have been revoked, you must manually edit 'site settings' to re-enable";
+        pasteClass = 'home--upload_paste--disabled';
         break;
+      default:
+        pasteContent = <>paste</>;
+        pasteTitle = 'pull image(s) directly from the clipboard';
+        pasteClass = '';
     }
 
     return (
@@ -155,11 +170,11 @@ export class Upload extends Component<UploadProps, UploadState> {
           </div>
           <div class={'col-3 home--upload_paste'}>
             <button
-              class={'btn btn-secondary home--upload_button'}
+              class={'btn btn-secondary home--upload_button ' + pasteClass}
               onClick={this.onPasteButtonClick}
               title={pasteTitle}
             >
-              {pasteIcon} paste
+              {pasteContent}
             </button>
           </div>
         </div>

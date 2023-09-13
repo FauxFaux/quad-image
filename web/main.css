@@ -65,6 +65,15 @@
     width: 100%;
 }
 
+.home--upload_paste--disabled {
+    background-color: var(--bs-secondary-bg);
+    cursor: not-allowed !important;
+}
+
+.home--upload_paste--disabled:hover {
+    background-color: var(--bs-secondary-bg);
+}
+
 .home--upload_pick input,.home--upload_paste button {
     margin-top: 1em;
     margin-bottom: 1em;
