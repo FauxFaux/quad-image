@@ -46,6 +46,10 @@
     margin: 0.2em 0.5em;
 }
 
+.home--sign_in-theme button {
+    padding: 1em;
+}
+
 .home--upload_drop {
     min-width: 16em;
     min-height: 6em;

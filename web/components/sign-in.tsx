@@ -7,10 +7,17 @@ import CircleOutlineIcon from 'mdi-preact/CircleOutlineIcon';
 
 import { putGalleryResp } from '../locket/client';
 import { plausibleGallerySecret } from '../types';
+import ThemeLightDarkIcon from 'mdi-preact/ThemeLightDarkIcon';
+import WeatherNightIcon from 'mdi-preact/WeatherNightIcon';
+import SunWirelessIcon from 'mdi-preact/SunWirelessIcon';
+
+export type Theme = 'light' | 'dark' | undefined | null;
 
 interface SignInProps {
   gallery: string | undefined;
   setGallery: (g: string | undefined) => void;
+  theme: Theme;
+  setTheme: (t: Theme) => void;
   syncingNewGallery?: boolean;
 }
 
@@ -20,7 +27,7 @@ interface SignInState {
 }
 
 export class SignIn extends Component<SignInProps, SignInState> {
-  syncClick = async (): Promise<void> => {
+  syncClick = () => {
     if (!plausibleGallerySecret(this.state.newGallery ?? '')) return;
     this.props.setGallery(this.state.newGallery);
     this.doneConfiguring();
@@ -99,12 +106,44 @@ export class SignIn extends Component<SignInProps, SignInState> {
           })}
         </div>
       );
+      const themeView = (
+        <div class={'btn-group home--sign_in-theme'}>
+          <button
+            type={'button'}
+            class={'btn btn-secondary' + (!props.theme ? ' active' : '')}
+            onClick={() => props.setTheme(undefined)}
+          >
+            <ThemeLightDarkIcon /> Auto
+          </button>
+          <button
+            type={'button'}
+            className={
+              'btn btn-secondary' + (props.theme === 'dark' ? ' active' : ' ')
+            }
+            onClick={() => props.setTheme('dark')}
+          >
+            <WeatherNightIcon /> Dark
+          </button>
+          <button
+            type={'button'}
+            className={
+              'btn btn-secondary' + (props.theme === 'light' ? ' active' : '')
+            }
+            onClick={() => props.setTheme('light')}
+          >
+            <SunWirelessIcon /> Light
+          </button>
+        </div>
+      );
       return (
         <div className={'row home--sign_in home--sign_in-info'}>
-        <div className={'col'}>
-          {galleryForm}
-          {validationView}
-        </div>
+          <div className={'col-lg'}>
+            {galleryForm}
+            {validationView}
+            <hr />
+            {themeView}
+            <hr />
+          </div>
         </div>
       );
     }

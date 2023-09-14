@@ -3,7 +3,7 @@ import { useEffect } from 'preact/hooks';
 
 import { ThumbList } from './components/thumb-list';
 import { Upload } from './components/upload';
-import { SignIn } from './components/sign-in';
+import { SignIn, Theme } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
 import { GallerySecret } from './types';
@@ -25,6 +25,7 @@ interface HomeState {
   pees: string[];
   configuredGallery?: GallerySecret;
   syncingNewGallery?: boolean;
+  configuredTheme?: Theme;
 }
 
 export class Home extends Component<unknown, HomeState> {
@@ -35,6 +36,7 @@ export class Home extends Component<unknown, HomeState> {
     uploads: [],
     pees: [],
     configuredGallery: undefined,
+    configuredTheme: undefined,
   };
 
   render(props: unknown, state: Readonly<HomeState>) {
@@ -65,6 +67,31 @@ export class Home extends Component<unknown, HomeState> {
         localStorage.removeItem('gallery');
       }
     }, [state.configuredGallery]);
+
+    const reprocessTheme = () => {
+      document.body.setAttribute(
+        'data-bs-theme',
+        this.state.configuredTheme ?? (userWantsLight() ? 'light' : 'dark'),
+      );
+    };
+    useEffect(() => {
+      const configuredTheme = localStorage.getItem('theme') as Theme;
+      this.setState({ configuredTheme });
+
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      const handle = () => reprocessTheme();
+      mq?.addEventListener('change', handle);
+      return () => mq?.removeEventListener('change', handle);
+    }, []);
+
+    useEffect(() => {
+      reprocessTheme();
+      if (state.configuredTheme) {
+        localStorage.setItem('theme', state.configuredTheme);
+      } else {
+        localStorage.removeItem('theme');
+      }
+    }, [state.configuredTheme]);
 
     const onResize = () => {
       this.setState({
@@ -133,6 +160,8 @@ export class Home extends Component<unknown, HomeState> {
         <SignIn
           gallery={state.configuredGallery}
           setGallery={setGallery}
+          theme={state.configuredTheme}
+          setTheme={(configuredTheme) => this.setState({ configuredTheme })}
           syncingNewGallery={state.syncingNewGallery}
         />
         <Messages
@@ -208,4 +237,12 @@ function getLocalOr<T>(key: string, def: T): T {
   const value = localStorage.getItem(key);
   if (!value) return def;
   return JSON.parse(value);
+}
+
+function userWantsLight() {
+  try {
+    return window.matchMedia('(prefers-color-scheme: light)')?.matches;
+  } catch {
+    return false;
+  }
 }
