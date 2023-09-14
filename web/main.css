@@ -72,11 +72,13 @@
 
 .home--upload_paste--disabled {
     background-color: var(--bs-secondary-bg);
+    color: var(--bs-secondary);
     cursor: not-allowed !important;
 }
 
 .home--upload_paste--disabled:hover {
     background-color: var(--bs-secondary-bg);
+    color: var(--bs-secondary);
 }
 
 .home--upload_pick input,.home--upload_paste button {
