@@ -1,6 +1,15 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
+const { readFileSync } = require('fs');
+
+const bs = './node_modules/bootstrap/dist/css/bootstrap.min.css';
+const bsHash = require('crypto')
+  .createHash('sha512-224')
+  .update(readFileSync(bs, 'utf8'))
+  .digest('hex')
+  .substring(0, 8);
+const bsName = `static/bootstrap.${bsHash}.css`;
 
 module.exports = {
   entry: './web/index.tsx',
@@ -15,6 +24,7 @@ module.exports = {
       template: './web/index.ejs',
       templateParameters: {
         mode: 'home',
+        bsName,
       },
     }),
     new HtmlWebpackPlugin({
@@ -22,10 +32,16 @@ module.exports = {
       filename: 'gallery/index.html',
       templateParameters: {
         mode: 'gallery',
+        bsName,
       },
     }),
     new CopyPlugin({
-      patterns: [{ from: 'web/plain/dumb', to: 'dumb' }, { from: 'web/plain/terms', to: 'terms' }],
+      patterns: [
+        { from: 'web/plain/dumb', to: 'dumb' },
+        { from: 'web/plain/terms', to: 'terms' },
+        { from: bs, to: bsName },
+        { from: `${bs}.map`, to: `static/bootstrap.min.css.map` },
+      ],
     }),
   ],
 

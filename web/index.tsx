@@ -8,6 +8,7 @@ export function init(element: HTMLElement, mode: string | null) {
   element.innerHTML = 'JS App booting...';
   (async () => {
     await new Promise((r) => setTimeout(r));
+    void import('bootstrap').catch(console.error);
     element.innerHTML = '';
     switch (mode) {
       case 'gallery':
