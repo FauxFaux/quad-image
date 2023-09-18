@@ -43,7 +43,19 @@
 }
 
 .home--sign_in-validation {
+    padding-inline-start: 0;
+}
+
+.home--sign_in-validation li {
     margin: 0.2em 0.5em;
+    list-style-type: none;
+    text-align: left;
+}
+
+@media (min-width: 768px) {
+    .home--sign_in-validation li {
+        display: inline-block;
+    }
 }
 
 .home--sign_in-theme button {

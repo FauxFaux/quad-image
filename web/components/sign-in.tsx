@@ -88,23 +88,18 @@ export class SignIn extends Component<SignInProps, SignInState> {
         </div>
       );
       const validationView = (
-        <div>
+        <ul class={'home--sign_in-validation'}>
           {validations.map(([msg, re]) => {
             const cand = state.newGallery ?? '';
             const valid = 'test' in re ? re.test(cand) : re(cand);
             return (
-              <span
-                class={
-                  'home--sign_in-validation ' +
-                  (valid ? 'text-success' : 'text-danger')
-                }
-              >
+              <li class={valid ? 'text-success' : 'text-danger'}>
                 {valid ? <CheckCircleOutlineIcon /> : <CircleOutlineIcon />}{' '}
                 {msg}
-              </span>
+              </li>
             );
           })}
-        </div>
+        </ul>
       );
       const themeView = (
         <div class={'btn-group home--sign_in-theme'}>
@@ -137,7 +132,7 @@ export class SignIn extends Component<SignInProps, SignInState> {
       );
       return (
         <div className={'row home--sign_in home--sign_in-info'}>
-          <div className={'col-lg'}>
+          <div className={'col'}>
             {galleryForm}
             {validationView}
             <hr />
