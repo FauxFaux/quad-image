@@ -29,6 +29,7 @@ interface SignInState {
 
 export class SignIn extends Component<SignInProps, SignInState> {
   doneConfiguring = () => {
+    this.props.picking.set(false);
     this.setState({ configuring: false });
   };
 
