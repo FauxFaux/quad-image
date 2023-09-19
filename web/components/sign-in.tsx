@@ -2,15 +2,13 @@ import { Component, JSX } from 'preact';
 import { useQuery } from 'preact-fetching';
 
 import IconSettings from 'mdi-preact/SettingsIcon';
-import CheckCircleOutlineIcon from 'mdi-preact/CheckCircleOutlineIcon';
-import CircleOutlineIcon from 'mdi-preact/CircleOutlineIcon';
+import SunWirelessIcon from 'mdi-preact/SunWirelessIcon';
+import ThemeLightDarkIcon from 'mdi-preact/ThemeLightDarkIcon';
+import TrashCanIcon from 'mdi-preact/TrashCanIcon';
+import WeatherNightIcon from 'mdi-preact/WeatherNightIcon';
 
 import { putGalleryResp } from '../locket/client';
-import { plausibleGallerySecret } from '../types';
-import ThemeLightDarkIcon from 'mdi-preact/ThemeLightDarkIcon';
-import WeatherNightIcon from 'mdi-preact/WeatherNightIcon';
-import SunWirelessIcon from 'mdi-preact/SunWirelessIcon';
-import TrashCanIcon from 'mdi-preact/TrashCanIcon';
+import { GalleryInput } from './gallery-input';
 
 export type Theme = 'light' | 'dark' | undefined | null;
 
@@ -26,84 +24,27 @@ interface SignInProps {
 
 interface SignInState {
   configuring?: boolean;
-  newGallery?: string;
 }
 
 export class SignIn extends Component<SignInProps, SignInState> {
-  syncClick = () => {
-    if (!plausibleGallerySecret(this.state.newGallery ?? '')) return;
-    this.props.gallery.set(this.state.newGallery);
-    this.doneConfiguring();
-  };
-
   doneConfiguring = () => {
-    this.setState({ configuring: false, newGallery: undefined });
+    this.setState({ configuring: false });
   };
 
   render(props: SignInProps, state: SignInState) {
     if (state.configuring) {
-      const valid = plausibleGallerySecret(state.newGallery ?? '');
-
-      const validations: [string, RegExp | ((s: string) => boolean)][] = [
-        ['starts with an ascii letter', /^[a-z]/i],
-        ['contains a !', /!/],
-        ['tag is 4-10 ascii alphanumerics', /^[a-z0-9]{4,10}!/],
-        ['secret is 4-99 characters', /!.{4,99}$/],
-        ['matches the mystery regex', plausibleGallerySecret],
-      ];
       const galleryForm = (
-        <div>
-          <label>
-            new backup gallery, in <i>public-name!secret passphrase</i> format:
-            <input
-              type={'text'}
-              className={`form-control is-${valid ? 'valid' : 'invalid'}`}
-              placeholder={'horse!battery staple'}
-              onInput={(ev) => {
-                this.setState({ newGallery: (ev.target as any)?.value });
-              }}
-              onKeyDown={(ev) => {
-                switch (ev.key) {
-                  case 'Enter':
-                    this.syncClick();
-                    break;
-                  case 'Escape':
-                    this.doneConfiguring();
-                    break;
-                }
-              }}
-              value={state.newGallery ?? ''}
-            />
-          </label>
-          <button
-            className={'btn btn-primary'}
-            disabled={!valid}
-            onClick={this.syncClick}
-          >
-            sync
-          </button>
-          <button
-            className={'btn btn-secondary'}
-            onClick={this.doneConfiguring}
-          >
-            cancel
-          </button>
-        </div>
+        <GalleryInput
+          label={'new backup gallery'}
+          submitName={'sync'}
+          accept={(gallery) => {
+            this.props.gallery.set(gallery);
+            this.doneConfiguring();
+          }}
+          cancel={this.doneConfiguring}
+        />
       );
-      const validationView = (
-        <ul class={'home--sign_in-validation'}>
-          {validations.map(([msg, re]) => {
-            const cand = state.newGallery ?? '';
-            const valid = 'test' in re ? re.test(cand) : re(cand);
-            return (
-              <li class={valid ? 'text-success' : 'text-danger'}>
-                {valid ? <CheckCircleOutlineIcon /> : <CircleOutlineIcon />}{' '}
-                {msg}
-              </li>
-            );
-          })}
-        </ul>
-      );
+
       const themeView = (
         <div class={'btn-group home--sign_in-theme'}>
           <button
@@ -160,7 +101,7 @@ export class SignIn extends Component<SignInProps, SignInState> {
               }}
             />
             <label className="form-check-label" htmlFor="signin-pickety">
-              Pick images to add to gallery, or clean-up
+              pick images to add to gallery, or clean-up
             </label>
           </div>
           {pickedActions}
@@ -171,7 +112,6 @@ export class SignIn extends Component<SignInProps, SignInState> {
         <div className={'row home--sign_in home--sign_in-info'}>
           <div className={'col'}>
             {galleryForm}
-            {state.newGallery && validationView}
             <hr />
             {themeView}
             <hr />
