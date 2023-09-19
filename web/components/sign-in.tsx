@@ -1,5 +1,6 @@
 import { Component, JSX } from 'preact';
 import { useQuery } from 'preact-fetching';
+import { toWords } from 'number-to-words';
 
 import IconSettings from 'mdi-preact/SettingsIcon';
 import SunWirelessIcon from 'mdi-preact/SunWirelessIcon';
@@ -35,7 +36,11 @@ export class SignIn extends Component<SignInProps, SignInState> {
     if (state.configuring) {
       const galleryForm = (
         <GalleryInput
-          label={'new backup gallery'}
+          label={
+            <>
+              new backup gallery, in <i>public-name!secret passphrase</i> format
+            </>
+          }
           submitName={'sync'}
           accept={(gallery) => {
             this.props.gallery.set(gallery);
@@ -77,11 +82,32 @@ export class SignIn extends Component<SignInProps, SignInState> {
 
       let pickedActions: JSX.Element | undefined = undefined;
       if (props.picking.v) {
+        let selectedImages: JSX.Element;
+        const c = props.currentlyPicked ?? 0;
+        switch (c) {
+          case 0:
+            selectedImages = <>no selected images</>;
+            break;
+          case 1:
+            selectedImages = <>one selected image</>;
+            break;
+          default:
+            selectedImages = <>{toWords(c)} selected images</>;
+        }
         pickedActions = (
           <div>
+            <GalleryInput
+              accept={() => {}}
+              cancel={() => {
+                props.picking.set(false);
+              }}
+              label={<>add {selectedImages} to a gallery</>}
+              submitName={'(wip) add'}
+              enabled={false}
+              placeholder={'husband!valley forge'}
+            />
             <button className={'btn btn-danger'} disabled={true}>
-              <TrashCanIcon /> (WIP) Remove {props.currentlyPicked} selected
-              images from local storage
+              <TrashCanIcon /> (wip) remove {selectedImages} from local storage
             </button>
           </div>
         );

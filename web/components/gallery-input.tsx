@@ -1,4 +1,4 @@
-import { Component } from 'preact';
+import { Component, JSX } from 'preact';
 import { GallerySecret, plausibleGallerySecret } from '../types';
 import CheckCircleOutlineIcon from 'mdi-preact/CheckCircleOutlineIcon';
 import CircleOutlineIcon from 'mdi-preact/CircleOutlineIcon';
@@ -6,8 +6,12 @@ import CircleOutlineIcon from 'mdi-preact/CircleOutlineIcon';
 interface GalleryInputProps {
   accept: (gallery: GallerySecret) => void;
   cancel: () => void;
-  label: string;
+  label: JSX.Element;
   submitName: string;
+
+  // wip?
+  enabled?: boolean;
+  placeholder?: string;
 }
 interface GalleryInputState {
   newGallery?: string;
@@ -39,11 +43,11 @@ export class GalleryInput extends Component<
     const galleryForm = (
       <>
         <label>
-          {props.label}, in <i>public-name!secret passphrase</i> format:
+          {props.label}
           <input
             type={'text'}
             className={`form-control is-${valid ? 'valid' : 'invalid'}`}
-            placeholder={'horse!battery staple'}
+            placeholder={props.placeholder ?? 'horse!battery staple'}
             onInput={(ev) => {
               this.setState({ newGallery: (ev.target as any)?.value });
             }}
@@ -62,7 +66,7 @@ export class GalleryInput extends Component<
         </label>
         <button
           className={'btn btn-primary'}
-          disabled={!valid}
+          disabled={!(valid && props.enabled)}
           onClick={checkAndAccept}
         >
           {props.submitName}
