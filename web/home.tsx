@@ -6,7 +6,7 @@ import { Upload } from './components/upload';
 import { SignIn, Theme } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
-import { GallerySecret } from './types';
+import { GallerySecret, ImageId } from './types';
 
 export type OurFile = Blob & { name?: string };
 
@@ -26,6 +26,7 @@ interface HomeState {
   configuredGallery?: GallerySecret;
   syncingNewGallery?: boolean;
   configuredTheme?: Theme;
+  picking: Record<ImageId, boolean> | undefined;
 }
 
 export class Home extends Component<unknown, HomeState> {
@@ -37,6 +38,7 @@ export class Home extends Component<unknown, HomeState> {
     pees: [],
     configuredGallery: undefined,
     configuredTheme: undefined,
+    picking: undefined,
   };
 
   render(props: unknown, state: Readonly<HomeState>) {
@@ -158,13 +160,25 @@ export class Home extends Component<unknown, HomeState> {
     const setTheme = (configuredTheme: Theme) =>
       this.setState({ configuredTheme });
 
-    const picking = undefined;
+    const setPicking = (picking: boolean) =>
+      this.setState({ picking: picking ? {} : undefined });
+
+    const pickingProp = {
+      v: state.picking,
+      set: (picking: Record<ImageId, boolean> | undefined) => {
+        this.setState({ picking });
+      },
+    };
 
     return (
       <div class={'container-fluid'}>
         <SignIn
           gallery={{ v: state.configuredGallery, set: setGallery }}
           theme={{ v: state.configuredTheme, set: setTheme }}
+          picking={{ v: state.picking !== undefined, set: setPicking }}
+          currentlyPicked={
+            Object.values(state.picking ?? {}).filter(Boolean).length
+          }
           syncingNewGallery={state.syncingNewGallery}
         />
         <Messages
@@ -183,14 +197,14 @@ export class Home extends Component<unknown, HomeState> {
           </div>
           {displayRight.length > 0 && (
             <div class={'col-md'} ref={this.imRight}>
-              <ThumbList items={displayRight} picking={picking} />
+              <ThumbList items={displayRight} picking={pickingProp} />
             </div>
           )}
         </div>
         {displayBottom.length > 0 && (
           <div class={'row'}>
             <div className={'col'}>
-              <ThumbList items={displayBottom} picking={picking} />
+              <ThumbList items={displayBottom} picking={pickingProp} />
               <div className={'util--clear'} />
             </div>
           </div>

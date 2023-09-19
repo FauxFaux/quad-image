@@ -1,10 +1,13 @@
 import { Component, JSX } from 'preact';
 import type { ImageId } from '../types';
 import type { PendingItem } from '../home';
+import type { Prop } from './sign-in';
+import CheckboxBlankCircleOutlineIcon from 'mdi-preact/CheckboxBlankCircleOutlineIcon';
+import CheckboxMarkedCircleOutlineIcon from 'mdi-preact/CheckboxMarkedCircleOutlineIcon';
 
 interface ThumbProps {
   items: PendingItem[];
-  picking: Record<ImageId, boolean> | undefined;
+  picking?: Prop<Record<ImageId, boolean> | undefined>;
 }
 
 export class ThumbList extends Component<ThumbProps, unknown> {
@@ -15,10 +18,18 @@ export class ThumbList extends Component<ThumbProps, unknown> {
           // I think I split these because Done is the most common case (by far), but I don't think I like it
           switch (item.state) {
             case 'done':
-              const picking = props.picking
-                ? props.picking[item.base] ?? false
+              const picking = props.picking?.v
+                ? props.picking.v[item.base] ?? false
                 : undefined;
-              return <ThumbDone bare={item.base} picking={picking} />;
+              return (
+                <ThumbDone
+                  bare={item.base}
+                  picking={picking}
+                  setPicked={(v) => {
+                    props.picking?.set({ ...props.picking.v, [item.base]: v });
+                  }}
+                />
+              );
             default:
               return <ThumbUpload item={item} />;
           }
@@ -31,6 +42,7 @@ export class ThumbList extends Component<ThumbProps, unknown> {
 interface ThumbDoneProps {
   bare: ImageId;
   picking?: boolean;
+  setPicked?: (picked: boolean) => void;
 }
 interface ThumbDoneState {
   copied?: boolean;
@@ -66,8 +78,23 @@ export class ThumbDone extends Component<ThumbDoneProps, ThumbDoneState> {
         </button>
       );
     } else {
+      const checked = props.picking;
+      const label = checked ? (
+        <>
+          <CheckboxMarkedCircleOutlineIcon /> selected
+        </>
+      ) : (
+        <>
+          <CheckboxBlankCircleOutlineIcon /> select
+        </>
+      );
       footer = (
-        <input type={'checkbox'} checked={props.picking} onChange={() => {}} />
+        <button
+          className={`btn btn-${!checked ? 'secondary' : 'success'}`}
+          onClick={() => props.setPicked?.(!checked)}
+        >
+          {label}
+        </button>
       );
     }
     return (

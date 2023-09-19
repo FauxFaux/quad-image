@@ -10,14 +10,17 @@ import { plausibleGallerySecret } from '../types';
 import ThemeLightDarkIcon from 'mdi-preact/ThemeLightDarkIcon';
 import WeatherNightIcon from 'mdi-preact/WeatherNightIcon';
 import SunWirelessIcon from 'mdi-preact/SunWirelessIcon';
+import TrashCanIcon from 'mdi-preact/TrashCanIcon';
 
 export type Theme = 'light' | 'dark' | undefined | null;
 
-type Prop<T> = { v: T; set: (v: T) => void };
+export type Prop<T> = { v: T; set: (v: T) => void };
 
 interface SignInProps {
   gallery: Prop<string | undefined>;
   theme: Prop<Theme>;
+  picking: Prop<boolean>;
+  currentlyPicked?: number;
   syncingNewGallery?: boolean;
 }
 
@@ -130,13 +133,49 @@ export class SignIn extends Component<SignInProps, SignInState> {
           </button>
         </div>
       );
+
+      let pickedActions: JSX.Element | undefined = undefined;
+      if (props.picking.v) {
+        pickedActions = (
+          <div>
+            <button className={'btn btn-danger'} disabled={true}>
+              <TrashCanIcon /> (WIP) Remove {props.currentlyPicked} selected
+              images from local storage
+            </button>
+          </div>
+        );
+      }
+
+      const pickerView = (
+        <div>
+          <div className="form-check form-switch form-check-inline">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              role="switch"
+              id="signin-pickety"
+              checked={props.picking.v}
+              onChange={(ev) => {
+                props.picking.set(ev.currentTarget.checked);
+              }}
+            />
+            <label className="form-check-label" htmlFor="signin-pickety">
+              Pick images to add to gallery, or clean-up
+            </label>
+          </div>
+          {pickedActions}
+        </div>
+      );
+
       return (
         <div className={'row home--sign_in home--sign_in-info'}>
           <div className={'col'}>
             {galleryForm}
-            {validationView}
+            {state.newGallery && validationView}
             <hr />
             {themeView}
+            <hr />
+            {pickerView}
             <hr />
           </div>
         </div>
