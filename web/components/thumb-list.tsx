@@ -1,9 +1,10 @@
-import { Component } from 'preact';
+import { Component, JSX } from 'preact';
 import type { ImageId } from '../types';
 import type { PendingItem } from '../home';
 
 interface ThumbProps {
   items: PendingItem[];
+  picking: Record<ImageId, boolean> | undefined;
 }
 
 export class ThumbList extends Component<ThumbProps, unknown> {
@@ -14,7 +15,10 @@ export class ThumbList extends Component<ThumbProps, unknown> {
           // I think I split these because Done is the most common case (by far), but I don't think I like it
           switch (item.state) {
             case 'done':
-              return <ThumbDone bare={item.base} />;
+              const picking = props.picking
+                ? props.picking[item.base] ?? false
+                : undefined;
+              return <ThumbDone bare={item.base} picking={picking} />;
             default:
               return <ThumbUpload item={item} />;
           }
@@ -26,6 +30,7 @@ export class ThumbList extends Component<ThumbProps, unknown> {
 
 interface ThumbDoneProps {
   bare: ImageId;
+  picking?: boolean;
 }
 interface ThumbDoneState {
   copied?: boolean;
@@ -49,18 +54,28 @@ export class ThumbDone extends Component<ThumbDoneProps, ThumbDoneState> {
 
   render(props: Readonly<ThumbDoneProps>, state: Readonly<ThumbDoneState>) {
     const bare = props.bare;
-    return (
-      <li>
-        <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
-          <img src={`${bare}.thumb.jpg`} loading={'lazy'} />
-        </a>
+    let footer: JSX.Element;
+    if (props.picking === undefined) {
+      footer = (
         <button
-          class={`btn btn-${!state.copied ? 'secondary' : 'success'}`}
+          className={`btn btn-${!state.copied ? 'secondary' : 'success'}`}
           onClick={this.doCopy}
           onMouseLeave={this.clearCopy}
         >
           {!state.copied ? 'copy' : 'copied!'}
         </button>
+      );
+    } else {
+      footer = (
+        <input type={'checkbox'} checked={props.picking} onChange={() => {}} />
+      );
+    }
+    return (
+      <li>
+        <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
+          <img src={`${bare}.thumb.jpg`} loading={'lazy'} />
+        </a>
+        {footer}
       </li>
     );
   }

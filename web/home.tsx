@@ -155,6 +155,8 @@ export class Home extends Component<unknown, HomeState> {
       }
     };
 
+    const picking = undefined;
+
     return (
       <div class={'container-fluid'}>
         <SignIn
@@ -180,14 +182,14 @@ export class Home extends Component<unknown, HomeState> {
           </div>
           {displayRight.length > 0 && (
             <div class={'col-md'} ref={this.imRight}>
-              <ThumbList items={displayRight} />
+              <ThumbList items={displayRight} picking={picking} />
             </div>
           )}
         </div>
         {displayBottom.length > 0 && (
           <div class={'row'}>
             <div className={'col'}>
-              <ThumbList items={displayBottom} />
+              <ThumbList items={displayBottom} picking={picking} />
               <div className={'util--clear'} />
             </div>
           </div>
