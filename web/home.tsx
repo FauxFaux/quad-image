@@ -155,15 +155,16 @@ export class Home extends Component<unknown, HomeState> {
       }
     };
 
+    const setTheme = (configuredTheme: Theme) =>
+      this.setState({ configuredTheme });
+
     const picking = undefined;
 
     return (
       <div class={'container-fluid'}>
         <SignIn
-          gallery={state.configuredGallery}
-          setGallery={setGallery}
-          theme={state.configuredTheme}
-          setTheme={(configuredTheme) => this.setState({ configuredTheme })}
+          gallery={{ v: state.configuredGallery, set: setGallery }}
+          theme={{ v: state.configuredTheme, set: setTheme }}
           syncingNewGallery={state.syncingNewGallery}
         />
         <Messages

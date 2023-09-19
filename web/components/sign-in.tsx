@@ -13,11 +13,11 @@ import SunWirelessIcon from 'mdi-preact/SunWirelessIcon';
 
 export type Theme = 'light' | 'dark' | undefined | null;
 
+type Prop<T> = { v: T; set: (v: T) => void };
+
 interface SignInProps {
-  gallery: string | undefined;
-  setGallery: (g: string | undefined) => void;
-  theme: Theme;
-  setTheme: (t: Theme) => void;
+  gallery: Prop<string | undefined>;
+  theme: Prop<Theme>;
   syncingNewGallery?: boolean;
 }
 
@@ -29,7 +29,7 @@ interface SignInState {
 export class SignIn extends Component<SignInProps, SignInState> {
   syncClick = () => {
     if (!plausibleGallerySecret(this.state.newGallery ?? '')) return;
-    this.props.setGallery(this.state.newGallery);
+    this.props.gallery.set(this.state.newGallery);
     this.doneConfiguring();
   };
 
@@ -105,26 +105,26 @@ export class SignIn extends Component<SignInProps, SignInState> {
         <div class={'btn-group home--sign_in-theme'}>
           <button
             type={'button'}
-            class={'btn btn-secondary' + (!props.theme ? ' active' : '')}
-            onClick={() => props.setTheme(undefined)}
+            class={'btn btn-secondary' + (!props.theme.v ? ' active' : '')}
+            onClick={() => props.theme.set(undefined)}
           >
             <ThemeLightDarkIcon /> Auto
           </button>
           <button
             type={'button'}
             className={
-              'btn btn-secondary' + (props.theme === 'dark' ? ' active' : ' ')
+              'btn btn-secondary' + (props.theme.v === 'dark' ? ' active' : ' ')
             }
-            onClick={() => props.setTheme('dark')}
+            onClick={() => props.theme.set('dark')}
           >
             <WeatherNightIcon /> Dark
           </button>
           <button
             type={'button'}
             className={
-              'btn btn-secondary' + (props.theme === 'light' ? ' active' : '')
+              'btn btn-secondary' + (props.theme.v === 'light' ? ' active' : '')
             }
-            onClick={() => props.setTheme('light')}
+            onClick={() => props.theme.set('light')}
           >
             <SunWirelessIcon /> Light
           </button>
@@ -155,7 +155,7 @@ export class SignIn extends Component<SignInProps, SignInState> {
       </span>
     );
 
-    const existing = props.gallery;
+    const existing = props.gallery.v;
     if (existing) {
       const { data, isLoading, isError } = useQuery(
         `gallery-${existing}-id`,
