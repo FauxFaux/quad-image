@@ -4,13 +4,12 @@ pub mod ingest;
 mod tests;
 mod thumbs;
 
-use std::fs;
-use std::io;
 use std::io::Read;
 use std::io::Write;
-use std::path;
+use std::net::ToSocketAddrs as _;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::{env, fs, io, path};
 
 use anyhow::anyhow;
 use anyhow::Context;
@@ -285,25 +284,48 @@ fn main() -> anyhow::Result<()> {
     thumbs::generate_all_thumbs()?;
     let secret = app_secret()?;
 
+    let dist = env::var("FRONTEND_DIR").unwrap_or_else(|_| "dist".to_string());
+    let dist = fs::canonicalize(&dist).with_context(|| {
+        anyhow!("unresolvable frontend directory: {dist:?}, try e.g. './dist'",)
+    })?;
+
+    let dist_test = dist.join("index.html");
+    let _ = fs::read(&dist_test).with_context(|| {
+        anyhow!(
+            "proposed frontend directory {dist:?} does not contain index.html, try e.g. './dist'",
+        )
+    })?;
+
+    let bind = env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:6699".to_string());
+    let bind_resolved = bind
+        .to_socket_addrs()
+        .with_context(|| anyhow!("invalid bind address: {bind:?}, try e.g. '0.0.0.0:6699'"))?;
+
+    for addr in bind_resolved {
+        println!("starting server on http://{:?}", addr);
+    }
+
     let conn = Arc::new(Mutex::new(conn));
 
-    rouille::start_server("127.0.0.1:6699", move |request| {
+    rouille::start_server(bind, move |request| {
         rouille::log(request, io::stdout(), || {
             if let Some(e) = request.remove_prefix("/e") {
                 return rouille::match_assets(&e, "e");
             }
 
             if let Some(e) = request.remove_prefix("/static") {
-                return rouille::match_assets(&e, "dist/static");
+                return rouille::match_assets(&e, &dist.join("static"));
             }
 
-            router!(request,
-                (GET)  ["/"]                    => { static_html("dist/index.html")          },
-                (GET)  ["/dumb/"]               => { static_html("dist/dumb/index.html")     },
-                (GET)  ["/terms/"]              => { static_html("dist/terms/index.html")    },
-                (GET)  ["/gallery/"]            => { static_html("dist/gallery/index.html")  },
+            let static_html = |path: &'static str| static_file("text/html", &dist.join(path));
 
-                (POST) ["/api/upload"]          => { upload(request)                        },
+            router!(request,
+                (GET)  ["/"]                    => { static_html("index.html")        },
+                (GET)  ["/dumb/"]               => { static_html("dumb/index.html")   },
+                (GET)  ["/terms/"]              => { static_html("terms/index.html")  },
+                (GET)  ["/gallery/"]            => { static_html("gallery/index.html")},
+
+                (POST) ["/api/upload"]          => { upload(request)                  },
 
                 (PUT)  ["/api/gallery"]         => {
                     gallery_put(conn.clone(), &secret, request)
@@ -319,10 +341,6 @@ fn main() -> anyhow::Result<()> {
     });
 }
 
-fn static_html(path: &'static str) -> Response {
-    static_file("text/html", path)
-}
-
-fn static_file(content_type: &'static str, path: &str) -> Response {
+fn static_file(content_type: &'static str, path: impl AsRef<path::Path>) -> Response {
     Response::from_file(content_type, fs::File::open(path).expect("static"))
 }

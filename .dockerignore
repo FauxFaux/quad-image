@@ -1,0 +1,11 @@
+# this whole thing is just for performance, the Dockerfile is multi-stage and explicitly pulls in what it wants
+
+/target
+dist/
+.idea/
+.lint/
+Dockerfile
+node_modules/
+e/
+*.db
+.secret
