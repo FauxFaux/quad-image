@@ -10,7 +10,7 @@ interface GalleryInputProps {
   submitName: string;
 
   // wip?
-  enabled?: boolean;
+  enabled: boolean;
   placeholder?: string;
 }
 interface GalleryInputState {

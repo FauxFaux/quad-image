@@ -47,6 +47,7 @@ export class SignIn extends Component<SignInProps, SignInState> {
             this.props.gallery.set(gallery);
             this.doneConfiguring();
           }}
+          enabled={true}
           cancel={this.doneConfiguring}
         />
       );
