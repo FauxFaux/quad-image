@@ -25,11 +25,12 @@ RUN apk add --no-cache dumb-init
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 USER 65534
 
-#RUN mkdir /data && chown 65534:65534 /data
-VOLUME ["/data"]
-WORKDIR /data
 COPY --from=build-rust /volume/target/x86_64-unknown-linux-musl/release/quad-image /opt
 COPY --from=build-js /volume/dist /opt/dist
+
+VOLUME ["/data"]
+WORKDIR /data
+
 ENV BIND_ADDR=0.0.0.0:80
 ENV FRONTEND_DIR=/opt/dist
 EXPOSE 80
