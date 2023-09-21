@@ -30,6 +30,18 @@ The expected deployment situation is:
 There are example config files in `quad-image.nginx` (for nginx) and
 `quad-image.service` (for systemd). All the ports/addresses are hardcoded.
 
+---
+
+A [`Dockerfile`](Dockerfile) is provided, if you prefer that kind of thing.
+It performs an isolated build and provides a minimal `alpine`-based container.
+It is not CI'd or published.
+
+You could run it like this, if you trusted Docker's to manage your data storage,
+which I wouldn't recommend:
+```
+docker run --name quad-image -p 6600:80 -it $(docker build -q .)
+```
+
 ### Safety
 
 HTTP is handled by [Rouille](https://crates.io/crates/rouille), a simple
