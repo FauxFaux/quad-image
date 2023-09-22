@@ -11,9 +11,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::{env, fs, path};
 
-use anyhow::anyhow;
-use anyhow::Context;
-use anyhow::Error;
+use anyhow::{anyhow, Context, Error, Result};
 use axum::body::Bytes;
 use axum::extract::{ConnectInfo, DefaultBodyLimit, Multipart, Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
@@ -21,44 +19,70 @@ use axum::Json;
 use lazy_static::lazy_static;
 use rand::RngCore;
 use serde_json::{json, Value};
+use tokio::task::JoinSet;
 use tower_http::services::ServeDir;
 
 lazy_static! {
     static ref IMAGE_ID: regex::Regex =
-        regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg|gif)$").unwrap();
+        regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg|gif)$").expect("static regex");
     static ref GALLERY_SPEC: regex::Regex =
-        regex::Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").unwrap();
+        regex::Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").expect("static regex");
 }
 
 type Caller<'h> = (SocketAddr, Option<&'h HeaderValue>);
 
-async fn upload(
-    ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    mut body: Multipart,
-) -> (StatusCode, HeaderMap, Json<Value>) {
-    let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
+struct UploadForm {
+    image: Bytes,
+    return_json: bool,
+}
 
-    let nh = |(s, b): (StatusCode, Json<Value>)| (s, HeaderMap::new(), b);
+enum UploadFormStatus {
+    Form(UploadForm),
+    BadRequest(&'static str),
+}
 
+async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
     let mut image: Option<Bytes> = None;
     let mut return_json: bool = false;
-    while let Some(field) = body.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
+    while let Some(field) = body.next_field().await? {
+        let name = field
+            .name()
+            .ok_or_else(|| anyhow!("unnamed field"))?
+            .to_string();
+        let data = field.bytes().await?;
         match name.as_str() {
             "image" if image.is_none() => image = Some(data),
-            "image" => return nh(bad_request("exactly one upload required")),
-            "return_json" if data.len() < 10 => match &*data {
+            "image" => return Ok(UploadFormStatus::BadRequest("exactly one upload required")),
+            "return_json" => match &*data {
                 b"true" => return_json = true,
                 b"false" => return_json = false,
-                _ => return nh(bad_request("invalid return_json value")),
+                _ => return Ok(UploadFormStatus::BadRequest("invalid return_json value")),
             },
             _ => (),
         }
     }
 
-    match ingest::store(&image.expect("TODO")) {
+    match image {
+        Some(image) => Ok(UploadFormStatus::Form(UploadForm { image, return_json })),
+        None => Ok(UploadFormStatus::BadRequest("no image provided")),
+    }
+}
+
+async fn upload(
+    ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Multipart,
+) -> (StatusCode, HeaderMap, Json<Value>) {
+    let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
+
+    let nh = |(s, b): (StatusCode, Json<Value>)| (s, HeaderMap::new(), b);
+    let form = match extract_image_form(body).await {
+        Ok(UploadFormStatus::Form(form)) => form,
+        Ok(UploadFormStatus::BadRequest(message)) => return nh(bad_request(message)),
+        Err(e) => return nh(log_error("parsing image form", &caller, &e)),
+    };
+
+    match ingest::store(&form.image) {
         Ok(image_id) => {
             println!("{caller:?}: {image_id}");
 
@@ -66,21 +90,27 @@ async fn upload(
                 return nh(log_error("thumbnailing just written", &caller, &e));
             }
 
-            if return_json {
-                (
-                    StatusCode::OK,
-                    HeaderMap::new(),
-                    data_response(resource_object(image_id, "image")),
-                )
-            } else {
-                let mut map = HeaderMap::new();
+            //  return_json: 200, no headers,      json body
+            // !return_json: 303, Location header, json body
+
+            let mut map = HeaderMap::new();
+            if form.return_json {
                 // relative to api/upload
                 map.insert(
                     "Location",
-                    HeaderValue::from_str(&format!("../{}", image_id)).unwrap(),
+                    HeaderValue::from_str(&format!("../{}", image_id))
+                        .expect("controlled string format"),
                 );
-                (StatusCode::SEE_OTHER, map, Json(json!({})))
             }
+            (
+                if form.return_json {
+                    StatusCode::OK
+                } else {
+                    StatusCode::SEE_OTHER
+                },
+                map,
+                data_response(resource_object(image_id, "image")),
+            )
         }
         Err(e) => nh(log_error("storing image", &caller, &e)),
     }
@@ -187,8 +217,8 @@ async fn gallery_put(
 
     let (gallery, private) = match GALLERY_SPEC.captures(&gallery_input) {
         Some(captures) => (
-            captures.get(1).unwrap().as_str(),
-            captures.get(2).unwrap().as_str(),
+            captures.get(1).expect("static regex").as_str(),
+            captures.get(2).expect("static regex").as_str(),
         ),
         None => {
             return bad_request(concat!(
@@ -298,13 +328,9 @@ async fn main() -> anyhow::Result<()> {
     })?;
 
     let bind = env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:6699".to_string());
-    let mut bind_resolved = bind
+    let bind_resolved = bind
         .to_socket_addrs()
         .with_context(|| anyhow!("invalid bind address: {bind:?}, try e.g. '0.0.0.0:6699'"))?;
-
-    // for addr in bind_resolved {
-    //     println!("starting server on http://{:?}", addr);
-    // }
 
     let ctx = Arc::new(Ctx {
         conn: Arc::new(Mutex::new(conn)),
@@ -325,8 +351,20 @@ async fn main() -> anyhow::Result<()> {
         .nest_service("/e", serve_dir(path::Path::new("e")))
         .fallback_service(serve_dir(dist.as_path()));
 
-    axum::Server::bind(&bind_resolved.next().unwrap())
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .await?;
+    let mut servers = JoinSet::new();
+    for addr in bind_resolved {
+        let app = app.clone();
+        println!("starting server on http://{:?}", addr);
+        let server = axum::Server::try_bind(&addr)
+            .with_context(|| anyhow!("binding to {addr:?}"))?
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>());
+        servers.spawn(server);
+    }
+
+    // servers don't stop or fail, so this is just driving the futures
+    while let Some(res) = servers.join_next().await {
+        let _ = res?;
+    }
+
     Ok(())
 }
