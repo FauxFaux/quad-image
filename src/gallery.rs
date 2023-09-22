@@ -1,3 +1,6 @@
+use std::convert::TryInto;
+use std::sync::{Arc, Mutex};
+
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Error;
@@ -5,7 +8,7 @@ use base64::Engine;
 use rusqlite::types::ToSql;
 use rusqlite::Connection;
 
-pub fn migrate_gallery(conn: &mut Connection) -> anyhow::Result<()> {
+pub fn migrate_gallery(conn: &Connection) -> anyhow::Result<()> {
     conn.execute(
         "create table if not exists gallery_images (
 gallery char(10) not null,
@@ -22,7 +25,7 @@ on gallery_images (gallery, image)",
     Ok(())
 }
 
-pub fn gallery_list_all(conn: &mut Connection, public: &str) -> Result<Vec<String>, Error> {
+pub fn gallery_list_all(conn: &Connection, public: &str) -> Result<Vec<String>, Error> {
     let mut stat = conn.prepare(
         "select image from gallery_images
 where gallery=? order by added desc",
@@ -30,7 +33,7 @@ where gallery=? order by added desc",
 
     let mut resp = Vec::new();
 
-    for image in stat.query_map(&[&public], |row| row.get::<usize, String>(0))? {
+    for image in stat.query_map([public], |row| row.get::<usize, String>(0))? {
         resp.push(image?);
     }
 
@@ -38,7 +41,7 @@ where gallery=? order by added desc",
 }
 
 pub fn gallery_store(
-    conn: crate::Conn,
+    conn: &Arc<Mutex<Connection>>,
     global_secret: &[u8],
     gallery: &str,
     private: &str,
@@ -53,7 +56,7 @@ pub fn gallery_store(
     let mut timestamp = epoch_millis();
 
     for image in images {
-        match stat.execute(&[&public.as_str() as &dyn ToSql, &image, &timestamp]) {
+        match stat.execute([&public.as_str() as &dyn ToSql, &image, &timestamp]) {
             Ok(_) => timestamp += 1,
             Err(rusqlite::Error::SqliteFailure(ffi, _))
                 if rusqlite::ErrorCode::ConstraintViolation == ffi.code =>
@@ -109,7 +112,7 @@ mod tests {
         super::migrate_gallery(&mut conn)?;
         let wrapped = Arc::new(Mutex::new(conn));
         let public = super::gallery_store(
-            wrapped.clone(),
+            &wrapped.clone(),
             &[1],
             "foo",
             "bar",

@@ -6,84 +6,121 @@ mod thumbs;
 
 use std::io::Read;
 use std::io::Write;
-use std::net::ToSocketAddrs as _;
+use std::net::{SocketAddr, ToSocketAddrs as _};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::{env, fs, io, path};
+use std::{env, fs, path};
+use std::future::IntoFuture;
 
-use anyhow::anyhow;
-use anyhow::Context;
-use anyhow::Error;
+use anyhow::{anyhow, Context, Error, Result};
+use axum::body::Bytes;
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Multipart, Path, State};
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
+use axum::Json;
 use lazy_static::lazy_static;
 use rand::RngCore;
-use rouille::input::json::JsonError;
-use rouille::input::json_input;
-use rouille::input::post;
-use rouille::post_input;
-use rouille::router;
-use rouille::Request;
-use rouille::Response;
-use serde_json::json;
-
-const BAD_REQUEST: u16 = 400;
-
-type Conn = Arc<Mutex<rusqlite::Connection>>;
+use serde_json::{json, Value};
+use tokio::task::JoinSet;
+use tower_http::services::ServeDir;
 
 lazy_static! {
     static ref IMAGE_ID: regex::Regex =
-        regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg|gif)$").unwrap();
+        regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg|gif)$").expect("static regex");
     static ref GALLERY_SPEC: regex::Regex =
-        regex::Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").unwrap();
+        regex::Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").expect("static regex");
 }
 
-fn upload(request: &Request) -> Response {
-    let params = match post_input!(request, {
-        image: Vec<post::BufferedFile>,
-        return_json: Option<String>,
-    }) {
-        Ok(params) => params,
-        Err(_) => return bad_request("invalid / missing parameters"),
+type Caller<'h> = (SocketAddr, Option<&'h HeaderValue>);
+
+struct UploadForm {
+    image: Bytes,
+    return_json: bool,
+}
+
+enum UploadFormStatus {
+    Form(UploadForm),
+    BadRequest(&'static str),
+}
+
+async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
+    let mut image: Option<Bytes> = None;
+    let mut return_json: bool = false;
+    while let Some(field) = body.next_field().await? {
+        let name = field
+            .name()
+            .ok_or_else(|| anyhow!("unnamed field"))?
+            .to_string();
+        let data = field.bytes().await?;
+        match name.as_str() {
+            "image" if image.is_none() => image = Some(data),
+            "image" => return Ok(UploadFormStatus::BadRequest("exactly one upload required")),
+            "return_json" => match &*data {
+                b"true" => return_json = true,
+                b"false" => return_json = false,
+                _ => return Ok(UploadFormStatus::BadRequest("invalid return_json value")),
+            },
+            _ => (),
+        }
+    }
+
+    match image {
+        Some(image) => Ok(UploadFormStatus::Form(UploadForm { image, return_json })),
+        None => Ok(UploadFormStatus::BadRequest("no image provided")),
+    }
+}
+
+async fn upload(
+    ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Multipart,
+) -> (StatusCode, HeaderMap, Json<Value>) {
+    let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
+
+    let nh = |(s, b): (StatusCode, Json<Value>)| (s, HeaderMap::new(), b);
+    let form = match extract_image_form(body).await {
+        Ok(UploadFormStatus::Form(form)) => form,
+        Ok(UploadFormStatus::BadRequest(message)) => return nh(bad_request(message)),
+        Err(e) => return nh(log_error("parsing image form", &caller, &e)),
     };
 
-    let image = match params.image.len() {
-        1 => &params.image[0],
-        _ => return bad_request("exactly one upload required"),
-    };
-
-    let return_json = match params.return_json {
-        Some(string) => match string.parse() {
-            Ok(val) => val,
-            Err(_) => return bad_request("invalid return_json value"),
-        },
-        None => false,
-    };
-
-    match ingest::store(&image.data) {
+    match ingest::store(&form.image) {
         Ok(image_id) => {
-            let remote_addr = request.remote_addr();
-            let remote_forwarded = request.header("X-Forwarded-For");
-
-            println!("{:?} {:?}: {}", remote_addr, remote_forwarded, image_id);
+            println!("{caller:?}: {image_id}");
 
             if let Err(e) = thumbs::thumbnail(&image_id) {
-                return log_error("thumbnailing just written", request, &e);
+                return nh(log_error("thumbnailing just written", &caller, &e));
             }
 
-            if return_json {
-                data_response(resource_object(image_id, "image"))
-            } else {
+            //  return_json: 200, no headers,      json body
+            // !return_json: 303, Location header, json body
+
+            let mut map = HeaderMap::new();
+            if form.return_json {
                 // relative to api/upload
-                Response::redirect_303(format!("../{}", image_id))
+                map.insert(
+                    "Location",
+                    HeaderValue::from_str(&format!("../{}", image_id))
+                        .expect("controlled string format"),
+                );
             }
+            (
+                if form.return_json {
+                    StatusCode::OK
+                } else {
+                    StatusCode::SEE_OTHER
+                },
+                map,
+                data_response(resource_object(image_id, "image")),
+            )
         }
-        Err(e) => log_error("storing image", request, &e),
+        Err(e) => nh(log_error("storing image", &caller, &e)),
     }
 }
 
 /// http://jsonapi.org/format/#errors
-fn error_object(message: &str) -> Response {
+fn error_object(message: &str) -> Json<Value> {
     println!("error: {}", message);
-    Response::json(&json!({ "errors": [
+    Json(json!({ "errors": [
         { "title": message }
     ] }))
 }
@@ -113,102 +150,76 @@ fn json_api_validate(obj: &serde_json::Value) {
 }
 
 /// http://jsonapi.org/format/#document-top-level
-fn data_response(inner: serde_json::Value) -> Response {
+fn data_response(inner: Value) -> Json<Value> {
     json_api_validate(&inner);
-    Response::json(&json!({ "data": inner }))
+    Json(json!({ "data": inner }))
 }
 
 /// http://jsonapi.org/format/#document-resource-objects
-fn resource_object<I: AsRef<str>>(id: I, type_: &'static str) -> serde_json::Value {
+fn resource_object<I: AsRef<str>>(id: I, type_: &'static str) -> Value {
     json!({ "id": id.as_ref(), "type": type_ })
 }
 
-fn bad_request(message: &str) -> Response {
-    error_object(message).with_status_code(BAD_REQUEST)
+fn bad_request(message: &str) -> (StatusCode, Json<Value>) {
+    (StatusCode::BAD_REQUEST, error_object(message))
 }
 
-fn log_error(location: &str, request: &Request, error: &Error) -> Response {
-    let remote_addr = request.remote_addr();
-    let remote_forwarded = request.header("X-Forwarded-For");
-
-    println!(
-        "{:?} {:?}: failed: {}: {:?}",
-        remote_addr, remote_forwarded, location, error
-    );
-    error_object(location).with_status_code(500)
+fn log_error(location: &str, caller: &Caller, error: &Error) -> (StatusCode, Json<Value>) {
+    println!("{caller:?}: failed: {location}: {error:?}",);
+    (StatusCode::INTERNAL_SERVER_ERROR, error_object(location))
 }
 
-fn gallery_put(conn: Conn, global_secret: &[u8], request: &Request) -> Response {
-    let body: serde_json::Value = match json_input(request) {
-        Ok(body) => body,
-        Err(JsonError::WrongContentType) => return bad_request("missing/invalid content type"),
-        Err(other) => {
-            println!("invalid request: {:?}", other);
-            return bad_request("missing/invalid content type");
-        }
-    };
+#[derive(serde::Deserialize)]
+struct GalleryAttributes {
+    gallery: String,
+    images: Vec<String>,
+}
 
-    let body = match body.as_object() {
-        Some(body) => body,
-        None => return bad_request("non-object body"),
-    };
+#[derive(serde::Deserialize)]
+struct GalleryData {
+    #[serde(rename = "type")]
+    type_: String,
+    attributes: GalleryAttributes,
+}
 
-    if body.contains_key("errors") {
-        return bad_request("'errors' must be absent");
-    }
+#[derive(serde::Deserialize)]
+struct GalleryInput {
+    data: GalleryData,
+}
 
-    let body = match body.get("data").and_then(|data| data.as_object()) {
-        Some(body) => body,
-        None => return bad_request("missing/invalid data attribute"),
-    };
-
-    if !body
-        .get("type")
-        .and_then(|ty| ty.as_str())
-        .map(|ty| "gallery" == ty)
-        .unwrap_or(false)
-    {
+#[axum_macros::debug_handler]
+async fn gallery_put(
+    ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    State(state): State<Arc<Ctx>>,
+    Json(body): Json<GalleryInput>,
+) -> (StatusCode, Json<Value>) {
+    let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
+    if body.data.type_ != "gallery" {
         return bad_request("missing/invalid type: gallery");
     }
 
-    let body = match body.get("attributes").and_then(|body| body.as_object()) {
-        Some(body) => body,
-        None => return bad_request("missing/invalid type: attributes"),
-    };
-
-    let gallery_input = match body.get("gallery").and_then(|val| val.as_str()) {
-        Some(string) => string,
-        None => return bad_request("missing/invalid type: gallery attribute"),
-    };
-
-    let raw_images = match body.get("images").and_then(|val| val.as_array()) {
-        Some(raw_images) => raw_images,
-        None => return bad_request("missing/invalid type: images"),
-    };
+    let gallery_input = body.data.attributes.gallery;
+    let raw_images = body.data.attributes.images;
 
     let mut images = Vec::with_capacity(raw_images.len());
 
-    for image in raw_images {
-        let image = match image.as_str() {
-            Some(image) => image,
-            None => return bad_request("non-string image in list"),
-        };
-
+    for image in &raw_images {
         if !IMAGE_ID.is_match(image) {
             return bad_request("invalid image id");
         }
 
-        if !path::Path::new(image).exists() {
+        if !path::Path::new(&image).exists() {
             return bad_request("no such image");
         }
 
-        images.push(image);
+        images.push(image.as_str());
     }
 
-    let (gallery, private) = match GALLERY_SPEC.captures(gallery_input) {
+    let (gallery, private) = match GALLERY_SPEC.captures(&gallery_input) {
         Some(captures) => (
-            captures.get(1).unwrap().as_str(),
-            captures.get(2).unwrap().as_str(),
+            captures.get(1).expect("static regex").as_str(),
+            captures.get(2).expect("static regex").as_str(),
         ),
         None => {
             return bad_request(concat!(
@@ -218,9 +229,12 @@ fn gallery_put(conn: Conn, global_secret: &[u8], request: &Request) -> Response 
         }
     };
 
-    match gallery::gallery_store(conn, global_secret, gallery, private, &images) {
-        Ok(public) => data_response(resource_object(public, "gallery")),
-        Err(e) => log_error("saving gallery item", request, &e),
+    match gallery::gallery_store(&state.conn, &state.secret, gallery, private, &images) {
+        Ok(public) => (
+            StatusCode::OK,
+            data_response(resource_object(public, "gallery")),
+        ),
+        Err(e) => log_error("saving gallery item", &caller, &e),
     }
 }
 
@@ -231,28 +245,39 @@ fn validate_image_id() {
     assert!(!IMAGE_ID.is_match("e/abcdefghi.png"));
 }
 
-fn gallery_get(request: &Request, conn: Conn, public: &str) -> Response {
+#[axum_macros::debug_handler]
+async fn gallery_get(
+    ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    State(state): State<Arc<Ctx>>,
+    Path(public): Path<String>,
+) -> (StatusCode, Json<Value>) {
     if public.len() > 32 || public.find(|c: char| !c.is_ascii_graphic()).is_some() {
         return bad_request("invalid gallery id");
     }
 
-    let mut conn = match conn.lock() {
+    let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
+
+    let conn = match state.conn.lock() {
         Ok(conn) => conn,
-        Err(_posion) => {
-            println!("poisoned! {:?}", _posion);
-            return error_object("internal error").with_status_code(500);
+        Err(posion) => {
+            println!("poisoned! {posion:?}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                error_object("internal error"),
+            );
         }
     };
 
-    match gallery::gallery_list_all(&mut *conn, public) {
+    match gallery::gallery_list_all(&conn, &public) {
         Ok(resp) => {
             let values: Vec<_> = resp
                 .into_iter()
                 .map(|id| json!({"id": id, "type": "image"}))
                 .collect();
-            data_response(json!(values))
+            (StatusCode::OK, data_response(json!(values)))
         }
-        Err(e) => log_error("listing gallery", request, &e),
+        Err(e) => log_error("listing gallery", &caller, &e),
     }
 }
 
@@ -272,15 +297,22 @@ fn gallery_db() -> Result<rusqlite::Connection, Error> {
     Ok(rusqlite::Connection::open("gallery.db")?)
 }
 
-fn main() -> anyhow::Result<()> {
+#[derive(Clone)]
+struct Ctx {
+    conn: Arc<Mutex<rusqlite::Connection>>,
+    secret: [u8; 32],
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     fs::create_dir_all("e").with_context(|| {
         anyhow!(
             "creating storage directory inside {:?}",
             std::env::current_dir()
         )
     })?;
-    let mut conn = gallery_db()?;
-    gallery::migrate_gallery(&mut conn)?;
+    let conn = gallery_db()?;
+    gallery::migrate_gallery(&conn)?;
     thumbs::generate_all_thumbs()?;
     let secret = app_secret()?;
 
@@ -301,46 +333,40 @@ fn main() -> anyhow::Result<()> {
         .to_socket_addrs()
         .with_context(|| anyhow!("invalid bind address: {bind:?}, try e.g. '0.0.0.0:6699'"))?;
 
+    let ctx = Arc::new(Ctx {
+        conn: Arc::new(Mutex::new(conn)),
+        secret,
+    });
+
+    let serve_dir = |p: &path::Path| ServeDir::new(p).call_fallback_on_method_not_allowed(true);
+
+    const MB: usize = 1024 * 1024;
+
+    use axum::routing::{get, post, put};
+    let app = axum::Router::new()
+        .route("/api/upload", post(upload))
+        .route("/api/gallery/:public", get(gallery_get))
+        .route("/api/gallery", put(gallery_put))
+        .layer(DefaultBodyLimit::max(10 * MB))
+        .with_state(Arc::clone(&ctx))
+        .nest_service("/e", serve_dir(path::Path::new("e")))
+        .fallback_service(serve_dir(dist.as_path()));
+
+    let mut servers = JoinSet::new();
     for addr in bind_resolved {
+        let app = app.clone();
         println!("starting server on http://{:?}", addr);
+
+        let server = tokio::net::TcpListener::bind(&addr).await
+            .with_context(|| anyhow!("binding to {addr:?}"))?;
+        let server = axum::serve(server, app.into_make_service_with_connect_info::<SocketAddr>());
+        servers.spawn(server.into_future());
     }
 
-    let conn = Arc::new(Mutex::new(conn));
+    // servers don't stop or fail, so this is just driving the futures
+    while let Some(res) = servers.join_next().await {
+        let _ = res?;
+    }
 
-    rouille::start_server(bind, move |request| {
-        rouille::log(request, io::stdout(), || {
-            if let Some(e) = request.remove_prefix("/e") {
-                return rouille::match_assets(&e, "e");
-            }
-
-            if let Some(e) = request.remove_prefix("/static") {
-                return rouille::match_assets(&e, &dist.join("static"));
-            }
-
-            let static_html = |path: &'static str| static_file("text/html", &dist.join(path));
-
-            router!(request,
-                (GET)  ["/"]                    => { static_html("index.html")        },
-                (GET)  ["/dumb/"]               => { static_html("dumb/index.html")   },
-                (GET)  ["/terms/"]              => { static_html("terms/index.html")  },
-                (GET)  ["/gallery/"]            => { static_html("gallery/index.html")},
-
-                (POST) ["/api/upload"]          => { upload(request)                  },
-
-                (PUT)  ["/api/gallery"]         => {
-                    gallery_put(conn.clone(), &secret, request)
-                },
-
-                (GET)  ["/api/gallery/{public}", public: String] => {
-                    gallery_get(request, conn.clone(), &public)
-                },
-
-                _ => rouille::Response::empty_404()
-            )
-        })
-    });
-}
-
-fn static_file(content_type: &'static str, path: impl AsRef<path::Path>) -> Response {
-    Response::from_file(content_type, fs::File::open(path).expect("static"))
+    Ok(())
 }

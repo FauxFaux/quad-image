@@ -224,7 +224,7 @@ fn apply_rotation(rotation: u32, image: &mut image::DynamicImage) {
     }
 }
 
-fn flip_diagonal(image: &mut image::DynamicImage) -> image::DynamicImage {
+fn flip_diagonal(image: &image::DynamicImage) -> image::DynamicImage {
     use image::GenericImageView;
 
     let (width, height) = image.dimensions();
