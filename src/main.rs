@@ -10,6 +10,7 @@ use std::net::{SocketAddr, ToSocketAddrs as _};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::{env, fs, path};
+use std::future::IntoFuture;
 
 use anyhow::{anyhow, Context, Error, Result};
 use axum::body::Bytes;
@@ -355,10 +356,11 @@ async fn main() -> anyhow::Result<()> {
     for addr in bind_resolved {
         let app = app.clone();
         println!("starting server on http://{:?}", addr);
-        let server = axum::Server::try_bind(&addr)
-            .with_context(|| anyhow!("binding to {addr:?}"))?
-            .serve(app.into_make_service_with_connect_info::<SocketAddr>());
-        servers.spawn(server);
+
+        let server = tokio::net::TcpListener::bind(&addr).await
+            .with_context(|| anyhow!("binding to {addr:?}"))?;
+        let server = axum::serve(server, app.into_make_service_with_connect_info::<SocketAddr>());
+        servers.spawn(server.into_future());
     }
 
     // servers don't stop or fail, so this is just driving the futures
