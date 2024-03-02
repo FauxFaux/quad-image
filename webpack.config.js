@@ -1,8 +1,13 @@
-const path = require('path');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const CopyPlugin = require('copy-webpack-plugin');
+import path from 'node:path';
+import HtmlWebpackPlugin from 'html-webpack-plugin';
+import CopyPlugin from 'copy-webpack-plugin';
 
-module.exports = {
+const __dirname = import.meta.dirname;
+if (!__dirname) {
+  throw new Error('requires node >20.11 for no particular reason');
+}
+
+export default {
   entry: './web/index.tsx',
   output: {
     path: path.resolve(__dirname, './dist'),
