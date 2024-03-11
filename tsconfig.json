@@ -20,5 +20,5 @@
 
     "isolatedModules": true
   },
-  "include": ["./web/**/*", "./scripts/**/*", "./test/**/*", "./types/**/*"],
+  "include": ["./web/**/*", "./scripts/**/*", "./tests/**/*", "./types/**/*"],
 }

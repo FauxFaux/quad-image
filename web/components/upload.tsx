@@ -3,7 +3,7 @@ import type { JSX } from 'preact';
 import { useEffect } from 'preact/hooks';
 import ContentPasteIcon from 'mdi-preact/ContentPasteIcon';
 
-interface Printer {
+export interface Printer {
   warn: (msg: string) => void;
   error: (err: Error | unknown) => void;
 }
