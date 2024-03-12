@@ -39,6 +39,7 @@ export const mockThumbs = (): PendingItem[] => {
   };
 
   return [
+    { state: 'too-big', ctx: 'dropped', file: mkFile(imgA, 'queued.png') },
     { state: 'queued', ctx: 'dropped', file: mkFile(imgA, 'queued.png') },
     { state: 'starting', ctx: 'pasted', file: mkFile(imgA, 'starting.png') },
     {

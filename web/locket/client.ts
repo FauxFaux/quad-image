@@ -49,7 +49,7 @@ export async function driveUpload(
 ) {
   const formData = new FormData();
   {
-    if (initial.state !== 'queued') {
+    if (initial.state !== 'starting') {
       throw new Error(`Invalid state: ${initial.state}`);
     }
     formData.append('image', initial.file, initial.file.name);

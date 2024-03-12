@@ -7,11 +7,27 @@ import { SignIn, Theme } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
 import { GallerySecret, ImageId } from './types';
+import { KnownImageFormat, readDimensions, readMagic } from './locket/resize';
 
 export type OurFile = Blob & { name?: string };
 
 export type PendingItem = { ctx: string } & (
   | { state: 'queued'; file: OurFile }
+  | { state: 'inspecting'; file: OurFile }
+  | {
+      state: 'too-big';
+      file: OurFile;
+      magic?: KnownImageFormat;
+      w?: number;
+      h?: number;
+    }
+  | {
+      state: 'shrinking';
+      file: OurFile;
+      magic?: KnownImageFormat;
+      w?: number;
+      h?: number;
+    }
   | { state: 'starting'; file: OurFile }
   | { state: 'uploading'; progress: number; file: OurFile }
   | { state: 'done'; base: string }
@@ -111,7 +127,7 @@ export class Home extends Component<unknown, HomeState> {
 
     // non-finished uploads, followed by real items munged to look like uploads
     const displayItems: PendingItem[] = [
-      // ...(require('./mocks/thumbs').mockThumbs()),
+      ...require('./mocks/thumbs').mockThumbs(),
       ...state.uploads
         .filter((u) => u.state !== 'done')
         .map((u) => u)
@@ -228,8 +244,36 @@ export class Home extends Component<unknown, HomeState> {
         return { uploads: newUploads };
       });
     };
+
+    let next: PendingItem | undefined = initial;
     try {
-      const next = await driveUpload(initial, updateState);
+      if (next.state !== 'queued') {
+        throw new Error(`Invalid state: ${initial.state}`);
+      }
+      updateState({ state: 'inspecting', file: next.file, ctx: next.ctx });
+      let magic, width, height;
+      try {
+        magic = await readMagic(next.file);
+      } catch (err) {
+        console.error('reading magic', err);
+      }
+      try {
+        ({ width, height } = await readDimensions(next.file));
+      } catch (err) {
+        console.error('reading dimensions', err);
+      }
+
+      next = {
+        state: 'too-big',
+        file: next.file,
+        ctx: next.ctx,
+        magic,
+        w: width,
+        h: height,
+      };
+      updateState(next);
+
+      next = await driveUpload(next, updateState);
       if (!next) return;
       const base = next.base;
       // two synchronous setState calls must be merged for no flicker

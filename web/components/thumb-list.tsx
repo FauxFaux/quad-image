@@ -147,6 +147,15 @@ export class ThumbUpload extends Component<ThumbUploadProps> {
       );
     }
 
+    if (item.state === 'too-big') {
+      return (
+        <li>
+          {preview(`image too large: ${item.file.size} bytes`)}
+          <div className={'embarrassment'}>&nbsp;</div>
+        </li>
+      );
+    }
+
     const msg = simpleMessage(item);
     if (msg) {
       return (
