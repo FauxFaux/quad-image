@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { readMagic, supportsWebP } from '../../web/locket/resize';
+import { readMagic } from '../../web/locket/resize';
 
 // jsdom's Blob is missing features that work fine in browsers,
 // but node's is fine; work around it here?
@@ -15,10 +15,6 @@ describe('image-ops', () => {
     ['tests/orient.heic', 'image/heic'],
   ])('%s recognised as %s', async (path, expected) => {
     expect(await readMagic(new Blob([assetToBlob(path)]))).toBe(expected);
-  });
-
-  it('jsdom supports webp', () => {
-    expect(supportsWebP()).toBe(false);
   });
 });
 

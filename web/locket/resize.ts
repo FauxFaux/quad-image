@@ -98,7 +98,13 @@ export const resizeToWeb = async (
 };
 
 export const supportsWebP = async () => {
-  const canvas = makeCanvas(1, 1);
+  const canvas = new OffscreenCanvas(1, 1);
+  // this won't realistically fail, but getContext must
+  // have been called for convertToBlob to not fail (Chrome, 2024)
+  const drawable = canvas.getContext('2d');
+  if (!drawable) {
+    throw new Error('OffscreenCanvas does not support 2d context');
+  }
   const blob = await canvas.convertToBlob({ type: 'image/webp' });
   return blob.type === 'image/webp';
 };

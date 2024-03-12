@@ -21,4 +21,5 @@
     "isolatedModules": true
   },
   "include": ["./web/**/*", "./scripts/**/*", "./tests/**/*", "./types/**/*"],
+  "exclude": ["**/*.cy.tsx"],
 }
