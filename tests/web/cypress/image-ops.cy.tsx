@@ -4,6 +4,7 @@ import {
   readDimensions,
   supportsWebP,
 } from '../../../web/locket/resize';
+import exp from 'node:constants';
 
 describe('image ops', () => {
   it('supports webp', async () => {
@@ -21,7 +22,9 @@ describe('image ops', () => {
       const dimensions = await readDimensions(blob);
       expect(dimensions).to.deep.equal({ width: 200, height: 100 });
     });
+  });
 
+  it('encodes webp', () => {
     cy.then(async () => {
       const png = await randomImage(3, 2560, 1440, 'image/png');
       expect(png.size).to.be.greaterThan(10 * MB);
@@ -45,6 +48,29 @@ describe('image ops', () => {
           {(png.size / MB).toFixed(2)}MB &rArr; {(webp.size / MB).toFixed(2)}MB
         </>,
       );
+    });
+  });
+
+  it('fails to open large images', () => {
+    withBlob('tests/30k.png', async (blob) => {
+      let success = false;
+      try {
+        await createImageBitmap(blob);
+        success = true;
+      } catch (e) {
+        expect(e).to.be.an.instanceOf(DOMException);
+      }
+      expect(success).to.be.false;
+    });
+  });
+
+  it.skip('can shrink large images', () => {
+    withBlob('tests/30k.png', async (blob) => {
+      await createImageBitmap(blob, {
+        resizeWidth: 100,
+        resizeHeight: 100,
+        resizeQuality: 'low',
+      });
     });
   });
 });
