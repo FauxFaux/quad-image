@@ -4,7 +4,6 @@ import {
   readDimensions,
   supportsWebP,
 } from '../../../web/locket/resize';
-import exp from 'node:constants';
 
 describe('image ops', () => {
   it('supports webp', async () => {

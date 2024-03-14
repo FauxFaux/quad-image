@@ -24,6 +24,13 @@ module.exports = {
         mode: 'gallery',
       },
     }),
+    new HtmlWebpackPlugin({
+      template: './web/index.ejs',
+      filename: 'image-debug/index.html',
+      templateParameters: {
+        mode: 'image-debug',
+      },
+    }),
     new CopyPlugin({
       patterns: [{ from: 'web/plain/dumb', to: 'dumb' }, { from: 'web/plain/terms', to: 'terms' }],
     }),
