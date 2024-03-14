@@ -42,7 +42,7 @@
     "style-loader": "^3.3.3",
     "svg-url-loader": "^8.0.0",
     "ts-node": "^10.9.2",
-    "typescript": "~5.3.3",
+    "typescript": "~5.4.2",
     "url-loader": "^4.1.0",
     "webpack": "~5.90.3",
     "webpack-cli": "^5.1.0"
@@ -51,7 +51,7 @@
     "history": "^5.3.0",
     "number-to-words": "^1.2.4",
     "preact": "^10.17",
-    "preact-fetching": "^0.1.1",
+    "preact-fetching": "^1.0.0",
     "preact-router": "^4.1",
     "serialize-error": "^11"
   }
