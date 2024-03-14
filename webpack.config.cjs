@@ -1,13 +1,8 @@
-import path from 'node:path';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
-import CopyPlugin from 'copy-webpack-plugin';
+const path = require('node:path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyPlugin = require('copy-webpack-plugin');
 
-const __dirname = import.meta.dirname;
-if (!__dirname) {
-  throw new Error('requires node >20.11 for no particular reason');
-}
-
-export default {
+module.exports = {
   entry: './web/index.tsx',
   output: {
     path: path.resolve(__dirname, './dist'),
@@ -38,8 +33,13 @@ export default {
   devtool: 'source-map',
 
   resolve: {
-    // Add '.ts' and '.tsx' as resolvable extensions.
     extensions: ['.ts', '.tsx', '.js', '.json'],
+
+    // only for cypress (hopefully)
+    alias: {
+      react: 'preact/compat',
+      'react-dom': 'preact/compat',
+    },
   },
 
   module: {

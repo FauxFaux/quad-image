@@ -3,6 +3,7 @@
   "scripts": {
     "build": "webpack --mode=production",
     "test": "jest",
+    "test:component": "cypress run --component",
     "lint": "eslint             'web/**/*.ts*' 'tests/web/**/*.ts*'",
     "lint-fix": "eslint --fix   'web/**/*.ts*' 'tests/web/**/*.ts*'",
     "format": "prettier --write 'web/**/*.ts*' 'tests/web/**/*.ts*'",
@@ -24,8 +25,10 @@
     "@typescript-eslint/parser": "^7.0.2",
     "babel-jest": "^29.7.0",
     "babel-loader": "^9.1.3",
+    "canvas": "^2.11.2",
     "copy-webpack-plugin": "^12",
     "css-loader": "^6.8.1",
+    "cypress": "^13.6.6",
     "eslint": "^8.15.0",
     "eslint-config-prettier": "^9.0.0",
     "html-webpack-plugin": "^5.5.3",

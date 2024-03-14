@@ -1,0 +1,7 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "dom", "cypress", "cypress/react"],
+  },
+  "exclude": []
+}

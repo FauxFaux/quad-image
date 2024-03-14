@@ -6,6 +6,9 @@
   "parserOptions": {
     "project": "./tsconfig.json"
   },
+  "ignorePatterns": [
+    "**/*.cy.tsx"
+  ],
   "plugins": [
     "@typescript-eslint"
   ],
