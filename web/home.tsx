@@ -7,7 +7,12 @@ import { SignIn, Theme } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
 import { GallerySecret, ImageId } from './types';
-import { KnownImageFormat, readDimensions, readMagic } from './locket/resize';
+import {
+  encodeWebP,
+  KnownImageFormat,
+  readDimensions,
+  readMagic,
+} from './locket/resize';
 
 export type OurFile = Blob & { name?: string };
 
@@ -15,18 +20,10 @@ export type PendingItem = { ctx: string } & (
   | { state: 'queued'; file: OurFile }
   | { state: 'inspecting'; file: OurFile }
   | {
-      state: 'too-big';
-      file: OurFile;
-      magic?: KnownImageFormat;
-      w?: number;
-      h?: number;
-    }
-  | {
       state: 'shrinking';
       file: OurFile;
       magic?: KnownImageFormat;
-      w?: number;
-      h?: number;
+      shape?: { width: number; height: number };
     }
   | { state: 'starting'; file: OurFile }
   | { state: 'uploading'; progress: number; file: OurFile }
@@ -251,16 +248,47 @@ export class Home extends Component<unknown, HomeState> {
         throw new Error(`Invalid state: ${initial.state}`);
       }
       updateState({ state: 'inspecting', file: next.file, ctx: next.ctx });
-      let magic, width, height;
+      let magic: KnownImageFormat | undefined;
       try {
         magic = await readMagic(next.file);
       } catch (err) {
-        console.error('reading magic', err);
+        console.warn('reading magic', err);
+        this.printer.warn('unexpected internal error reading magic, ignoring');
       }
-      try {
-        ({ width, height } = await readDimensions(next.file));
-      } catch (err) {
-        console.error('reading dimensions', err);
+
+      const size = next.file.size;
+      const MB = 1024 * 1024;
+      const maxSizeBy = {
+        // unsupported by server, always transcode
+        'image/heic': 0,
+        'image/png': 0.8 * MB,
+        'image/jpeg': 8 * MB,
+        'image/webp': 8 * MB,
+        'image/gif': Infinity,
+      };
+      // unrecognised formats are always re-encoded
+      const reEncode = !magic || size >= maxSizeBy[magic];
+      const targetSize = 1 * MB;
+
+      if (reEncode) {
+        let chosen;
+        try {
+          const image = await createImageBitmap(next.file);
+          try {
+            // 0.7 is supposedly "phone camera quality"
+            for (const quality of [0.8, 0.6, 0.4, 0.2]) {
+              if (chosen) {
+                chosen = null;
+                // give the gc a chance
+                await sleep(30);
+              }
+              chosen = await encodeWebP(image, quality);
+              if (chosen.size < targetSize) break;
+            }
+          } finally {
+            image.close();
+          }
+        } catch (err) {}
       }
 
       next = {
@@ -307,3 +335,5 @@ function userWantsLight() {
     return false;
   }
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
