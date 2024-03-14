@@ -18,13 +18,14 @@ export class ThumbList extends Component<ThumbProps, unknown> {
           // I think I split these because Done is the most common case (by far), but I don't think I like it
           switch (item.state) {
             case 'done':
-              const picking = props.picking?.v
-                ? props.picking.v[item.base] ?? false
-                : undefined;
               return (
                 <ThumbDone
                   bare={item.base}
-                  picking={picking}
+                  picking={
+                    props.picking?.v
+                      ? props.picking.v[item.base] ?? false
+                      : undefined
+                  }
                   setPicked={(v) => {
                     props.picking?.set({ ...props.picking.v, [item.base]: v });
                   }}

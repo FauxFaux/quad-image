@@ -199,7 +199,9 @@ async function guessClipboard() {
     if (resp.state === 'denied') {
       return 'denied';
     }
-  } catch {}
+  } catch {
+    // do nothing; we're intentionally detecting features
+  }
 
   if (!navigator?.clipboard?.read) {
     return 'unavailable';
