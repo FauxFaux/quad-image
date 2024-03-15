@@ -7,7 +7,8 @@
     "lint": "eslint             'web/**/*.ts*' 'tests/web/**/*.ts*'",
     "lint-fix": "eslint --fix   'web/**/*.ts*' 'tests/web/**/*.ts*'",
     "format": "prettier --write 'web/**/*.ts*' 'tests/web/**/*.ts*'",
-    "watch": "webpack --watch --mode=development"
+    "watch": "webpack --watch --mode=development",
+    "bundle-size": "webpack --mode=production --profile --json > dist/stats.json && webpack-bundle-analyzer dist/stats.json"
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.22.5",
@@ -45,6 +46,7 @@
     "typescript": "~5.4.2",
     "url-loader": "^4.1.0",
     "webpack": "~5.90.3",
+    "webpack-bundle-analyzer": "^4.10.1",
     "webpack-cli": "^5.1.0"
   },
   "dependencies": {

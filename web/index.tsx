@@ -3,7 +3,6 @@ import { render } from 'preact';
 import { serializeError } from 'serialize-error';
 import { Gallery } from './gallery';
 import { Home } from './home';
-import { ImageDebug } from './image-debug';
 
 export function init(element: HTMLElement, mode: string | null) {
   element.innerHTML = 'JS App booting...';
@@ -13,8 +12,11 @@ export function init(element: HTMLElement, mode: string | null) {
     switch (mode) {
       case 'gallery':
         return render(<Gallery />, element);
-      case 'image-debug':
+      case 'image-debug': {
+        // facilitate splitting off the dssim wasm, which bundle-analyze doesn't understand
+        const { ImageDebug } = await import('./image-debug');
         return render(<ImageDebug />, element);
+      }
       default:
         return render(<Home />, element);
     }
