@@ -334,11 +334,8 @@ mod tests {
     #[test]
     fn sixteen() {
         let png = im(include_bytes!("../tests/16-bit.png"));
-        png.write_to(
-            &mut io::Cursor::new(vec![]),
-            image::ImageOutputFormat::Jpeg(40),
-        )
-        .expect("able to write a loaded image, even if it was naughty");
+        png.write_to(&mut io::Cursor::new(vec![]), ImageFormat::Jpeg)
+            .expect("able to write a loaded image, even if it was naughty");
     }
 
     #[test]
@@ -348,10 +345,7 @@ mod tests {
             ImageFormat::Png,
         )
         .unwrap();
-        match png.write_to(
-            &mut io::Cursor::new(vec![]),
-            image::ImageOutputFormat::Jpeg(40),
-        ) {
+        match png.write_to(&mut io::Cursor::new(vec![]), ImageFormat::Jpeg) {
             Ok(_) => panic!("woo, image now supports this, delete down_to_8bit maybe"),
             Err(ImageError::Unsupported(_)) => (),
             Err(other) => panic!("unexpected failure: {:?}", other),

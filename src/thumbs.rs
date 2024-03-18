@@ -1,10 +1,11 @@
 use std::fs;
-use std::io::Read;
+use std::io::{BufWriter, Read};
 use std::path::Path;
 
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
+use image::codecs::jpeg::JpegEncoder;
 use rayon::prelude::*;
 
 fn thumb_name(image_id: &str) -> String {
@@ -51,9 +52,14 @@ pub fn thumbnail(image_id: &str) -> Result<String> {
     let image = image::load_from_memory(&bytes)?;
     let shrunk = image.thumbnail(320, 160);
 
-    let mut temp = tempfile_fast::PersistableTempFile::new_in("e")?;
+    let temp = tempfile_fast::PersistableTempFile::new_in("e")?;
+    let mut buf = BufWriter::new(temp);
 
-    shrunk.write_to(&mut temp, image::ImageOutputFormat::Jpeg(40))?;
+    let encoder = JpegEncoder::new_with_quality(&mut buf, 40);
+    shrunk.write_with_encoder(encoder)?;
+
+    // into_inner() is documented to flush
+    let temp = buf.into_inner()?;
 
     temp.persist_noclobber(&thumb_name).map_err(|e| e.error)?;
     crate::ingest::make_readable(&thumb_name)?;
