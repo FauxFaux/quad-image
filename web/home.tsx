@@ -7,11 +7,14 @@ import { SignIn, Theme } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
 import { GallerySecret, ImageId } from './types';
+import { encodeWebP, readMagic } from './locket/resize';
 
 export type OurFile = Blob & { name?: string };
 
 export type PendingItem = { ctx: string } & (
   | { state: 'queued'; file: OurFile }
+  | { state: 'resizing'; file: OurFile }
+  | { state: 'ready'; file: OurFile; originalSize: number | undefined }
   | { state: 'starting'; file: OurFile }
   | { state: 'uploading'; progress: number; file: OurFile }
   | { state: 'done'; base: string }
@@ -229,7 +232,31 @@ export class Home extends Component<unknown, HomeState> {
       });
     };
     try {
-      const next = await driveUpload(initial, updateState);
+      let next: PendingItem | undefined = initial;
+      if ('queued' !== next?.state) {
+        throw new Error('should be in starting state');
+      }
+
+      const magic = await readMagic(next.file);
+
+      if (next.file.size > 1024 * 1024 || magic === 'image/heic') {
+        next = {
+          ...next,
+          state: 'resizing',
+        };
+        updateState(next);
+
+        next = await attemptShrinkage(next);
+        updateState(next);
+      } else {
+        next = {
+          ...next,
+          state: 'ready',
+          originalSize: undefined,
+        };
+      }
+
+      next = await driveUpload(next, updateState);
       if (!next) return;
       const base = next.base;
       // two synchronous setState calls must be merged for no flicker
@@ -263,3 +290,51 @@ function userWantsLight() {
     return false;
   }
 }
+
+const attemptShrinkage = async (next: PendingItem): Promise<PendingItem> => {
+  if (next.state !== 'resizing') {
+    throw new Error(`invalid state: ${next.state}`);
+  }
+  const original = next.file;
+
+  await unblock();
+  const image = await createImageBitmap(original);
+
+  let resized;
+  try {
+    await unblock();
+    resized = await encodeWebP(image, 0.8);
+
+    if (resized.size > 5 * 1024 * 1024) {
+      resized = undefined;
+      await unblock();
+      resized = await encodeWebP(image, 0.5);
+    }
+
+    if (resized.size > 9 * 1024 * 1024) {
+      resized = undefined;
+      await unblock();
+      resized = await encodeWebP(image, 0.2);
+    }
+  } finally {
+    image.close();
+  }
+
+  await unblock();
+  const saveAtLeast = 0.1; // 0.1 = 10%
+  if (resized.size > original.size * (1 - saveAtLeast)) {
+    resized = original;
+  }
+
+  return {
+    ...next,
+    state: 'ready',
+    file: resized.size < original.size * 0.9 ? resized : original,
+    originalSize: original.size,
+  };
+};
+
+const unblock = async () => sleep(15);
+
+const sleep = async (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));

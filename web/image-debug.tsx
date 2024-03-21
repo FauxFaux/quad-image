@@ -37,8 +37,13 @@ async function loadImage(
   const arr = ct!.getImageData(0, 0, image.width, image.height);
   cvs.width = 0;
   cvs.height = 0;
-  const di = dssim.createImageRgba(d, arr.data, image.width, image.height);
-  cleanup(() => dssim.freeImage(di));
+  let di: dssim.DssimImage | undefined = undefined;
+  try {
+    di = dssim.createImageRgba(d, arr.data, image.width, image.height);
+    cleanup(() => dssim.freeImage(di!));
+  } catch (err) {
+    console.error('loading original into dssim', err);
+  }
   return { image, di };
 }
 
@@ -102,7 +107,7 @@ export const ImageDebug = () => {
           const elapsed = performance.now() - start;
           await sleep(15);
 
-          let comp: number;
+          let comp: number | undefined;
           try {
             const cleanupsHere: (() => void)[] = [];
             const { image: iThis, di: dThis } = await loadImage(enc, d, (c) =>
@@ -111,7 +116,7 @@ export const ImageDebug = () => {
             iThis.close();
 
             try {
-              comp = dssim.compare(d, dOriginal, dThis);
+              comp = dOriginal && dThis && dssim.compare(d, dOriginal, dThis);
             } finally {
               for (const c of cleanupsHere) {
                 c();

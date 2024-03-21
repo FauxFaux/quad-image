@@ -13,6 +13,7 @@ describe('image-ops', () => {
     ['tests/orient.jpg', 'image/jpeg'],
     ['tests/orient.webp', 'image/webp'],
     ['tests/orient.heic', 'image/heic'],
+    ['tests/prefix-only-invalid-weird-magic.heic', 'image/heic'],
   ])('%s recognised as %s', async (path, expected) => {
     expect(await readMagic(new Blob([assetToBlob(path)]))).toBe(expected);
   });

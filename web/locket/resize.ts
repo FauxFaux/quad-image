@@ -41,6 +41,11 @@ export const readMagic = async (
       prefix.slice(16),
       // heic
       [0x68, 0x65, 0x69, 0x63],
+    ) ||
+    startsWith(
+      prefix.slice(16),
+      // mif1heic
+      [0x6d, 0x69, 0x66, 0x31, 0x68, 0x65, 0x69, 0x63],
     )
   ) {
     return 'image/heic';

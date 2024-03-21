@@ -185,6 +185,10 @@ const simpleMessage = (item: PendingItem) => {
   switch (item.state) {
     case 'queued':
       return 'queued';
+    case 'resizing':
+      return 'resizing';
+    case 'ready':
+      return 'ready';
     case 'starting':
       return 'starting';
     case 'uploading': {
