@@ -51,6 +51,7 @@ pub fn thumbnail(image_id: &str) -> Result<String> {
 
     let image = image::load_from_memory(&bytes)?;
     let shrunk = image.thumbnail(320, 160);
+    let shrunk = shrunk.into_rgb8();
 
     let temp = tempfile_fast::PersistableTempFile::new_in("e")?;
     let mut buf = BufWriter::new(temp);

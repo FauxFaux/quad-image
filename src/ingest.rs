@@ -7,8 +7,9 @@ use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
-use image::imageops;
 use image::ImageFormat;
+use image::ImageFormat::Jpeg;
+use image::{imageops, DynamicImage};
 use rand::distributions::Alphanumeric;
 use rand::distributions::Distribution;
 use tempfile_fast::PersistableTempFile;
@@ -108,9 +109,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
     };
 
     let mut temp = temp_file()?;
-    loaded
-        .write_to(temp.as_mut(), target_format)
-        .with_context(|| anyhow!("save"))?;
+    write_image(temp.as_mut(), loaded.clone(), target_format).with_context(|| anyhow!("save"))?;
 
     if target_format == Png {
         // Chrome seems to convert everything pasted to png, even if it's huge.
@@ -131,8 +130,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
 
             target_format = Jpeg;
 
-            loaded
-                .write_to(temp.as_mut(), target_format)
+            write_image(temp.as_mut(), loaded, target_format)
                 .with_context(|| anyhow!("save attempt 2"))?;
 
             let jpeg_length = temp
@@ -152,6 +150,22 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
     };
 
     write_out(temp, ext)
+}
+
+fn write_image(
+    dest: &mut (impl io::Write + Seek),
+    im: DynamicImage,
+    target_format: ImageFormat,
+) -> Result<()> {
+    let im = match target_format {
+        Jpeg => DynamicImage::from(im.into_rgb8()),
+        _ => im,
+    };
+
+    im.write_to(dest, target_format)
+        .with_context(|| anyhow!("save"))?;
+
+    Ok(())
 }
 
 fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
@@ -245,8 +259,11 @@ fn down_to_8bit(image: image::DynamicImage) -> image::DynamicImage {
 
 #[cfg(test)]
 mod tests {
-    use image::{ImageError, ImageFormat};
     use std::{fs, io};
+
+    use image::{ImageError, ImageFormat};
+
+    use super::write_image;
 
     #[test]
     fn exif() {
@@ -334,7 +351,7 @@ mod tests {
     #[test]
     fn sixteen() {
         let png = im(include_bytes!("../tests/16-bit.png"));
-        png.write_to(&mut io::Cursor::new(vec![]), ImageFormat::Jpeg)
+        write_image(&mut io::Cursor::new(vec![]), png, ImageFormat::Jpeg)
             .expect("able to write a loaded image, even if it was naughty");
     }
 
