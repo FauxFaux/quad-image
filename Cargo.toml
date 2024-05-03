@@ -32,9 +32,7 @@ sha2 = "0.10"
 tempfile-fast = "0.3"
 
 [dependencies.image]
-git = "https://github.com/image-rs/image"
-# fix for https://github.com/image-rs/image/issues/2173 which they apparently don't consider serious enough to release
-rev = "c193acbf7b745b071f5617e269f0955ee97c25d3"
+version = "0.25.1"
 # features -= "hdr", "dxt", "dds"
 default-features = false
 features = ["gif", "jpeg", "ico", "png", "pnm", "tga", "tiff", "webp", "bmp"]
