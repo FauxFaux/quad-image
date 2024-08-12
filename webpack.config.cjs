@@ -56,14 +56,10 @@ module.exports = {
         test: /\.tsx?$/,
         use: [{ loader: 'babel-loader' }],
         exclude: /node_modules/,
-      },
-      {
-        test: /\.css$/i,
-        use: ['style-loader', 'css-loader'],
-      },
+      }
     ],
   },
   experiments: {
-    asyncWebAssembly: true,
+    futureDefaults: true,
   }
 };

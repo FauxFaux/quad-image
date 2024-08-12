@@ -23,7 +23,7 @@ export class ThumbList extends Component<ThumbProps, unknown> {
                   bare={item.base}
                   picking={
                     props.picking?.v
-                      ? props.picking.v[item.base] ?? false
+                      ? (props.picking.v[item.base] ?? false)
                       : undefined
                   }
                   setPicked={(v) => {
