@@ -14,8 +14,8 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-axum = { version = "0.7", features = ["multipart"] }
-axum-macros = "0.4"
+axum = { version = "0.8", features = ["multipart"] }
+axum-macros = "0.5"
 base64 = "0.22"
 gif = "0.13"
 hmac = "0.12"
@@ -28,7 +28,7 @@ regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-tower-http = { version = "0.5", features = ["fs"] }
+tower-http = { version = "0.6", features = ["fs"] }
 tempfile-fast = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 

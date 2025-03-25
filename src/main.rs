@@ -345,7 +345,7 @@ async fn main() -> anyhow::Result<()> {
     use axum::routing::{get, post, put};
     let app = axum::Router::new()
         .route("/api/upload", post(upload))
-        .route("/api/gallery/:public", get(gallery_get))
+        .route("/api/gallery/{public}", get(gallery_get))
         .route("/api/gallery", put(gallery_put))
         .layer(DefaultBodyLimit::max(10 * MB))
         .with_state(Arc::clone(&ctx))
