@@ -4,13 +4,13 @@ pub mod ingest;
 mod tests;
 mod thumbs;
 
+use std::future::IntoFuture;
 use std::io::Read;
 use std::io::Write;
 use std::net::{SocketAddr, ToSocketAddrs as _};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::{env, fs, path};
-use std::future::IntoFuture;
 
 use anyhow::{anyhow, Context, Error, Result};
 use axum::body::Bytes;
@@ -125,7 +125,7 @@ fn error_object(message: &str) -> Json<Value> {
     ] }))
 }
 
-fn json_api_validate_obj(obj: &serde_json::Map<String, serde_json::Value>) {
+fn json_api_validate_obj(obj: &serde_json::Map<String, Value>) {
     assert!(obj.contains_key("id"), "id is mandatory in {:?}", obj);
     assert!(obj.contains_key("type"), "type is mandatory in {:?}", obj);
 }
@@ -133,7 +133,7 @@ fn json_api_validate_obj(obj: &serde_json::Map<String, serde_json::Value>) {
 /// panic if something isn't valid json-api.
 /// panic is fine because the structure should be static in code
 /// could be only tested at debug time..
-fn json_api_validate(obj: &serde_json::Value) {
+fn json_api_validate(obj: &Value) {
     if let Some(obj) = obj.as_object() {
         json_api_validate_obj(obj)
     } else if let Some(list) = obj.as_array() {
@@ -304,13 +304,9 @@ struct Ctx {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    fs::create_dir_all("e").with_context(|| {
-        anyhow!(
-            "creating storage directory inside {:?}",
-            std::env::current_dir()
-        )
-    })?;
+async fn main() -> Result<()> {
+    fs::create_dir_all("e")
+        .with_context(|| anyhow!("creating storage directory inside {:?}", env::current_dir()))?;
     let conn = gallery_db()?;
     gallery::migrate_gallery(&conn)?;
     thumbs::generate_all_thumbs()?;
@@ -357,9 +353,13 @@ async fn main() -> anyhow::Result<()> {
         let app = app.clone();
         println!("starting server on http://{:?}", addr);
 
-        let server = tokio::net::TcpListener::bind(&addr).await
+        let server = tokio::net::TcpListener::bind(&addr)
+            .await
             .with_context(|| anyhow!("binding to {addr:?}"))?;
-        let server = axum::serve(server, app.into_make_service_with_connect_info::<SocketAddr>());
+        let server = axum::serve(
+            server,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        );
         servers.spawn(server.into_future());
     }
 
