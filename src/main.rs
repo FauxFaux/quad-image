@@ -287,7 +287,7 @@ fn app_secret() -> Result<[u8; 32], Error> {
     if path.exists() {
         fs::File::open(path)?.read_exact(&mut buf)?;
     } else {
-        rand::thread_rng().fill_bytes(&mut buf);
+        rand::rng().fill_bytes(&mut buf);
         fs::File::create(path)?.write_all(&buf)?;
     }
     Ok(buf)

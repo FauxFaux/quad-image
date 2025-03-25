@@ -22,7 +22,7 @@ hmac = "0.12"
 kamadak-exif = "0.6"
 lazy_static = "1"
 libc = "0.2"
-rand = "0.8"
+rand = "0.9"
 rayon = "1"
 regex = "1"
 serde = { version = "1", features = ["derive"] }

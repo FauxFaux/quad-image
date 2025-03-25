@@ -10,8 +10,8 @@ use anyhow::Result;
 use image::ImageFormat;
 use image::ImageFormat::Jpeg;
 use image::{imageops, DynamicImage};
-use rand::distributions::Alphanumeric;
-use rand::distributions::Distribution;
+use rand::distr::Alphanumeric;
+use rand::distr::Distribution;
 use tempfile_fast::PersistableTempFile;
 
 pub fn make_readable(path: &str) -> io::Result<()> {
@@ -169,7 +169,7 @@ fn write_image(
 }
 
 fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
-    let mut rand = rand::thread_rng();
+    let mut rand = rand::rng();
 
     for _ in 0..32768 {
         let rand_bit: String = Alphanumeric
