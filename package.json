@@ -20,7 +20,7 @@
     "@testing-library/preact": "^3.2.3",
     "@tsconfig/recommended": "^1.0.3",
     "@types/jquery": "^3.3.31",
-    "@types/node": "^20.11.2",
+    "@types/node": "^22",
     "@types/number-to-words": "^1.2.1",
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
@@ -42,9 +42,9 @@
     "ts-node": "^10.9.2",
     "typescript": "~5.8",
     "url-loader": "^4.1.0",
-    "webpack": "~5.97",
+    "webpack": "~5.99",
     "webpack-bundle-analyzer": "^4.10.1",
-    "webpack-cli": "^5.1.0"
+    "webpack-cli": "^6"
   },
   "dependencies": {
     "history": "^5.3.0",
