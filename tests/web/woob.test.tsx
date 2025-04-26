@@ -1,24 +1,20 @@
-import '@testing-library/jest-dom';
-import '@testing-library/jest-dom/jest-globals';
-
-import { describe, test, expect, jest } from '@jest/globals';
+import { describe, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/preact';
 import { Printer, Upload } from '../../web/components/upload';
 
 describe('Upload', () => {
   test('can detect clipboard availability in jsdom', () => {
     const printer = mockPrinter();
-    const mockUpload = jest.fn();
+    const mockUpload = vi.fn();
     render(<Upload printer={printer} triggerUploads={mockUpload} />);
-    expect(
-      screen.getByTitle('pull image(s) directly from the clipboard'),
-    ).toBeInTheDocument();
+    // throws on absent
+    screen.getByTitle('pull image(s) directly from the clipboard');
   });
 });
 
 const mockPrinter = () => {
   return {
-    error: jest.fn<Printer['error']>(),
-    warn: jest.fn<Printer['warn']>(),
+    error: vi.fn<Printer['error']>(),
+    warn: vi.fn<Printer['warn']>(),
   };
 };

@@ -1,4 +1,3 @@
-import globals from 'globals';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import pluginJs from '@eslint/js';
 import pluginVitest from '@vitest/eslint-plugin';
@@ -6,7 +5,6 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   globalIgnores(['**/*.cy.tsx']),
-  { languageOptions: { globals: globals.node } },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

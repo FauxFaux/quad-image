@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it } from 'vitest';
 import { readMagic } from '../../web/locket/resize';
 
 // jsdom's Blob is missing features that work fine in browsers,
