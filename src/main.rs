@@ -36,6 +36,7 @@ type Caller<'h> = (SocketAddr, Option<&'h HeaderValue>);
 struct UploadForm {
     image: Bytes,
     return_json: bool,
+    return_redirect: bool,
     return_full_url: bool,
 }
 
@@ -47,6 +48,7 @@ enum UploadFormStatus {
 async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
     let mut image: Option<Bytes> = None;
     let mut return_json: bool = false;
+    let mut return_redirect: bool = false;
     let mut return_full_url: bool = false;
     while let Some(field) = body.next_field().await? {
         let name = field
@@ -61,6 +63,15 @@ async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
                 b"true" => return_json = true,
                 b"false" => return_json = false,
                 _ => return Ok(UploadFormStatus::BadRequest("invalid return_json value")),
+            },
+            "return_redirect" => match &*data {
+                b"true" => return_redirect = true,
+                b"false" => return_redirect = false,
+                _ => {
+                    return Ok(UploadFormStatus::BadRequest(
+                        "invalid return_redirect value",
+                    ))
+                }
             },
             "return_full_url" => match &*data {
                 b"true" => return_full_url = true,
@@ -79,6 +90,7 @@ async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
         Some(image) => Ok(UploadFormStatus::Form(UploadForm {
             image,
             return_json,
+            return_redirect,
             return_full_url,
         })),
         None => Ok(UploadFormStatus::BadRequest("no image provided")),
@@ -107,10 +119,12 @@ async fn upload(
                 return nh(log_error("thumbnailing just written", &caller, &e));
             }
 
-            //  return_json: 200, Location Header, json body
-            // !return_json: 303, Location header, text body
+            let status = if form.return_redirect {
+                StatusCode::SEE_OTHER
+            } else {
+                StatusCode::OK
+            };
 
-            let mut status = StatusCode::OK;
             let mut map = HeaderMap::new();
             let url = if form.return_full_url {
                 let host = match headers
@@ -126,11 +140,13 @@ async fn upload(
                 image_id
             };
 
-            // relative to api/upload
-            map.insert(
-                "Location",
-                HeaderValue::from_str(&url).expect("controlled string format"),
-            );
+            if form.return_redirect {
+                // relative to api/upload
+                map.insert(
+                    "Location",
+                    HeaderValue::from_str(&url).expect("controlled string format"),
+                );
+            }
 
             let resp = if form.return_json {
                 map.insert(
@@ -143,7 +159,6 @@ async fn upload(
                     "Content-Type",
                     HeaderValue::from_static("text/plain; charset=utf-8"),
                 );
-                status = StatusCode::SEE_OTHER;
                 url.into_response()
             };
 
