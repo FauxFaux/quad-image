@@ -16,6 +16,7 @@ use anyhow::{anyhow, Context, Error, Result};
 use axum::body::Bytes;
 use axum::extract::{ConnectInfo, DefaultBodyLimit, Multipart, Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use lazy_static::lazy_static;
 use rand::RngCore;
@@ -35,6 +36,7 @@ type Caller<'h> = (SocketAddr, Option<&'h HeaderValue>);
 struct UploadForm {
     image: Bytes,
     return_json: bool,
+    return_full_url: bool,
 }
 
 enum UploadFormStatus {
@@ -45,6 +47,7 @@ enum UploadFormStatus {
 async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
     let mut image: Option<Bytes> = None;
     let mut return_json: bool = false;
+    let mut return_full_url: bool = false;
     while let Some(field) = body.next_field().await? {
         let name = field
             .name()
@@ -59,12 +62,25 @@ async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
                 b"false" => return_json = false,
                 _ => return Ok(UploadFormStatus::BadRequest("invalid return_json value")),
             },
+            "return_full_url" => match &*data {
+                b"true" => return_full_url = true,
+                b"false" => return_full_url = false,
+                _ => {
+                    return Ok(UploadFormStatus::BadRequest(
+                        "invalid return_full_url value",
+                    ))
+                }
+            },
             _ => (),
         }
     }
 
     match image {
-        Some(image) => Ok(UploadFormStatus::Form(UploadForm { image, return_json })),
+        Some(image) => Ok(UploadFormStatus::Form(UploadForm {
+            image,
+            return_json,
+            return_full_url,
+        })),
         None => Ok(UploadFormStatus::BadRequest("no image provided")),
     }
 }
@@ -73,10 +89,10 @@ async fn upload(
     ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     body: Multipart,
-) -> (StatusCode, HeaderMap, Json<Value>) {
+) -> (StatusCode, HeaderMap, Response) {
     let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
 
-    let nh = |(s, b): (StatusCode, Json<Value>)| (s, HeaderMap::new(), b);
+    let nh = |(s, b): (StatusCode, Json<Value>)| (s, HeaderMap::new(), b.into_response());
     let form = match extract_image_form(body).await {
         Ok(UploadFormStatus::Form(form)) => form,
         Ok(UploadFormStatus::BadRequest(message)) => return nh(bad_request(message)),
@@ -91,27 +107,47 @@ async fn upload(
                 return nh(log_error("thumbnailing just written", &caller, &e));
             }
 
-            //  return_json: 200, no headers,      json body
-            // !return_json: 303, Location header, json body
+            //  return_json: 200, Location Header, json body
+            // !return_json: 303, Location header, text body
 
+            let mut status = StatusCode::OK;
             let mut map = HeaderMap::new();
-            if form.return_json {
-                // relative to api/upload
+            let url = if form.return_full_url {
+                let host = match headers
+                    .get("X-Forwarded-Host")
+                    .or_else(|| headers.get("host"))
+                    .and_then(|h| h.to_str().ok())
+                {
+                    Some(host) => host,
+                    None => return nh(bad_request("missing host header")),
+                };
+                format!("https://{host}/{image_id}")
+            } else {
+                image_id
+            };
+
+            // relative to api/upload
+            map.insert(
+                "Location",
+                HeaderValue::from_str(&url).expect("controlled string format"),
+            );
+
+            let resp = if form.return_json {
                 map.insert(
-                    "Location",
-                    HeaderValue::from_str(&format!("../{}", image_id))
-                        .expect("controlled string format"),
+                    "Content-Type",
+                    HeaderValue::from_static("application/vnd.api+json; charset=utf-8"),
                 );
-            }
-            (
-                if form.return_json {
-                    StatusCode::OK
-                } else {
-                    StatusCode::SEE_OTHER
-                },
-                map,
-                data_response(resource_object(image_id, "image")),
-            )
+                data_response(resource_object(url, "image")).into_response()
+            } else {
+                map.insert(
+                    "Content-Type",
+                    HeaderValue::from_static("text/plain; charset=utf-8"),
+                );
+                status = StatusCode::SEE_OTHER;
+                url.into_response()
+            };
+
+            (status, map, resp)
         }
         Err(e) => nh(log_error("storing image", &caller, &e)),
     }
