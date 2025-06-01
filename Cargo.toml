@@ -1,7 +1,7 @@
 [package]
 authors = ["Chris West (Faux) <git@goeswhere.com>"]
 name = "quad-image"
-version = "0.1.1"
+version = "0.2.0"
 
 description = "An image host"
 repository = "https://github.com/FauxFaux/quad-image"
