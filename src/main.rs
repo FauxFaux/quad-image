@@ -18,18 +18,12 @@ use axum::extract::{ConnectInfo, DefaultBodyLimit, Multipart, Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use rand::RngCore;
+use regex::Regex;
 use serde_json::{json, Value};
 use tokio::task::JoinSet;
 use tower_http::services::ServeDir;
-
-lazy_static! {
-    static ref IMAGE_ID: regex::Regex =
-        regex::Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg|gif)$").expect("static regex");
-    static ref GALLERY_SPEC: regex::Regex =
-        regex::Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").expect("static regex");
-}
 
 type Caller<'h> = (SocketAddr, Option<&'h HeaderValue>);
 
@@ -253,10 +247,13 @@ async fn gallery_put(
     let gallery_input = body.data.attributes.gallery;
     let raw_images = body.data.attributes.images;
 
+    static GALLERY_SPEC: Lazy<Regex> =
+        Lazy::new(|| Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").expect("static regex"));
+
     let mut images = Vec::with_capacity(raw_images.len());
 
     for image in &raw_images {
-        if !IMAGE_ID.is_match(image) {
+        if !is_image_id(image) {
             return bad_request("invalid image id");
         }
 
@@ -289,11 +286,17 @@ async fn gallery_put(
     }
 }
 
+pub fn is_image_id(image: &str) -> bool {
+    static RE: Lazy<Regex> =
+        Lazy::new(|| Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg|gif)$").expect("static regex"));
+    RE.is_match(image)
+}
+
 #[test]
 fn validate_image_id() {
-    assert!(IMAGE_ID.is_match("e/abcdefghij.png"));
-    assert!(!IMAGE_ID.is_match(" e/abcdefghij.png"));
-    assert!(!IMAGE_ID.is_match("e/abcdefghi.png"));
+    assert!(is_image_id("e/abcdefghij.png"));
+    assert!(!is_image_id(" e/abcdefghij.png"));
+    assert!(!is_image_id("e/abcdefghi.png"));
 }
 
 #[axum_macros::debug_handler]

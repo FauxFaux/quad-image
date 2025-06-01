@@ -19,7 +19,7 @@ pub fn generate_all_thumbs() -> Result<()> {
         let path = path?;
 
         if let Some(s) = path.path().to_str() {
-            if !crate::IMAGE_ID.is_match(s) {
+            if !crate::is_image_id(s) {
                 continue;
             }
 

@@ -3,7 +3,7 @@
 FROM clux/muslrust:stable AS build-rust
 
 # download the index
-RUN cargo search lazy_static
+RUN cargo search rand
 RUN cargo install cargo-auditable
 ADD Cargo.* ./
 RUN mkdir src && echo 'fn main() {}' > src/main.rs && cargo fetch
@@ -12,7 +12,7 @@ ADD . .
 RUN cargo auditable build --release
 
 
-FROM node:20-alpine AS build-js
+FROM node:22-alpine AS build-js
 WORKDIR /volume
 ADD package.json package-lock.json ./
 RUN npm ci
