@@ -10,6 +10,13 @@ A very, very simple image hosting API, plus support files.
  * The image is saved to the local disc.
  * The URL of the image is returned.
 
+Feature creep:
+
+ * Image thumbnails are produced
+ * Users can append images to galleries (if they know the secret),
+    and list images in the gallery (if they know the less secret)
+ * There's also a UI.
+
 ### Building
 
 `quad-image` probably only works on libc/Unix operating systems.
