@@ -10,34 +10,32 @@ interface ThumbProps {
   picking?: Prop<Record<ImageId, boolean> | undefined>;
 }
 
-export class ThumbList extends Component<ThumbProps, unknown> {
-  render(props: Readonly<ThumbProps>) {
-    return (
-      <ul class={'thumb--frame'}>
-        {props.items.map((item) => {
-          // I think I split these because Done is the most common case (by far), but I don't think I like it
-          switch (item.state) {
-            case 'done':
-              return (
-                <ThumbDone
-                  bare={item.base}
-                  picking={
-                    props.picking?.v
-                      ? (props.picking.v[item.base] ?? false)
-                      : undefined
-                  }
-                  setPicked={(v) => {
-                    props.picking?.set({ ...props.picking.v, [item.base]: v });
-                  }}
-                />
-              );
-            default:
-              return <ThumbUpload item={item} />;
-          }
-        })}
-      </ul>
-    );
-  }
+export function ThumbList(props: ThumbProps) {
+  return (
+    <ul class={'thumb--frame'}>
+      {props.items.map((item) => {
+        // I think I split these because Done is the most common case (by far), but I don't think I like it
+        switch (item.state) {
+          case 'done':
+            return (
+              <ThumbDone
+                bare={item.base}
+                picking={
+                  props.picking?.v
+                    ? (props.picking.v[item.base] ?? false)
+                    : undefined
+                }
+                setPicked={(v) => {
+                  props.picking?.set({ ...props.picking.v, [item.base]: v });
+                }}
+              />
+            );
+          default:
+            return <ThumbUpload item={item} />;
+        }
+      })}
+    </ul>
+  );
 }
 
 interface ThumbDoneProps {
