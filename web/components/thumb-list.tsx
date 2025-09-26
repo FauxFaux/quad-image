@@ -1,4 +1,5 @@
 import { Component, JSX } from 'preact';
+import { useState } from 'preact/hooks';
 import type { ImageId } from '../types';
 import type { PendingItem } from '../home';
 import type { Prop } from './sign-in';
@@ -43,68 +44,65 @@ interface ThumbDoneProps {
   picking?: boolean;
   setPicked?: (picked: boolean) => void;
 }
-interface ThumbDoneState {
-  copied?: boolean;
-}
 
-export class ThumbDone extends Component<ThumbDoneProps, ThumbDoneState> {
-  doCopy = async () => {
+export function ThumbDone(props: ThumbDoneProps) {
+  const [copied, setCopied] = useState<boolean>(false);
+
+  const doCopy = async () => {
     try {
-      const { bare } = this.props;
+      const { bare } = props;
       const url = new URL(bare, document.location.href);
       await navigator.clipboard.writeText(url.href);
-      this.setState({ copied: true });
+      setCopied(true);
     } catch (err) {
       alert('Failed to copy to clipboard: ' + err);
     }
   };
 
-  clearCopy = () => {
-    this.setState({ copied: false });
+  const clearCopy = () => {
+    setCopied(false);
   };
 
-  render(props: Readonly<ThumbDoneProps>, state: Readonly<ThumbDoneState>) {
-    const bare = props.bare;
-    let footer: JSX.Element;
-    if (props.picking === undefined) {
-      footer = (
-        <button
-          className={`btn btn-${!state.copied ? 'secondary' : 'success'}`}
-          onClick={this.doCopy}
-          onMouseLeave={this.clearCopy}
-        >
-          {!state.copied ? 'copy' : 'copied!'}
-        </button>
-      );
-    } else {
-      const checked = props.picking;
-      const label = checked ? (
-        <>
-          <CheckboxMarkedCircleOutlineIcon /> selected
-        </>
-      ) : (
-        <>
-          <CheckboxBlankCircleOutlineIcon /> select
-        </>
-      );
-      footer = (
-        <button
-          className={`btn btn-${!checked ? 'secondary' : 'success'}`}
-          onClick={() => props.setPicked?.(!checked)}
-        >
-          {label}
-        </button>
-      );
-    }
-    return (
-      <li>
-        <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
-          <img src={`${bare}.thumb.jpg`} loading={'lazy'} />
-        </a>
-        {footer}
-      </li>
+  const bare = props.bare;
+  let footer: JSX.Element;
+  if (props.picking === undefined) {
+    footer = (
+      <button
+        className={`btn btn-${!copied ? 'secondary' : 'success'}`}
+        onClick={doCopy}
+        onMouseLeave={clearCopy}
+      >
+        {!copied ? 'copy' : 'copied!'}
+      </button>
+    );
+  } else {
+    const checked = props.picking;
+    const label = checked ? (
+      <>
+        <CheckboxMarkedCircleOutlineIcon /> selected
+      </>
+    ) : (
+      <>
+        <CheckboxBlankCircleOutlineIcon /> select
+      </>
+    );
+    footer = (
+      <button
+        className={`btn btn-${!checked ? 'secondary' : 'success'}`}
+        onClick={() => props.setPicked?.(!checked)}
+      >
+        {label}
+      </button>
     );
   }
+  return (
+    <li>
+      <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
+        <img src={`${bare}.thumb.jpg`} loading={'lazy'} />
+      </a>
+      {footer}
+    </li>
+  );
 }
 
 interface ThumbUploadProps {
