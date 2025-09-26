@@ -1,5 +1,6 @@
 {
   "name": "quad-image",
+  "type": "module",
   "scripts": {
     "build": "webpack --mode=production",
     "test": "vitest",
