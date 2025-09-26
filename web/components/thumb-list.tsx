@@ -1,4 +1,4 @@
-import { Component, JSX } from 'preact';
+import { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import type { ImageId } from '../types';
 import type { PendingItem } from '../home';
@@ -109,72 +109,70 @@ interface ThumbUploadProps {
   item: PendingItem;
 }
 
-export class ThumbUpload extends Component<ThumbUploadProps> {
-  render(props: Readonly<ThumbUploadProps>) {
-    const item = props.item;
-    if (item.state === 'done') {
-      //return <ThumbDone bare={item.base} />;
-      throw new Error('ThumbUpload should not be used for done items');
-    }
+export function ThumbUpload(props: ThumbUploadProps) {
+  const item = props.item;
+  if (item.state === 'done') {
+    //return <ThumbDone bare={item.base} />;
+    throw new Error('ThumbUpload should not be used for done items');
+  }
 
-    const preview = (msg: string) => (
-      <div class={'thumb--frame-imgbox thumb--frame-message'}>
-        <img
-          src={URL.createObjectURL(item.file)}
-          alt={item.file.name ? `preview of ${item.file.name}` : 'preview'}
-        />
-        <span>
-          {item.ctx}
-          <br />
-          {item.file.name}
-          <br />
-          {msg}
-        </span>
-      </div>
-    );
+  const preview = (msg: string) => (
+    <div class={'thumb--frame-imgbox thumb--frame-message'}>
+      <img
+        src={URL.createObjectURL(item.file)}
+        alt={item.file.name ? `preview of ${item.file.name}` : 'preview'}
+      />
+      <span>
+        {item.ctx}
+        <br />
+        {item.file.name}
+        <br />
+        {msg}
+      </span>
+    </div>
+  );
 
-    // this is such garbage
+  // this is such garbage
 
-    if (item.state === 'error') {
-      return (
-        <li>
-          {preview(`error: ${item.error}`)}
-          <div class={'embarrassment'}>&nbsp;</div>
-        </li>
-      );
-    }
-
-    const msg = simpleMessage(item);
-    if (msg) {
-      return (
-        <li>
-          {preview(msg)}
-          <div class={'embarrassment'}>&nbsp;</div>
-        </li>
-      );
-    }
-
-    if (item.state !== 'uploading' || Number.isNaN(item.progress)) {
-      throw new Error(`unreachable state ${item.state}`);
-    }
-
-    const pct = Math.round(item.progress * 100);
-    // pct < 100
+  if (item.state === 'error') {
     return (
       <li>
-        {preview(`transferring: ${pct}% complete`)}
-        <div
-          className="progress"
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <div className="progress-bar" style={`width: ${pct}%`} />
-        </div>
+        {preview(`error: ${item.error}`)}
+        <div class={'embarrassment'}>&nbsp;</div>
       </li>
     );
   }
+
+  const msg = simpleMessage(item);
+  if (msg) {
+    return (
+      <li>
+        {preview(msg)}
+        <div class={'embarrassment'}>&nbsp;</div>
+      </li>
+    );
+  }
+
+  if (item.state !== 'uploading' || Number.isNaN(item.progress)) {
+    throw new Error(`unreachable state ${item.state}`);
+  }
+
+  const pct = Math.round(item.progress * 100);
+  // pct < 100
+  return (
+    <li>
+      {preview(`transferring: ${pct}% complete`)}
+      <div
+        className="progress"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div className="progress-bar" style={`width: ${pct}%`} />
+      </div>
+    </li>
+  );
 }
 
 const simpleMessage = (item: PendingItem) => {
