@@ -37,9 +37,7 @@ export function Gallery() {
     );
   }
   if (status !== 'success' || !Array.isArray(data)) {
-    return (
-      <div class={'alert alert-error'}>loading failed: invalid data</div>
-    );
+    return <div class={'alert alert-error'}>loading failed: invalid data</div>;
   }
 
   return (
