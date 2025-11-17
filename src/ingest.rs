@@ -54,7 +54,7 @@ fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage> {
         }
     }
 
-    Ok(down_to_8bit(loaded))
+    Ok(loaded)
 }
 
 fn temp_file() -> Result<PersistableTempFile> {
@@ -240,28 +240,11 @@ fn flip_diagonal(image: &image::DynamicImage) -> image::DynamicImage {
     image::DynamicImage::ImageRgba8(out)
 }
 
-fn down_to_8bit(image: image::DynamicImage) -> image::DynamicImage {
-    use image::DynamicImage as DI;
-    match image {
-        DI::ImageLuma16(_) | DI::ImageRgb16(_) | DI::ImageLuma8(_) | DI::ImageRgb32F(_) => {
-            DI::ImageRgb8(image.to_rgb8())
-        }
-        DI::ImageLumaA16(_) | DI::ImageRgba16(_) | DI::ImageLumaA8(_) | DI::ImageRgba32F(_) => {
-            DI::ImageRgba8(image.to_rgba8())
-        }
-        DI::ImageRgb8(_) | DI::ImageRgba8(_) => image,
-        other => {
-            println!("unhandled dynamic image variant {:?}", other);
-            other
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{fs, io};
 
-    use image::{ImageError, ImageFormat};
+    use image::ImageFormat;
 
     use super::write_image;
 
@@ -356,16 +339,12 @@ mod tests {
     }
 
     #[test]
-    fn sixteen_not_supported() {
+    fn sixteen_natively_supported_since_0_25_7() {
         let png = image::load_from_memory_with_format(
             include_bytes!("../tests/16-bit.png"),
             ImageFormat::Png,
         )
         .unwrap();
-        match png.write_to(&mut io::Cursor::new(vec![]), ImageFormat::Jpeg) {
-            Ok(_) => panic!("woo, image now supports this, delete down_to_8bit maybe"),
-            Err(ImageError::Unsupported(_)) => (),
-            Err(other) => panic!("unexpected failure: {:?}", other),
-        }
+        png.write_to(&mut io::Cursor::new(vec![]), ImageFormat::Jpeg).expect("supported since image 0.25.7");
     }
 }

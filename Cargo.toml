@@ -17,7 +17,7 @@ anyhow = "1"
 axum = { version = "0.8", features = ["multipart"] }
 axum-macros = "0.5"
 base64 = "0.22"
-gif = "0.13"
+gif = "0.14"
 hmac = "0.12"
 kamadak-exif = "0.6"
 libc = "0.2"
