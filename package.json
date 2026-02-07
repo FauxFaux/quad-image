@@ -41,7 +41,7 @@
     "typescript-eslint": "^8",
     "url-loader": "^4.1.0",
     "vitest": "^4",
-    "webpack": "~5.102",
+    "webpack": "~5.105",
     "webpack-bundle-analyzer": "^4.10.1",
     "webpack-cli": "^6"
   },
