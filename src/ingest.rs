@@ -345,6 +345,7 @@ mod tests {
             ImageFormat::Png,
         )
         .unwrap();
-        png.write_to(&mut io::Cursor::new(vec![]), ImageFormat::Jpeg).expect("supported since image 0.25.7");
+        png.write_to(&mut io::Cursor::new(vec![]), ImageFormat::Jpeg)
+            .expect("supported since image 0.25.7");
     }
 }

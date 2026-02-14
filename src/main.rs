@@ -19,7 +19,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use once_cell::sync::Lazy;
-use rand::RngCore;
+use rand::Rng;
 use regex::Regex;
 use serde_json::{json, Value};
 use tokio::task::JoinSet;
