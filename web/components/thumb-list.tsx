@@ -5,6 +5,7 @@ import type { PendingItem } from '../home';
 import type { Prop } from './sign-in';
 import CheckboxBlankCircleOutlineIcon from 'mdi-preact/CheckboxBlankCircleOutlineIcon';
 import CheckboxMarkedCircleOutlineIcon from 'mdi-preact/CheckboxMarkedCircleOutlineIcon';
+import { serializeError } from 'serialize-error';
 
 interface ThumbProps {
   items: PendingItem[];
@@ -55,7 +56,9 @@ export function ThumbDone(props: ThumbDoneProps) {
       await navigator.clipboard.writeText(url.href);
       setCopied(true);
     } catch (err) {
-      alert('Failed to copy to clipboard: ' + err);
+      alert(
+        'Failed to copy to clipboard: ' + JSON.stringify(serializeError(err)),
+      );
     }
   };
 
@@ -69,7 +72,9 @@ export function ThumbDone(props: ThumbDoneProps) {
     footer = (
       <button
         className={`btn btn-${!copied ? 'secondary' : 'success'}`}
-        onClick={doCopy}
+        onClick={() => {
+          void doCopy();
+        }}
         onMouseLeave={clearCopy}
       >
         {!copied ? 'copy' : 'copied!'}

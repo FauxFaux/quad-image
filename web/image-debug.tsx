@@ -6,6 +6,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { serializeError } from 'serialize-error';
 import { encodeWebP, readMagic } from './locket/resize';
 import * as dssim from './locket/dssim';
+import ensureError from 'ensure-error';
 
 interface Picked {
   blob: Blob;
@@ -60,7 +61,7 @@ export const ImageDebug = () => {
   };
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       const cleanup: (() => void)[] = [];
 
       try {
@@ -123,8 +124,7 @@ export const ImageDebug = () => {
               }
             }
           } catch (err) {
-            console.error(err);
-            // TODO: printer
+            printer.error(ensureError(err));
           }
 
           setPicked(
@@ -143,8 +143,7 @@ export const ImageDebug = () => {
           );
         }
       } catch (err) {
-        console.error(err);
-        // TODO: printer
+        printer.error(ensureError(err));
       } finally {
         for (const c of cleanup) {
           try {

@@ -6,7 +6,7 @@ export function printer(
 ) {
   return {
     warn: (msg: string) => appendMessage(['warn', msg]),
-    error: (err: Error | unknown) => {
+    error: (err: Error) => {
       console.error(err);
       appendMessage([
         'error',

@@ -7,6 +7,8 @@ import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
 import { GallerySecret, ImageId } from './types';
 import { encodeWebP, readMagic } from './locket/resize';
+import { orPrinter } from './locket/result';
+import * as z from 'zod/mini';
 
 export type OurFile = Blob & { name?: string };
 
@@ -42,7 +44,7 @@ export function Home() {
   );
   // copy-pasta localStorage management
   useEffect(() => {
-    setPees(getLocalOr('quadpees', []));
+    setPees(getLocalOrEmpty('quadpees'));
   }, []);
 
   useEffect(() => {
@@ -109,42 +111,38 @@ export function Home() {
         return newUploads;
       });
     };
-    try {
-      let next: PendingItem | undefined = initial;
-      if ('queued' !== next?.state) {
-        throw new Error('should be in starting state');
-      }
+    let next: PendingItem | undefined = initial;
+    if ('queued' !== next?.state) {
+      throw new Error('should be in starting state');
+    }
 
-      const magic = await readMagic(next.file);
+    const magic = await readMagic(next.file);
 
-      if (next.file.size > 1024 * 1024 || magic === 'image/heic') {
-        next = {
-          ...next,
-          state: 'resizing',
-        };
-        updateState(next);
-
-        next = await attemptShrinkage(next);
-        updateState(next);
-      } else {
-        next = {
-          ...next,
-          state: 'ready',
-          originalSize: undefined,
-        };
-      }
-
-      next = await driveUpload(next, updateState);
-      if (!next) return;
-      const base = next.base;
-      // two synchronous setState calls must be merged for no flicker
-      setPees((pees) => [...pees, base]);
+    if (next.file.size > 1024 * 1024 || magic === 'image/heic') {
+      next = {
+        ...next,
+        state: 'resizing',
+      };
       updateState(next);
-      if (configuredGallery) {
-        await putGallery(configuredGallery, [base]);
-      }
-    } catch (err) {
-      printerRef.current.error(err);
+
+      next = await attemptShrinkage(next);
+      updateState(next);
+    } else {
+      next = {
+        ...next,
+        state: 'ready',
+        originalSize: undefined,
+      };
+    }
+
+    next = await driveUpload(next, updateState);
+    if (!next) return;
+    const base = next.base;
+    // two synchronous setState calls must be merged for no flicker
+    setPees((pees) => [...pees, base]);
+    updateState(next);
+    if (configuredGallery) {
+      await putGallery(configuredGallery, [base]);
     }
   };
 
@@ -179,7 +177,10 @@ export function Home() {
     }));
     setUploads((currentUploads) => {
       for (let i = 0; i < additional.length; ++i) {
-        void uploadWrapper(currentUploads.length + i, additional[i]);
+        orPrinter(
+          async () => uploadWrapper(currentUploads.length + i, additional[i]),
+          printerRef.current,
+        );
       }
       return [...currentUploads, ...additional];
     });
@@ -193,11 +194,9 @@ export function Home() {
 
       try {
         await putGallery(next, pees);
-      } catch (err) {
-        printerRef.current.error(err);
+      } finally {
+        setSyncingNewGallery(false);
       }
-
-      setSyncingNewGallery(false);
     }
   };
 
@@ -216,7 +215,10 @@ export function Home() {
   return (
     <div class={'container-fluid'}>
       <SignIn
-        gallery={{ v: configuredGallery, set: setGallery }}
+        gallery={{
+          v: configuredGallery,
+          set: (e) => orPrinter(async () => setGallery(e), printerRef.current),
+        }}
         theme={{ v: configuredTheme, set: setTheme }}
         picking={{ v: picking !== undefined, set: setPickingState }}
         currentlyPicked={Object.values(picking ?? {}).filter(Boolean).length}
@@ -264,10 +266,12 @@ export function Home() {
   );
 }
 
-function getLocalOr<T>(key: string, def: T): T {
+const peesSchema = z.array(z.string());
+
+function getLocalOrEmpty(key: string): string[] {
   const value = localStorage.getItem(key);
-  if (!value) return def;
-  return JSON.parse(value);
+  if (!value) return [];
+  return peesSchema.parse(JSON.parse(value));
 }
 
 function userWantsLight() {

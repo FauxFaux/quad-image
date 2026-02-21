@@ -44,11 +44,13 @@
     "webpack-cli": "^6"
   },
   "dependencies": {
+    "ensure-error": "^5",
     "history": "^5.3.0",
     "number-to-words": "^1.2.4",
     "preact": "^10.17",
     "preact-fetching": "^1.0.0",
     "preact-router": "^4.1",
-    "serialize-error": "^12"
+    "serialize-error": "^12",
+    "zod": "^4"
   }
 }

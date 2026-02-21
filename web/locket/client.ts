@@ -1,11 +1,12 @@
 import { PendingItem } from '../home';
+import * as z from 'zod/mini';
 
 export async function getGallery(
   gallery: string,
-): Promise<{ id: string; type: 'image' }[]> {
+): Promise<GalleryResponse['data']> {
   const resp = await fetch(`/api/gallery/${gallery}`);
-  const body: any = await resp.json();
-  if (!body?.data) {
+  const body: unknown = await resp.json();
+  if (!isGalleryResponse(body)) {
     throw new Error(`missing data in response: ${JSON.stringify(body)}`);
   }
 
@@ -35,12 +36,10 @@ export async function putGallery(gallery: string, images: string[]) {
   if (!resp.ok) {
     throw new Error(`failed to call gallery: ${resp.status}`);
   }
-  const body: any = await resp.json();
-  if (!body?.data) {
+  const body: unknown = await resp.json();
+  if (!isResourceObject(body)) {
     throw new Error(`missing data in response: ${JSON.stringify(body)}`);
   }
-
-  return body.data;
 }
 
 export async function driveUpload(
@@ -96,7 +95,44 @@ export async function driveUpload(
     return;
   }
 
-  const response = xhr.response;
-  const base = response.data.id;
+  const response: any = xhr.response;
+  const base: any = response.data.id;
   return { state: 'done', ctx: initial.ctx, base } as const;
+}
+
+const resourceObjectSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+});
+
+const galleryResponseSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.string(),
+      type: z.literal('image'),
+    }),
+  ),
+});
+
+type ResourceObject = z.infer<typeof resourceObjectSchema>;
+type GalleryResponse = z.infer<typeof galleryResponseSchema>;
+
+function isResourceObject(obj: unknown): obj is ResourceObject {
+  try {
+    resourceObjectSchema.parse(obj);
+    return true;
+  } catch (e) {
+    console.error('invalid resource object', e, obj);
+    return false;
+  }
+}
+
+function isGalleryResponse(body: unknown): body is GalleryResponse {
+  try {
+    galleryResponseSchema.parse(body);
+    return true;
+  } catch (e) {
+    console.error('invalid gallery response', e, body);
+    return false;
+  }
 }

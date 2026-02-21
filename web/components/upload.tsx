@@ -1,10 +1,11 @@
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import ContentPasteIcon from 'mdi-preact/ContentPasteIcon';
+import { orPrinter } from '../locket/result';
 
 export interface Printer {
   warn: (msg: string) => void;
-  error: (err: Error | unknown) => void;
+  error: (err: Error) => void;
 }
 
 interface UploadProps {
@@ -65,30 +66,26 @@ export function Upload(props: UploadProps) {
   };
 
   const onPasteButtonClick = async () => {
-    try {
-      const uploads: Blob[] = [];
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        const images = item.types.filter((type) => type.startsWith('image/'));
-        if (!images.length) {
-          const typeList = item.types.join(', ');
-          props.printer.warn(
-            `Unsupported non-image item in clipboard, only found ${typeList}.`,
-          );
-          continue;
-        }
-        const type = preferredCodec(images);
-        const blob = await item.getType(type);
-        uploads.push(blob);
+    const uploads: Blob[] = [];
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const images = item.types.filter((type) => type.startsWith('image/'));
+      if (!images.length) {
+        const typeList = item.types.join(', ');
+        props.printer.warn(
+          `Unsupported non-image item in clipboard, only found ${typeList}.`,
+        );
+        continue;
       }
-      if (!uploads.length) {
-        props.printer.warn('No images in clipboard, nothing to upload.');
-        return;
-      }
-      props.triggerUploads(uploads, 'pasted');
-    } catch (err) {
-      props.printer.error(err);
+      const type = preferredCodec(images);
+      const blob = await item.getType(type);
+      uploads.push(blob);
     }
+    if (!uploads.length) {
+      props.printer.warn('No images in clipboard, nothing to upload.');
+      return;
+    }
+    props.triggerUploads(uploads, 'pasted');
   };
 
   const dropClick = () => {
@@ -170,7 +167,7 @@ export function Upload(props: UploadProps) {
         <div class={'col-3 home--upload_paste'}>
           <button
             class={'btn btn-secondary home--upload_button ' + pasteClass}
-            onClick={onPasteButtonClick}
+            onClick={() => orPrinter(onPasteButtonClick, props.printer)}
             title={pasteTitle}
           >
             {pasteContent}

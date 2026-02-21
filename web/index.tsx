@@ -20,7 +20,7 @@ export function init(element: HTMLElement, mode: string | null) {
       default:
         return render(<Home />, element);
     }
-  })().catch(async (e) => {
+  })().catch((e) => {
     console.error(e);
     // really
     element.innerHTML = `<pre>${JSON.stringify(serializeError(e), null, 2)
