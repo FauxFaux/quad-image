@@ -24,7 +24,7 @@
     "@vitest/eslint-plugin": "^1",
     "babel-loader": "^10",
     "copy-webpack-plugin": "^13",
-    "cypress": "^13.6.6",
+    "cypress": "^15",
     "eslint": "^9",
     "html-webpack-plugin": "^5.5.3",
     "ignore-loader": "^0.1.2",
