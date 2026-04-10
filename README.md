@@ -25,7 +25,8 @@ It requires Rust, stable should be fine.
 Build it by running `cargo build --release`, and grabbing the binary from
 `target/release/quad-image`.
 
-The UI also needs to be built, by running `npm ci` and `npm run build`.
+The UI also needs to be built, by running `npm ci` and `npm run build`,
+this converts the source in `web/` to the static files in `dist/`.
 
 
 ### Hosting

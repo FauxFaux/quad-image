@@ -18,7 +18,7 @@ location /api/ {
 }
 
 location / {
-    root /opt/quad-image/web/;
+    root /opt/quad-image/dist/;
     try_files $uri $uri/index.html =404;
 }
 
