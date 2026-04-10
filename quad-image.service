@@ -16,20 +16,18 @@ Restart=on-failure
 
 #[Hardening]
 
-# strict isn't supported in Ubuntu 16.04, so start with full then try to upgrade
-ProtectSystem=full
+# No filesystem by default
 ProtectSystem=strict
-
 ProtectHome=yes
-
-# shouldn't need to elevate
-NoNewPrivileges=true
-CapabilityBoundingSet=
-
-# these three protects aren't supported in Ubuntu 16.04, but don't add value as we should have no privs
 ProtectKernelTunables=true
 ProtectControlGroups=true
 ProtectKernelModules=true
 
+ReadWritePaths=/opt/quad-image
+
 PrivateDevices=true
 PrivateTmp=true
+
+# shouldn't need to elevate
+NoNewPrivileges=true
+CapabilityBoundingSet=

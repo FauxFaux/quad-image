@@ -25,14 +25,17 @@ It requires Rust, stable should be fine.
 Build it by running `cargo build --release`, and grabbing the binary from
 `target/release/quad-image`.
 
+The UI also needs to be built, by running `npm ci` and `npm run build`.
+
 
 ### Hosting
 
 The expected deployment situation is:
 
- * `quad-image` running under a service manager.
- * the `web/` subdirectory being served by a webserver
- * the webserver proxying traffic to `quad-image`.
+ * `quad-image` running under a service manager,
+     in a directory where it can write its database and `e` images directory
+ * a webserver handling tls and proxying traffic to `quad-image`,
+ * optionally, the webserver serving `dist/` (the compiled UI) over /.
 
 There are example config files in `quad-image.nginx` (for nginx) and
 `quad-image.service` (for systemd). All the ports/addresses are hardcoded.
