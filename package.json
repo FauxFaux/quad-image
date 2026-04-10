@@ -23,7 +23,7 @@
     "@types/number-to-words": "^1.2.1",
     "@vitest/eslint-plugin": "^1",
     "babel-loader": "^10",
-    "copy-webpack-plugin": "^13",
+    "copy-webpack-plugin": "^14",
     "cypress": "^15",
     "eslint": "^9",
     "html-webpack-plugin": "^5.5.3",
