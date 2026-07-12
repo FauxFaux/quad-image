@@ -1,11 +1,7 @@
 import { OurFile } from '../home';
 
 export type KnownImageFormat =
-  | 'image/jpeg'
-  | 'image/webp'
-  | 'image/png'
-  | 'image/gif'
-  | 'image/heic';
+  'image/jpeg' | 'image/webp' | 'image/png' | 'image/gif' | 'image/heic';
 
 interface BlobLike {
   slice(start: number, end: number, contentType: string): BlobLike;
