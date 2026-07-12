@@ -22,7 +22,7 @@ export function Gallery() {
 
   const pub = hash?.[0];
   if (!pub || !pub.includes(':')) {
-    return <div class={'alert alert-warn'}>no valid gallery specified</div>;
+    return <div class={'alert alert-warning'}>no valid gallery specified</div>;
   }
 
   const { status, error, data } = useQuery(`gallery-${pub}-data`, async () =>
@@ -33,11 +33,11 @@ export function Gallery() {
   }
   if (status === 'error') {
     return (
-      <div class={'alert alert-error'}>loading failed: {error?.message}</div>
+      <div class={'alert alert-danger'}>loading failed: {error?.message}</div>
     );
   }
   if (status !== 'success' || !Array.isArray(data)) {
-    return <div class={'alert alert-error'}>loading failed: invalid data</div>;
+    return <div class={'alert alert-danger'}>loading failed: invalid data</div>;
   }
 
   return (

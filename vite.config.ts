@@ -7,7 +7,7 @@ import analyzer from 'vite-bundle-analyzer';
 export default defineConfig({
   plugins: [preact(), analyzer({ enabled: process.env.ANALYZE === 'true' })],
 
-  // copied verbatim into dist/, for e.g. /dumb/ and /terms/
+  // copied verbatim into dist/
   publicDir: 'web/plain',
 
   build: {
