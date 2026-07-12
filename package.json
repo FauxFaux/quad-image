@@ -22,6 +22,7 @@
     "@vitest/eslint-plugin": "^1",
     "cypress": "^15",
     "eslint": "^10",
+    "jiti": "^2",
     "jsdom": "^29",
     "jsonapi-typescript": "0.1.3",
     "mdi-preact": "^9",
