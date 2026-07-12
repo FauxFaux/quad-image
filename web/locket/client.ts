@@ -37,9 +37,11 @@ export async function putGallery(gallery: string, images: string[]) {
     throw new Error(`failed to call gallery: ${resp.status}`);
   }
   const body: unknown = await resp.json();
-  if (!isResourceObject(body)) {
+  if (!isResourceObjectResponse(body)) {
     throw new Error(`missing data in response: ${JSON.stringify(body)}`);
   }
+
+  return body.data;
 }
 
 export async function driveUpload(
@@ -105,6 +107,10 @@ const resourceObjectSchema = z.object({
   type: z.string(),
 });
 
+const resourceObjectResponseSchema = z.object({
+  data: resourceObjectSchema,
+});
+
 const galleryResponseSchema = z.object({
   data: z.array(
     z.object({
@@ -114,15 +120,15 @@ const galleryResponseSchema = z.object({
   ),
 });
 
-type ResourceObject = z.infer<typeof resourceObjectSchema>;
+type ResourceObjectResponse = z.infer<typeof resourceObjectResponseSchema>;
 type GalleryResponse = z.infer<typeof galleryResponseSchema>;
 
-function isResourceObject(obj: unknown): obj is ResourceObject {
+function isResourceObjectResponse(obj: unknown): obj is ResourceObjectResponse {
   try {
-    resourceObjectSchema.parse(obj);
+    resourceObjectResponseSchema.parse(obj);
     return true;
   } catch (e) {
-    console.error('invalid resource object', e, obj);
+    console.error('invalid resource object response', e, obj);
     return false;
   }
 }
