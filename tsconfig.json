@@ -19,7 +19,7 @@
     "jsxImportSource": "preact",
     "resolveJsonModule": true,
 
-    "types": ["node"],
+    "types": ["node", "vite/client"],
 
     "isolatedModules": true
   },
