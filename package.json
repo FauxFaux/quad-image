@@ -50,7 +50,7 @@
     "preact": "^10.17",
     "preact-fetching": "^1.0.0",
     "preact-router": "^4.1",
-    "serialize-error": "^12",
+    "serialize-error": "^13",
     "zod": "^4"
   }
 }
