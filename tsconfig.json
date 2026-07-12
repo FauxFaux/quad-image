@@ -19,6 +19,8 @@
     "jsxImportSource": "preact",
     "resolveJsonModule": true,
 
+    "types": ["node"],
+
     "isolatedModules": true
   },
   "include": ["./web/**/*", "./scripts/**/*", "./tests/**/*", "./types/**/*"],
