@@ -12,11 +12,6 @@ export function init(element: HTMLElement, mode: string | null) {
     switch (mode) {
       case 'gallery':
         return render(<Gallery />, element);
-      case 'image-debug': {
-        // facilitate splitting off the dssim wasm, which bundle-analyze doesn't understand
-        const { ImageDebug } = await import('./image-debug');
-        return render(<ImageDebug />, element);
-      }
       default:
         return render(<Home />, element);
     }

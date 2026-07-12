@@ -7,7 +7,6 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, './dist'),
     filename: 'static/bundle.[contenthash].js',
-    webassemblyModuleFilename: "static/[hash].module.wasm",
     library: 'app',
   },
 
@@ -23,13 +22,6 @@ module.exports = {
       filename: 'gallery/index.html',
       templateParameters: {
         mode: 'gallery',
-      },
-    }),
-    new HtmlWebpackPlugin({
-      template: './web/index.ejs',
-      filename: 'image-debug/index.html',
-      templateParameters: {
-        mode: 'image-debug',
       },
     }),
     new CopyPlugin({
