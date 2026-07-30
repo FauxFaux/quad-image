@@ -149,6 +149,14 @@
     width: 100%;
 }
 
+/* debugging info for uploads made in this session */
+.thumb--stats {
+    font-size: 80%;
+    text-align: center;
+    /* the numbers matter more than the layout, so let them wrap */
+    overflow-wrap: anywhere;
+}
+
 .gallery--header {
     font-size: 140%;
     margin-bottom: 1em;

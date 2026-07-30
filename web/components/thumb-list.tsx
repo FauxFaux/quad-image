@@ -1,7 +1,7 @@
 import { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import type { ImageId } from '../types';
-import type { PendingItem } from '../home';
+import type { PendingItem, UploadStats } from '../home';
 import type { Prop } from './sign-in';
 import CheckboxBlankCircleOutlineIcon from 'mdi-preact/CheckboxBlankCircleOutlineIcon';
 import CheckboxMarkedCircleOutlineIcon from 'mdi-preact/CheckboxMarkedCircleOutlineIcon';
@@ -22,6 +22,7 @@ export function ThumbList(props: ThumbProps) {
             return (
               <ThumbDone
                 bare={item.base}
+                stats={item.stats}
                 picking={
                   props.picking?.v
                     ? (props.picking.v[item.base] ?? false)
@@ -42,6 +43,8 @@ export function ThumbList(props: ThumbProps) {
 
 interface ThumbDoneProps {
   bare: ImageId;
+  /** only present for uploads from this session */
+  stats?: UploadStats;
   picking?: boolean;
   setPicked?: (picked: boolean) => void;
 }
@@ -105,10 +108,37 @@ export function ThumbDone(props: ThumbDoneProps) {
       <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
         <img src={`${bare}.thumb.jpg`} loading={'lazy'} />
       </a>
+      {props.stats && <StatsLine stats={props.stats} />}
       {footer}
     </li>
   );
 }
+
+function StatsLine(props: { stats: UploadStats }) {
+  return (
+    <div class={'thumb--stats text-body-secondary'}>
+      {describeStats(props.stats)}
+    </div>
+  );
+}
+
+const humanSize = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)}MB`
+    : `${Math.round(bytes / 1024)}kB`;
+
+export const describeStats = (stats: UploadStats) => {
+  const { originalSize, originalType, resizedSize, quality, used } = stats;
+  const was = `${humanSize(originalSize)} ${originalType}`;
+  if (resizedSize === undefined) {
+    return `sent ${was} unchanged`;
+  }
+  const encode = `webp q${quality} ${humanSize(resizedSize)}`;
+  if (used === 'resized') {
+    return `sent ${encode}, from ${was}`;
+  }
+  return `sent ${was} unchanged, ${encode} wasn't worth it`;
+};
 
 interface ThumbUploadProps {
   item: PendingItem;
@@ -143,7 +173,11 @@ export function ThumbUpload(props: ThumbUploadProps) {
     return (
       <li>
         {preview(`error: ${item.error}`)}
-        <div class={'embarrassment'}>&nbsp;</div>
+        {item.stats ? (
+          <StatsLine stats={item.stats} />
+        ) : (
+          <div class={'embarrassment'}>&nbsp;</div>
+        )}
       </li>
     );
   }

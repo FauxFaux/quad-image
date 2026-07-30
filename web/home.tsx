@@ -12,10 +12,24 @@ import * as z from 'zod/mini';
 
 export type OurFile = Blob & { name?: string };
 
-export type PendingItem = { ctx: string } & (
+/** what we did to the file before sending it; for on-device debugging */
+export interface UploadStats {
+  /** what the browser handed us */
+  originalSize: number;
+  /** the format we sniffed out of the original, not what it claimed */
+  originalType: string;
+  /** the smallest encode we managed, if we tried to encode at all */
+  resizedSize?: number;
+  /** the webp quality of that encode */
+  quality?: number;
+  /** which of the two we actually put on the wire */
+  used: 'resized' | 'original';
+}
+
+export type PendingItem = { ctx: string; stats?: UploadStats } & (
   | { state: 'queued'; file: OurFile }
   | { state: 'resizing'; file: OurFile }
-  | { state: 'ready'; file: OurFile; originalSize: number | undefined }
+  | { state: 'ready'; file: OurFile }
   | { state: 'starting'; file: OurFile }
   | { state: 'uploading'; progress: number; file: OurFile }
   | { state: 'done'; base: string }
@@ -117,6 +131,7 @@ export function Home() {
     }
 
     const magic = await readMagic(next.file);
+    const originalType = magic ?? next.file.type ?? 'unknown';
 
     if (next.file.size > 1024 * 1024 || magic === 'image/heic') {
       next = {
@@ -125,13 +140,17 @@ export function Home() {
       };
       updateState(next);
 
-      next = await attemptShrinkage(next);
+      next = await attemptShrinkage(next, originalType);
       updateState(next);
     } else {
       next = {
         ...next,
         state: 'ready',
-        originalSize: undefined,
+        stats: {
+          originalSize: next.file.size,
+          originalType,
+          used: 'original',
+        },
       };
     }
 
@@ -150,6 +169,11 @@ export function Home() {
     printer((msg) => setMessages((messages) => [...messages, msg])),
   );
 
+  // uploads from this session keep their stats, so prefer them over the
+  // (identical looking, but stats-less) local-storage entry for the same image
+  const doneUploads = uploads.flatMap((u) => (u.state === 'done' ? [u] : []));
+  const thisSession = new Set(doneUploads.map((u) => u.base));
+
   // non-finished uploads, followed by real items munged to look like uploads
   const displayItems: PendingItem[] = [
     // ...(require('./mocks/thumbs').mockThumbs()),
@@ -157,11 +181,14 @@ export function Home() {
       .filter((u) => u.state !== 'done')
       .map((u) => u)
       .reverse(),
+    ...doneUploads.reverse(),
     ...pees
-      .map(
-        (base) =>
-          ({ base, state: 'done', ctx: 'local-storage' }) as PendingItem,
-      )
+      .filter((base) => !thisSession.has(base))
+      .map((base): PendingItem => ({
+        base,
+        state: 'done',
+        ctx: 'local-storage',
+      }))
       .reverse(),
   ];
 
@@ -282,7 +309,10 @@ function userWantsLight() {
   }
 }
 
-const attemptShrinkage = async (next: PendingItem): Promise<PendingItem> => {
+const attemptShrinkage = async (
+  next: PendingItem,
+  originalType: string,
+): Promise<PendingItem> => {
   if (next.state !== 'resizing') {
     throw new Error(`invalid state: ${next.state}`);
   }
@@ -291,21 +321,25 @@ const attemptShrinkage = async (next: PendingItem): Promise<PendingItem> => {
   await unblock();
   const image = await createImageBitmap(original);
 
+  let quality = 0.8;
+
   let resized;
   try {
     await unblock();
-    resized = await encodeWebP(image, 0.8);
+    resized = await encodeWebP(image, quality);
 
     if (resized.size > 5 * 1024 * 1024) {
       resized = undefined;
       await unblock();
-      resized = await encodeWebP(image, 0.5);
+      quality = 0.5;
+      resized = await encodeWebP(image, quality);
     }
 
     if (resized.size > 9 * 1024 * 1024) {
       resized = undefined;
       await unblock();
-      resized = await encodeWebP(image, 0.2);
+      quality = 0.2;
+      resized = await encodeWebP(image, quality);
     }
   } finally {
     image.close();
@@ -313,15 +347,23 @@ const attemptShrinkage = async (next: PendingItem): Promise<PendingItem> => {
 
   await unblock();
   const saveAtLeast = 0.1; // 0.1 = 10%
-  if (resized.size > original.size * (1 - saveAtLeast)) {
-    resized = original;
-  }
+  const worthIt = resized.size < original.size * (1 - saveAtLeast);
+
+  const stats: UploadStats = {
+    originalSize: original.size,
+    originalType,
+    resizedSize: resized.size,
+    quality,
+    used: worthIt ? 'resized' : 'original',
+  };
+
+  console.log('resize', stats);
 
   return {
     ...next,
     state: 'ready',
-    file: resized.size < original.size * 0.9 ? resized : original,
-    originalSize: original.size,
+    file: worthIt ? resized : original,
+    stats,
   };
 };
 

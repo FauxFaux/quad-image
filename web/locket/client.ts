@@ -67,6 +67,7 @@ export async function driveUpload(
       progress: e.lengthComputable ? e.loaded / e.total : NaN,
       ctx: initial.ctx,
       file: initial.file,
+      stats: initial.stats,
     });
   });
   const code = await new Promise((resolve) => {
@@ -78,28 +79,38 @@ export async function driveUpload(
       state: 'starting',
       file: initial.file,
       ctx: initial.ctx,
+      stats: initial.stats,
     });
   });
 
   if (xhr.status !== 200 || code !== 'load') {
     let msg = 'unexpected request error: ';
+    msg += `${xhr.status}: ${xhr.statusText}`;
     if (code === 'error') {
-      msg += '[opaque networking failure]';
-    } else {
-      msg += `${xhr.status}: ${xhr.statusText}`;
+      msg += ' + [opaque networking failure]';
     }
+
+    // the tile shows msg and the stats separately, but the console wants both
+    console.error(msg, 'sending', initial.file.size, 'bytes', initial.stats);
+
     updateState({
       state: 'error',
       error: msg,
       ctx: initial.ctx,
       file: initial.file,
+      stats: initial.stats,
     });
     return;
   }
 
   const response: any = xhr.response;
   const base: any = response.data.id;
-  return { state: 'done', ctx: initial.ctx, base } as const;
+  return {
+    state: 'done',
+    ctx: initial.ctx,
+    base,
+    stats: initial.stats,
+  } as const;
 }
 
 const resourceObjectSchema = z.object({
