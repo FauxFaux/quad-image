@@ -319,7 +319,13 @@ const attemptShrinkage = async (
   const original = next.file;
 
   await unblock();
-  const image = await createImageBitmap(original);
+  // firefox rejects with a bare, stackless InvalidStateError for anything it
+  // can't decode (heic, tiff, ...), so say what we were holding at the time
+  const image = await createImageBitmap(original).catch((cause: unknown) => {
+    throw new Error(`cannot decode ${originalType} (${original.size} bytes)`, {
+      cause,
+    });
+  });
 
   let quality = 0.8;
 
