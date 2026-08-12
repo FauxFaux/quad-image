@@ -23,7 +23,7 @@
     "cypress": "^15",
     "eslint": "^10",
     "jiti": "^2",
-    "jsdom": "^29",
+    "jsdom": "^30",
     "jsonapi-typescript": "0.1.3",
     "mdi-preact": "^9",
     "prettier": "~3.9",
