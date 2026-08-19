@@ -82,7 +82,7 @@ export function Home() {
 
   const reprocessTheme = () => {
     document.body.setAttribute(
-      'data-bs-theme',
+      'data-theme',
       configuredTheme ?? (userWantsLight() ? 'light' : 'dark'),
     );
   };

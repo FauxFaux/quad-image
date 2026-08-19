@@ -34,7 +34,6 @@
     "vitest": "^4"
   },
   "dependencies": {
-    "bootstrap": "^5",
     "ensure-error": "^5",
     "history": "^5",
     "number-to-words": "^1",

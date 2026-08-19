@@ -1,4 +1,4 @@
-import 'bootstrap/dist/css/bootstrap.css';
+import './base.css';
 import './main.css';
 import { render } from 'preact';
 import { serializeError } from 'serialize-error';
