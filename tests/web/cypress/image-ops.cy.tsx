@@ -2,12 +2,12 @@ import {
   encodeWebP,
   KnownImageFormat,
   readDimensions,
-  supportsWebP,
+  canvasSupportsWebP,
 } from '../../../web/locket/resize';
 
 describe('image ops', () => {
   it('supports webp', async () => {
-    expect(await supportsWebP()).to.be.true;
+    expect(await canvasSupportsWebP()).to.be.true;
   });
 
   it('reads dimensions', () => {

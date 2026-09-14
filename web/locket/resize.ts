@@ -1,4 +1,5 @@
 import { OurFile } from '../home';
+import { encodeWebPUsingWasm } from './webp-wasm';
 
 export type KnownImageFormat =
   'image/jpeg' | 'image/webp' | 'image/png' | 'image/gif' | 'image/heic';
@@ -98,7 +99,7 @@ export const resizeToWeb = async (
   return blob;
 };
 
-export const encodeWebP = async (
+export const encodeWebPUsingCanvas = async (
   image: ImageBitmap,
   quality: number | undefined,
 ): Promise<Blob> => {
@@ -115,7 +116,15 @@ export const encodeWebP = async (
   }
 };
 
-export const supportsWebP = async () => {
+export const encodeWebP = async (
+  image: ImageBitmap,
+  quality: number | undefined,
+): Promise<Blob> => {
+  if (await canvasSupportsWebP()) return encodeWebPUsingCanvas(image, quality);
+  return encodeWebPUsingWasm(image, quality);
+};
+
+export const canvasSupportsWebP = async () => {
   const canvas = new OffscreenCanvas(1, 1);
   // this won't realistically fail, but getContext must
   // have been called for convertToBlob to not fail (Chrome, 2024)
