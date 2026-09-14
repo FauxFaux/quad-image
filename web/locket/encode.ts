@@ -1,12 +1,4 @@
-import { encodeWebPUsingWasm } from './webp-wasm';
-
-export const encodeWebP = async (
-  image: ImageBitmap,
-  quality: number | undefined,
-): Promise<Blob> => {
-  if (await canvasSupportsWebP()) return encodeWebPUsingCanvas(image, quality);
-  return encodeWebPUsingWasm(image, quality);
-};
+import { encodeWebPUsingWasm, loadEncoder } from './webp-wasm';
 
 export const canvasSupportsWebP = async () => {
   const canvas = new OffscreenCanvas(1, 1);
@@ -17,6 +9,16 @@ export const canvasSupportsWebP = async () => {
   const blob = await canvas.convertToBlob({ type: 'image/webp' });
   return blob.type === 'image/webp';
 };
+
+// Begin both capability detection and the fallback download before an image is
+// selected. The result is shared by all subsequent encodes.
+const canvasWebPSupported = canvasSupportsWebP();
+void canvasWebPSupported
+  .then((supported) => {
+    if (!supported) void loadEncoder().catch(() => {});
+  })
+  // An encode operation will surface either failure to its caller.
+  .catch(() => {});
 
 export const encodeWebPUsingCanvas = async (
   image: ImageBitmap,
@@ -33,4 +35,12 @@ export const encodeWebPUsingCanvas = async (
     canvas.width = 0;
     canvas.height = 0;
   }
+};
+
+export const encodeWebP = async (
+  image: ImageBitmap,
+  quality: number | undefined,
+): Promise<Blob> => {
+  if (await canvasWebPSupported) return encodeWebPUsingCanvas(image, quality);
+  return encodeWebPUsingWasm(image, quality);
 };

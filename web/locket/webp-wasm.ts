@@ -15,7 +15,7 @@ interface WebPEncoderExports extends WebAssembly.Exports {
 
 let encoderPromise: Promise<WebPEncoderExports> | undefined;
 
-const loadEncoder = async () => {
+export const loadEncoder = async () => {
   encoderPromise ??= fetch(
     new URL('../assets/webp-encode.wasm', import.meta.url),
   )
