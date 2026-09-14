@@ -8,6 +8,7 @@ const qualities = [0.8, 0.5, 0.2];
 
 interface EncodedPreview {
   size: number;
+  duration: number;
   url: string;
 }
 
@@ -48,9 +49,15 @@ export function EncodePreview() {
 
         const nextPreviews: QualityPreview[] = [];
         for (const quality of qualities) {
+          await sleep(15);
+          const canvasStart = performance.now();
           const canvasWebp = await encodeWebPUsingCanvas(image, quality);
+          const canvasDuration = performance.now() - canvasStart;
           if (cancelled) return;
+          await sleep(15);
+          const wasmStart = performance.now();
           const wasmWebp = await encodeWebPUsingWasm(image, quality);
+          const wasmDuration = performance.now() - wasmStart;
           if (cancelled) return;
 
           const canvasUrl = URL.createObjectURL(canvasWebp);
@@ -58,8 +65,12 @@ export function EncodePreview() {
           outputUrls.push(canvasUrl, wasmUrl);
           nextPreviews.push({
             quality,
-            canvas: { size: canvasWebp.size, url: canvasUrl },
-            wasm: { size: wasmWebp.size, url: wasmUrl },
+            canvas: {
+              size: canvasWebp.size,
+              duration: canvasDuration,
+              url: canvasUrl,
+            },
+            wasm: { size: wasmWebp.size, duration: wasmDuration, url: wasmUrl },
           });
         }
         if (!cancelled) setPreviews(nextPreviews);
@@ -107,7 +118,8 @@ export function EncodePreview() {
             <div class={'row encode-preview--images'} key={preview.quality}>
               <section class={'col-md'}>
                 <h2>
-                  Canvas q{preview.quality} ({humanSize(preview.canvas.size)})
+                  Canvas q{preview.quality} ({humanSize(preview.canvas.size)},{' '}
+                  {humanDuration(preview.canvas.duration)})
                 </h2>
                 <img
                   src={preview.canvas.url}
@@ -116,7 +128,8 @@ export function EncodePreview() {
               </section>
               <section class={'col-md'}>
                 <h2>
-                  WASM q{preview.quality} ({humanSize(preview.wasm.size)})
+                  WASM q{preview.quality} ({humanSize(preview.wasm.size)},{' '}
+                  {humanDuration(preview.wasm.duration)})
                 </h2>
                 <img
                   src={preview.wasm.url}
@@ -135,3 +148,8 @@ const humanSize = (bytes: number) =>
   bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)}MB`
     : `${Math.round(bytes / 1024)}kB`;
+
+const sleep = async (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const humanDuration = (milliseconds: number) => `${Math.round(milliseconds)}ms`;
