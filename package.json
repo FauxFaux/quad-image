@@ -21,7 +21,7 @@
     "@types/node": "^24",
     "@types/number-to-words": "^1",
     "@vitest/eslint-plugin": "^1",
-    "cypress": "^15",
+    "cypress": "^16",
     "eslint": "^10",
     "jiti": "^2",
     "jsdom": "^30",
@@ -32,7 +32,7 @@
     "typescript-eslint": "^8",
     "vite": "^8",
     "vite-bundle-analyzer": "^1",
-    "vitest": "^4"
+    "vitest": "^5"
   },
   "dependencies": {
     "ensure-error": "^5",
