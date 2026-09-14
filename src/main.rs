@@ -287,16 +287,18 @@ async fn gallery_put(
 }
 
 pub fn is_image_id(image: &str) -> bool {
-    static RE: Lazy<Regex> =
-        Lazy::new(|| Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|jpg|gif)$").expect("static regex"));
+    static RE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new("^e/[a-zA-Z0-9]{10}\\.(?:png|webp|jpg|gif)$").expect("static regex")
+    });
     RE.is_match(image)
 }
 
 #[test]
 fn validate_image_id() {
+    assert!(is_image_id("e/abcdefghij.webp"));
     assert!(is_image_id("e/abcdefghij.png"));
-    assert!(!is_image_id(" e/abcdefghij.png"));
-    assert!(!is_image_id("e/abcdefghi.png"));
+    assert!(!is_image_id(" e/abcdefghij.webp"));
+    assert!(!is_image_id("e/abcdefghi.webp"));
 }
 
 #[axum_macros::debug_handler]

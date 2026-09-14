@@ -103,7 +103,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
     let loaded = load_image(data, guessed_format)?;
 
     let mut target_format = match guessed_format {
-        Png | Pnm | Tiff | Bmp | Ico | Hdr | Tga => Png,
+        Png | Pnm | Tiff | Bmp | Ico | Hdr | Tga => WebP,
         Gif => unreachable!(),
         _ => Jpeg,
     };
@@ -111,17 +111,17 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
     let mut temp = temp_file()?;
     write_image(temp.as_mut(), loaded.clone(), target_format).with_context(|| anyhow!("save"))?;
 
-    if target_format == Png {
-        // Chrome seems to convert everything pasted to png, even if it's huge.
-        // So, if we see a png that's too big, down-convert it to a jpg,
+    if target_format == WebP {
+        // Chrome seems to convert everything pasted to PNG, even if it's huge.
+        // So, if the lossless WebP output is too big, down-convert it to JPEG,
         // and log about how proud we are of having ruined the internet.
         // Alternatively, we could record whether it was a pasted upload?
 
-        let png_length = temp
+        let webp_length = temp
             .metadata()
             .with_context(|| anyhow!("temp metadata"))?
             .len();
-        if png_length > 1024 * 1024 {
+        if webp_length > 1024 * 1024 {
             temp.seek(SeekFrom::Start(0))
                 .with_context(|| anyhow!("truncating temp file 2"))?;
 
@@ -138,13 +138,13 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
                 .with_context(|| anyhow!("temp metadata 2"))?
                 .len();
             println!(
-                "png came out too big so we jpeg'd it: {} -> {}",
-                png_length, jpeg_length
+                "lossless webp came out too big so we jpeg'd it: {} -> {}",
+                webp_length, jpeg_length
             );
         }
     }
     let ext = match target_format {
-        Png => "png",
+        WebP => "webp",
         Jpeg => "jpg",
         _ => unreachable!(),
     };
