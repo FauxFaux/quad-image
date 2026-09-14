@@ -3,6 +3,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:webp-wasm": "docker build --target wasm --output type=local,dest=web/assets webp-wasm",
     "dev": "vite",
     "test": "vitest",
     "test:component": "cypress run --component",
