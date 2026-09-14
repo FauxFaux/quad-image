@@ -1,5 +1,10 @@
 import { KnownImageFormat, readDimensions } from '../../../web/locket/resize';
-import { encodeWebP, canvasSupportsWebP } from '../../../web/locket/encode';
+import {
+  encodeWebP,
+  encodeWebPUsingCanvas,
+  canvasSupportsWebP,
+} from '../../../web/locket/encode';
+import { encodeWebPUsingWasm } from '../../../web/locket/webp-wasm';
 
 describe('image ops', () => {
   it('supports webp', async () => {
@@ -19,31 +24,16 @@ describe('image ops', () => {
     });
   });
 
-  it('encodes webp', () => {
-    cy.then(async () => {
-      const png = await randomImage(3, 2560, 1440, 'image/png');
-      expect(png.size).to.be.greaterThan(10 * MB);
-      const image = await createImageBitmap(png);
-      let webp;
-      try {
-        webp = await encodeWebP(image, 0.5);
-      } finally {
-        image.close();
-      }
-      expect(webp.size).to.be.lessThan(10 * MB);
+  it('encodes webp using the fallback', () => {
+    cy.then(() => expectWebP(encodeWebP));
+  });
 
-      const dimensions = await readDimensions(webp);
-      expect(dimensions).to.deep.equal({ width: 2560, height: 1440 });
-      const style = { maxWidth: 400 };
-      cy.mount(
-        <>
-          <img src={URL.createObjectURL(png)} style={style} />
-          <img src={URL.createObjectURL(webp)} style={style} />
-          <br />
-          {(png.size / MB).toFixed(2)}MB &rArr; {(webp.size / MB).toFixed(2)}MB
-        </>,
-      );
-    });
+  it('encodes webp using canvas', () => {
+    cy.then(() => expectWebP(encodeWebPUsingCanvas));
+  });
+
+  it('encodes webp using wasm', () => {
+    cy.then(() => expectWebP(encodeWebPUsingWasm));
   });
 
   it('fails to open large images', () => {
@@ -69,6 +59,28 @@ describe('image ops', () => {
     });
   });
 });
+
+type WebPEncoder = (
+  image: ImageBitmap,
+  quality: number | undefined,
+) => Promise<Blob>;
+
+const expectWebP = async (encode: WebPEncoder) => {
+  const png = await randomImage(3, 2560, 1440, 'image/png');
+  expect(png.size).to.be.greaterThan(10 * MB);
+
+  const image = await createImageBitmap(png);
+  let webp: Blob;
+  try {
+    webp = await encode(image, 0.5);
+  } finally {
+    image.close();
+  }
+  expect(webp.size).to.be.lessThan(10 * MB);
+
+  const dimensions = await readDimensions(webp);
+  expect(dimensions).to.deep.equal({ width: 2560, height: 1440 });
+};
 
 const withBlob = (
   filePath: string,
