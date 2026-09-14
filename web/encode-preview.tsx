@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { ImageComparison } from './components/image-comparison';
 import { Upload } from './components/upload';
 import { Messages, printer } from './locket/err';
 import { canvasSupportsWebP, encodeWebPUsingCanvas } from './locket/encode';
 import { encodeWebPUsingWasm } from './locket/webp-wasm';
 
-const qualities = [0.8, 0.5, 0.2];
+const qualities = [0.8, 0.5, 0.2, 0.1, 0.01];
 
 interface EncodedPreview {
   size: number;
@@ -20,6 +21,7 @@ interface QualityPreview {
 
 export function EncodePreview() {
   const [file, setFile] = useState<Blob | undefined>(undefined);
+  const [originalUrl, setOriginalUrl] = useState<string | undefined>(undefined);
   const [previews, setPreviews] = useState<QualityPreview[]>([]);
   const [webpWarning, setWebpWarning] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<['warn' | 'error', string][]>([]);
@@ -32,6 +34,9 @@ export function EncodePreview() {
 
     let cancelled = false;
     const outputUrls: string[] = [];
+    const inputUrl = URL.createObjectURL(file);
+    outputUrls.push(inputUrl);
+    setOriginalUrl(inputUrl);
     setPreviews([]);
     setWebpWarning(undefined);
 
@@ -94,6 +99,9 @@ export function EncodePreview() {
   return (
     <main class={'container-fluid encode-preview'}>
       <h1>Encode preview</h1>
+      <p>
+        Comparing WebP encodings with different implementations and qualities
+      </p>
       <Messages
         messages={messages}
         removeMessage={(index) =>
@@ -114,30 +122,33 @@ export function EncodePreview() {
               {webpWarning}
             </div>
           )}
-          {previews.map((preview) => (
-            <div class={'row encode-preview--images'} key={preview.quality}>
-              <section class={'col-md'}>
-                <h2>
-                  Canvas q{preview.quality} ({humanSize(preview.canvas.size)},{' '}
-                  {humanDuration(preview.canvas.duration)})
-                </h2>
-                <img
-                  src={preview.canvas.url}
-                  alt={`Canvas WebP q${preview.quality} preview`}
-                />
-              </section>
-              <section class={'col-md'}>
-                <h2>
-                  WASM q{preview.quality} ({humanSize(preview.wasm.size)},{' '}
-                  {humanDuration(preview.wasm.duration)})
-                </h2>
-                <img
-                  src={preview.wasm.url}
-                  alt={`WASM WebP q${preview.quality} preview`}
-                />
-              </section>
-            </div>
-          ))}
+          {originalUrl &&
+            previews.map((preview) => (
+              <div class={'row encode-preview--images'} key={preview.quality}>
+                <section class={'col-md'}>
+                  <h2>
+                    Canvas q{preview.quality} ({humanSize(preview.canvas.size)},{' '}
+                    {humanDuration(preview.canvas.duration)})
+                  </h2>
+                  <ImageComparison
+                    originalUrl={originalUrl}
+                    previewUrl={preview.canvas.url}
+                    previewAlt={`Canvas WebP q${preview.quality} preview`}
+                  />
+                </section>
+                <section class={'col-md'}>
+                  <h2>
+                    WASM q{preview.quality} ({humanSize(preview.wasm.size)},{' '}
+                    {humanDuration(preview.wasm.duration)})
+                  </h2>
+                  <ImageComparison
+                    originalUrl={originalUrl}
+                    previewUrl={preview.wasm.url}
+                    previewAlt={`WASM WebP q${preview.quality} preview`}
+                  />
+                </section>
+              </div>
+            ))}
         </>
       )}
     </main>
