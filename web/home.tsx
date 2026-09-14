@@ -6,7 +6,8 @@ import { SignIn, Theme } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
 import { GallerySecret, ImageId } from './types';
-import { encodeWebP, readMagic } from './locket/resize';
+import { readMagic } from './locket/resize';
+import { encodeWebP } from './locket/encode';
 import { orPrinter } from './locket/result';
 import * as z from 'zod/mini';
 

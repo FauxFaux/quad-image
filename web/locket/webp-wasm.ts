@@ -41,10 +41,6 @@ const wasmQuality = (quality: number | undefined) => {
   return Math.min(1, Math.max(0, quality)) * 100;
 };
 
-/**
- * Encodes an ImageBitmap as a WebP Blob using the bundled libwebp WASM module.
- * Its arguments and result mirror encodeWebP in resize.ts.
- */
 export const encodeWebPUsingWasm = async (
   image: ImageBitmap,
   quality: number | undefined,
