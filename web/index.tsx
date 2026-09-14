@@ -4,12 +4,16 @@ import { render } from 'preact';
 import { serializeError } from 'serialize-error';
 import { Gallery } from './gallery';
 import { Home } from './home';
+import { EncodePreview } from './encode-preview';
 
 export function init(element: HTMLElement, mode: string | null) {
   element.innerHTML = 'JS App booting...';
   (async () => {
     await new Promise((r) => setTimeout(r));
     element.innerHTML = '';
+    if (window.location.hash.slice(1).startsWith('encodePreview=1')) {
+      return render(<EncodePreview />, element);
+    }
     switch (mode) {
       case 'gallery':
         return render(<Gallery />, element);

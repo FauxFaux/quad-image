@@ -167,3 +167,17 @@
 .util--clear {
   height: 50em;
 }
+
+.encode-preview--images {
+  margin-top: 1em;
+}
+
+.encode-preview--original {
+  margin: 0 0 1em;
+}
+
+.encode-preview--images img {
+  max-width: 100%;
+  max-height: 70vh;
+  height: auto;
+}
