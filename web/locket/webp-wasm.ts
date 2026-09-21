@@ -1,7 +1,18 @@
-interface WebPEncoderExports extends WebAssembly.Exports {
+export interface WebPEncoderExports extends WebAssembly.Exports {
   memory: WebAssembly.Memory;
   malloc(size: number): number;
   free(pointer: number): void;
+  WebPEncodeLosslessRGBA(
+    rgba: number,
+    width: number,
+    height: number,
+    stride: number,
+    output: number,
+  ): number;
+  WebPFree(pointer: number): void;
+}
+
+interface FullWebPEncoderExports extends WebPEncoderExports {
   WebPEncodeRGBA(
     rgba: number,
     width: number,
@@ -10,29 +21,44 @@ interface WebPEncoderExports extends WebAssembly.Exports {
     quality: number,
     output: number,
   ): number;
-  WebPFree(pointer: number): void;
 }
 
-let encoderPromise: Promise<WebPEncoderExports> | undefined;
+let encoderPromise: Promise<FullWebPEncoderExports> | undefined;
+let losslessEncoderPromise: Promise<WebPEncoderExports> | undefined;
+
+const instantiateEncoder = async <Encoder extends WebPEncoderExports>(
+  url: URL,
+) => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`could not load WebP encoder (${response.status})`);
+  }
+
+  const { instance } = await WebAssembly.instantiate(
+    await response.arrayBuffer(),
+    {
+      env: {
+        emscripten_notify_memory_growth: () => {},
+      },
+    },
+  );
+  return instance.exports as Encoder;
+};
 
 export const loadEncoder = async () => {
-  encoderPromise ??= fetch(
+  encoderPromise ??= instantiateEncoder<FullWebPEncoderExports>(
     new URL('../assets/webp-encode.wasm', import.meta.url),
-  )
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`could not load WebP encoder (${response.status})`);
-      }
-
-      return WebAssembly.instantiate(await response.arrayBuffer(), {
-        env: {
-          emscripten_notify_memory_growth: () => {},
-        },
-      });
-    })
-    .then(({ instance }) => instance.exports as WebPEncoderExports);
+  );
 
   return encoderPromise;
+};
+
+export const loadLosslessEncoder = async () => {
+  losslessEncoderPromise ??= instantiateEncoder<WebPEncoderExports>(
+    new URL('../assets/webp-encode-lossless.wasm', import.meta.url),
+  );
+
+  return losslessEncoderPromise;
 };
 
 const wasmQuality = (quality: number | undefined) => {
@@ -45,6 +71,38 @@ export const encodeWebPUsingWasm = async (
   image: ImageBitmap,
   quality: number | undefined,
 ): Promise<Blob> => {
+  const encoder = await loadEncoder();
+  return encodeWebPWithEncoder(image, encoder, (input, output) =>
+    encoder.WebPEncodeRGBA(
+      input,
+      image.width,
+      image.height,
+      image.width * 4,
+      wasmQuality(quality),
+      output,
+    ),
+  );
+};
+
+export const encodeWebPLosslessUsingWasm = (
+  image: ImageBitmap,
+  encoder: WebPEncoderExports,
+): Blob =>
+  encodeWebPWithEncoder(image, encoder, (input, output) =>
+    encoder.WebPEncodeLosslessRGBA(
+      input,
+      image.width,
+      image.height,
+      image.width * 4,
+      output,
+    ),
+  );
+
+const encodeWebPWithEncoder = (
+  image: ImageBitmap,
+  encoder: WebPEncoderExports,
+  encode: (input: number, output: number) => number,
+): Blob => {
   const canvas = new OffscreenCanvas(image.width, image.height);
   try {
     const context = canvas.getContext('2d');
@@ -53,7 +111,6 @@ export const encodeWebPUsingWasm = async (
 
     context.drawImage(image, 0, 0);
     const rgba = context.getImageData(0, 0, image.width, image.height).data;
-    const encoder = await loadEncoder();
     const input = encoder.malloc(rgba.byteLength);
     const output = encoder.malloc(Uint32Array.BYTES_PER_ELEMENT);
 
@@ -68,14 +125,7 @@ export const encodeWebPUsingWasm = async (
       new Uint8Array(encoder.memory.buffer, input, rgba.byteLength).set(rgba);
       new DataView(encoder.memory.buffer).setUint32(output, 0, true);
 
-      const size = encoder.WebPEncodeRGBA(
-        input,
-        image.width,
-        image.height,
-        image.width * 4,
-        wasmQuality(quality),
-        output,
-      );
+      const size = encode(input, output);
       encoded = new DataView(encoder.memory.buffer).getUint32(output, true);
 
       if (!size || !encoded) throw new Error('WebP encoding failed');

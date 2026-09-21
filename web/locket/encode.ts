@@ -1,4 +1,9 @@
-import { encodeWebPUsingWasm, loadEncoder } from './webp-wasm';
+import {
+  encodeWebPLosslessUsingWasm,
+  encodeWebPUsingWasm,
+  loadEncoder,
+  loadLosslessEncoder,
+} from './webp-wasm';
 
 export const canvasSupportsWebP = async () => {
   const canvas = new OffscreenCanvas(1, 1);
@@ -10,12 +15,12 @@ export const canvasSupportsWebP = async () => {
   return blob.type === 'image/webp';
 };
 
-// Begin both capability detection and the fallback download before an image is
-// selected. The result is shared by all subsequent encodes.
+// Begin both capability detection and the appropriate fallback download before
+// an image is selected. The result is shared by all subsequent encodes.
 const canvasWebPSupported = canvasSupportsWebP();
 void canvasWebPSupported
   .then((supported) => {
-    if (!supported) void loadEncoder().catch(() => {});
+    void (supported ? loadLosslessEncoder() : loadEncoder()).catch(() => {});
   })
   // An encode operation will surface either failure to its caller.
   .catch(() => {});
@@ -43,4 +48,11 @@ export const encodeWebP = async (
 ): Promise<Blob> => {
   if (await canvasWebPSupported) return encodeWebPUsingCanvas(image, quality);
   return encodeWebPUsingWasm(image, quality);
+};
+
+export const encodeWebPLossless = async (image: ImageBitmap): Promise<Blob> => {
+  const encoder = await (await canvasWebPSupported
+    ? loadLosslessEncoder()
+    : loadEncoder());
+  return encodeWebPLosslessUsingWasm(image, encoder);
 };

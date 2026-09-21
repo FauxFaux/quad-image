@@ -1,6 +1,7 @@
 import { KnownImageFormat, readDimensions } from '../../../web/locket/resize';
 import {
   encodeWebP,
+  encodeWebPLossless,
   encodeWebPUsingCanvas,
   canvasSupportsWebP,
 } from '../../../web/locket/encode';
@@ -34,6 +35,10 @@ describe('image ops', () => {
 
   it('encodes webp using wasm', () => {
     cy.then(() => expectWebP(encodeWebPUsingWasm));
+  });
+
+  it('encodes lossless webp', () => {
+    cy.then(() => expectWebP((image) => encodeWebPLossless(image)));
   });
 
   it('fails to open large images', () => {
