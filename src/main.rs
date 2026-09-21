@@ -29,6 +29,7 @@ type Caller<'h> = (SocketAddr, Option<&'h HeaderValue>);
 
 struct UploadForm {
     image: Bytes,
+    gallery: Option<String>,
     return_json: bool,
     return_redirect: bool,
     return_full_url: bool,
@@ -41,6 +42,7 @@ enum UploadFormStatus {
 
 async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
     let mut image: Option<Bytes> = None;
+    let mut gallery: Option<String> = None;
     let mut return_json: bool = false;
     let mut return_redirect: bool = false;
     let mut return_full_url: bool = false;
@@ -53,6 +55,15 @@ async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
         match name.as_str() {
             "image" if image.is_none() => image = Some(data),
             "image" => return Ok(UploadFormStatus::BadRequest("exactly one upload required")),
+            "gallery" if gallery.is_none() => match String::from_utf8(data.to_vec()) {
+                Ok(value) => gallery = Some(value),
+                Err(_) => return Ok(UploadFormStatus::BadRequest("invalid gallery value")),
+            },
+            "gallery" => {
+                return Ok(UploadFormStatus::BadRequest(
+                    "exactly one gallery value allowed",
+                ))
+            }
             "return_json" => match &*data {
                 b"true" => return_json = true,
                 b"false" => return_json = false,
@@ -83,6 +94,7 @@ async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
     match image {
         Some(image) => Ok(UploadFormStatus::Form(UploadForm {
             image,
+            gallery,
             return_json,
             return_redirect,
             return_full_url,
@@ -94,6 +106,7 @@ async fn extract_image_form(mut body: Multipart) -> Result<UploadFormStatus> {
 async fn upload(
     ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
+    State(state): State<Arc<Ctx>>,
     body: Multipart,
 ) -> (StatusCode, HeaderMap, Response) {
     let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
@@ -105,12 +118,29 @@ async fn upload(
         Err(e) => return nh(log_error("parsing image form", &caller, &e)),
     };
 
+    let gallery = match form.gallery.as_deref().map(parse_gallery_spec).transpose() {
+        Ok(gallery) => gallery,
+        Err(message) => return nh(bad_request(message)),
+    };
+
     match ingest::store(&form.image) {
         Ok(image_id) => {
             println!("{caller:?}: {image_id}");
 
             if let Err(e) = thumbs::thumbnail(&image_id) {
                 return nh(log_error("thumbnailing just written", &caller, &e));
+            }
+
+            if let Some((gallery, private)) = gallery {
+                if let Err(e) = gallery::gallery_store(
+                    &state.conn,
+                    &state.secret,
+                    gallery,
+                    private,
+                    &[image_id.as_str()],
+                ) {
+                    return nh(log_error("saving uploaded image to gallery", &caller, &e));
+                }
             }
 
             let status = if form.return_redirect {
@@ -232,6 +262,22 @@ struct GalleryInput {
     data: GalleryData,
 }
 
+fn parse_gallery_spec(input: &str) -> Result<(&str, &str), &'static str> {
+    static GALLERY_SPEC: Lazy<Regex> =
+        Lazy::new(|| Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").expect("static regex"));
+
+    match GALLERY_SPEC.captures(input) {
+        Some(captures) => Ok((
+            captures.get(1).expect("static regex").as_str(),
+            captures.get(2).expect("static regex").as_str(),
+        )),
+        None => Err(concat!(
+            "gallery format: name!password, ",
+            "4-10 letters, pass: 4+ anything"
+        )),
+    }
+}
+
 #[axum_macros::debug_handler]
 async fn gallery_put(
     ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
@@ -247,9 +293,6 @@ async fn gallery_put(
     let gallery_input = body.data.attributes.gallery;
     let raw_images = body.data.attributes.images;
 
-    static GALLERY_SPEC: Lazy<Regex> =
-        Lazy::new(|| Regex::new("^([a-zA-Z][a-zA-Z0-9]{3,9})!(.{4,99})$").expect("static regex"));
-
     let mut images = Vec::with_capacity(raw_images.len());
 
     for image in &raw_images {
@@ -264,17 +307,9 @@ async fn gallery_put(
         images.push(image.as_str());
     }
 
-    let (gallery, private) = match GALLERY_SPEC.captures(&gallery_input) {
-        Some(captures) => (
-            captures.get(1).expect("static regex").as_str(),
-            captures.get(2).expect("static regex").as_str(),
-        ),
-        None => {
-            return bad_request(concat!(
-                "gallery format: name!password, ",
-                "4-10 letters, pass: 4+ anything"
-            ));
-        }
+    let (gallery, private) = match parse_gallery_spec(&gallery_input) {
+        Ok(gallery) => gallery,
+        Err(message) => return bad_request(message),
     };
 
     match gallery::gallery_store(&state.conn, &state.secret, gallery, private, &images) {
@@ -299,6 +334,14 @@ fn validate_image_id() {
     assert!(is_image_id("e/abcdefghij.png"));
     assert!(!is_image_id(" e/abcdefghij.webp"));
     assert!(!is_image_id("e/abcdefghi.webp"));
+}
+
+#[test]
+fn validate_gallery_spec() {
+    assert_eq!(Ok(("album", "secret")), parse_gallery_spec("album!secret"));
+    assert!(parse_gallery_spec("abc!secret").is_err());
+    assert!(parse_gallery_spec("album!abc").is_err());
+    assert!(parse_gallery_spec("1album!secret").is_err());
 }
 
 #[axum_macros::debug_handler]

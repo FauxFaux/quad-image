@@ -1,8 +1,10 @@
 import { JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useId, useState } from 'preact/hooks';
 import { GallerySecret, plausibleGallerySecret } from '../types';
 import CheckCircleOutlineIcon from 'mdi-preact/CheckCircleOutlineIcon';
 import CircleOutlineIcon from 'mdi-preact/CircleOutlineIcon';
+import EyeIcon from 'mdi-preact/EyeIcon';
+import EyeOffIcon from 'mdi-preact/EyeOffIcon';
 
 interface GalleryInputProps {
   accept: (gallery: GallerySecret) => void;
@@ -13,10 +15,15 @@ interface GalleryInputProps {
   // wip?
   enabled: boolean;
   placeholder?: string;
+  initialValue?: GallerySecret;
 }
 
 export function GalleryInput(props: GalleryInputProps) {
-  const [newGallery, setNewGallery] = useState<string>('');
+  const inputId = useId();
+  const [newGallery, setNewGallery] = useState<string>(
+    props.initialValue ?? '',
+  );
+  const [revealPassword, setRevealPassword] = useState(false);
 
   const valid = plausibleGallerySecret(newGallery);
 
@@ -35,14 +42,15 @@ export function GalleryInput(props: GalleryInputProps) {
 
   const galleryForm = (
     <>
-      <label>
-        {props.label}
+      <label htmlFor={inputId}>{props.label}</label>
+      <div className={'input-group'}>
         <input
-          type={'text'}
+          id={inputId}
+          type={revealPassword ? 'text' : 'password'}
           className={`form-control is-${valid ? 'valid' : 'invalid'}`}
           placeholder={props.placeholder ?? 'horse!battery staple'}
           onInput={(ev) => {
-            setNewGallery((ev.target as any)?.value || '');
+            setNewGallery(ev.currentTarget.value);
           }}
           onKeyDown={(ev) => {
             switch (ev.key) {
@@ -56,7 +64,21 @@ export function GalleryInput(props: GalleryInputProps) {
           }}
           value={newGallery}
         />
-      </label>
+        <button
+          type={'button'}
+          className={'btn btn-outline-secondary'}
+          title={
+            revealPassword ? 'hide gallery password' : 'reveal gallery password'
+          }
+          aria-label={
+            revealPassword ? 'hide gallery password' : 'reveal gallery password'
+          }
+          aria-pressed={revealPassword}
+          onClick={() => setRevealPassword((current) => !current)}
+        >
+          {revealPassword ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
       <button
         className={'btn btn-primary'}
         disabled={!(valid && props.enabled)}

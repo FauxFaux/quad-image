@@ -1,0 +1,35 @@
+import { fireEvent, render, screen } from '@testing-library/preact';
+import { describe, expect, test, vi } from 'vitest';
+
+import { GalleryInput } from '../../web/components/gallery-input';
+import { maskGallerySecret } from '../../web/components/sign-in';
+
+describe('gallery configuration', () => {
+  test('masks only the secret in the existing gallery label', () => {
+    expect(maskGallerySecret('album!secret passphrase')).toBe('album!****');
+  });
+
+  test('starts with the existing gallery hidden and can reveal it', () => {
+    render(
+      <GalleryInput
+        accept={vi.fn()}
+        cancel={vi.fn()}
+        label={<>backup gallery</>}
+        submitName={'sync'}
+        enabled={true}
+        initialValue={'album!secret'}
+      />,
+    );
+
+    const input = screen.getByLabelText('backup gallery');
+    expect(input).toHaveProperty('type', 'password');
+    expect(input).toHaveProperty('value', 'album!secret');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'reveal gallery password' }),
+    );
+
+    expect(input).toHaveProperty('type', 'text');
+    screen.getByRole('button', { name: 'hide gallery password' });
+  });
+});

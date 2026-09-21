@@ -155,15 +155,12 @@ export function Home() {
       };
     }
 
-    next = await driveUpload(next, updateState);
+    next = await driveUpload(next, updateState, configuredGallery);
     if (!next) return;
     const base = next.base;
     // two synchronous setState calls must be merged for no flicker
     setPees((pees) => [...pees, base]);
     updateState(next);
-    if (configuredGallery) {
-      await putGallery(configuredGallery, [base]);
-    }
   };
 
   const printerRef = useRef(

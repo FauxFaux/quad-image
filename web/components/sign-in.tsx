@@ -18,6 +18,11 @@ export type Theme = 'light' | 'dark' | undefined | null;
 
 export type Prop<T> = { v: T; set: (v: T) => void };
 
+export function maskGallerySecret(gallery: string): string {
+  const separator = gallery.indexOf('!');
+  return separator === -1 ? gallery : `${gallery.slice(0, separator + 1)}****`;
+}
+
 interface SignInProps {
   gallery: Prop<string | undefined>;
   theme: Prop<Theme>;
@@ -37,10 +42,17 @@ export function SignIn(props: SignInProps) {
     const galleryForm = (
       <GalleryInput
         label={
-          <>
-            new backup gallery, in <i>public-name!secret passphrase</i> format
-          </>
+          props.gallery.v ? (
+            <>
+              backup gallery: <code>{maskGallerySecret(props.gallery.v)}</code>
+            </>
+          ) : (
+            <>
+              new backup gallery, in <i>public-name!secret passphrase</i> format
+            </>
+          )
         }
+        initialValue={props.gallery.v}
         submitName={'sync'}
         accept={(gallery) => {
           props.gallery.set(gallery);

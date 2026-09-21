@@ -47,6 +47,7 @@ export async function putGallery(gallery: string, images: string[]) {
 export async function driveUpload(
   initial: PendingItem,
   updateState: (next: PendingItem) => void,
+  gallery?: string,
 ) {
   const formData = new FormData();
   {
@@ -56,6 +57,7 @@ export async function driveUpload(
     formData.append('image', initial.file, initial.file.name);
     formData.append('ctx', initial.ctx);
     formData.append('return_json', 'true');
+    if (gallery) formData.append('gallery', gallery);
   }
 
   const xhr = new XMLHttpRequest();
