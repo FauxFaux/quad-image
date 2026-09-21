@@ -19,7 +19,6 @@
     "@testing-library/preact": "^3",
     "@tsconfig/recommended": "^1",
     "@types/node": "^24",
-    "@types/number-to-words": "^1",
     "@vitest/eslint-plugin": "^1",
     "cypress": "^16",
     "eslint": "^10",
@@ -37,11 +36,11 @@
   "dependencies": {
     "ensure-error": "^5",
     "history": "^5",
-    "number-to-words": "^1",
     "preact": "^10.17",
     "preact-fetching": "^1",
     "preact-router": "^4.1",
     "serialize-error": "^13",
+    "ts-number-to-words": "^2",
     "zod": "^4"
   }
 }

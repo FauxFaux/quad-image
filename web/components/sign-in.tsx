@@ -2,8 +2,7 @@ import { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import { useQuery } from 'preact-fetching';
 
-// deep import to work around webpack bundling warning in unused code
-import toWords from 'number-to-words/src/toWords';
+import { toWords } from 'ts-number-to-words';
 
 import IconSettings from 'mdi-preact/SettingsIcon';
 import SunWirelessIcon from 'mdi-preact/SunWirelessIcon';
