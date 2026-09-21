@@ -1,0 +1,27 @@
+diff --git a/src/enc/webp_enc.c b/src/enc/webp_enc.c
+index 369f9d4..0000000 100644
+--- a/src/enc/webp_enc.c
++++ b/src/enc/webp_enc.c
+@@ -351,6 +351,7 @@ int WebPEncode(const WebPConfig* config, WebPPicture* pic) {
+ 
+   if (pic->stats != NULL) memset(pic->stats, 0, sizeof(*pic->stats));
+ 
++#if !defined(WEBP_LOSSLESS_ONLY)
+   if (!config->lossless) {
+     VP8Encoder* enc = NULL;
+ 
+@@ -393,7 +394,13 @@ int WebPEncode(const WebPConfig* config, WebPPicture* pic) {
+       VP8EncFreeBitWriters(enc);
+     }
+     ok &= DeleteVP8Encoder(enc);  // must always be called, even if !ok
+-  } else {
++  } else
++#else
++  if (!config->lossless) {
++    return WebPEncodingSetError(pic, VP8_ENC_ERROR_INVALID_CONFIGURATION);
++  }
++#endif
++  {
+     // Make sure we have ARGB samples.
+     if (pic->argb == NULL && !WebPPictureYUVAToARGB(pic)) {
+       return 0;
