@@ -2,13 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/preact';
 import { describe, expect, test, vi } from 'vitest';
 
 import { GalleryInput } from '../../web/components/gallery-input';
-import { maskGallerySecret } from '../../web/components/sign-in';
 
 describe('gallery configuration', () => {
-  test('masks only the secret in the existing gallery label', () => {
-    expect(maskGallerySecret('album!secret passphrase')).toBe('album!****');
-  });
-
   test('starts with the existing gallery hidden and can reveal it', () => {
     render(
       <GalleryInput

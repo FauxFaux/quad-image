@@ -5,7 +5,7 @@ import { Upload } from './components/upload';
 import { SignIn, Theme } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
-import { GallerySecret, ImageId } from './types';
+import { GallerySecret, generateGallerySecret, ImageId } from './types';
 import { readMagic } from './locket/resize';
 import { encodeWebP } from './locket/encode';
 import { orPrinter } from './locket/result';
@@ -47,7 +47,7 @@ export function Home() {
   const [pees, setPees] = useState<string[]>([]);
   const [configuredGallery, setConfiguredGallery] = useState<
     GallerySecret | undefined
-  >(undefined);
+  >(() => localStorage.getItem('gallery') ?? generateGallerySecret());
   const [syncingNewGallery, setSyncingNewGallery] = useState<
     boolean | undefined
   >(undefined);
@@ -67,11 +67,6 @@ export function Home() {
     if (!Array.isArray(pees) || !(pees.length > 0)) return;
     localStorage.setItem('quadpees', JSON.stringify(pees));
   }, [pees]);
-
-  // copy-pasta localStorage management
-  useEffect(() => {
-    setConfiguredGallery(localStorage.getItem('gallery') ?? undefined);
-  }, []);
 
   useEffect(() => {
     if (configuredGallery?.includes('!')) {

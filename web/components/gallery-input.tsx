@@ -43,7 +43,7 @@ export function GalleryInput(props: GalleryInputProps) {
   const galleryForm = (
     <>
       <label htmlFor={inputId}>{props.label}</label>
-      <div className={'input-group'}>
+      <span className={'home--gallery-input'}>
         <input
           id={inputId}
           type={revealPassword ? 'text' : 'password'}
@@ -78,7 +78,7 @@ export function GalleryInput(props: GalleryInputProps) {
         >
           {revealPassword ? <EyeOffIcon /> : <EyeIcon />}
         </button>
-      </div>
+      </span>
       <button
         className={'btn btn-primary'}
         disabled={!(valid && props.enabled)}
