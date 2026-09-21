@@ -39,10 +39,6 @@ export type PendingItem = { ctx: string; stats?: UploadStats } & (
 );
 
 export function Home() {
-  const imRight = useRef<HTMLDivElement>(null);
-  const [imRightWidth, setImRightWidth] = useState<number | undefined>(
-    undefined,
-  );
   const [messages, setMessages] = useState<['warn' | 'error', string][]>([]);
   const [uploads, setUploads] = useState<PendingItem[]>([]);
   const [pees, setPees] = useState<string[]>(() => getLocalOrEmpty('quadpees'));
@@ -95,17 +91,6 @@ export function Home() {
       localStorage.removeItem('theme');
     }
   }, [configuredTheme]);
-
-  const onResize = () => {
-    setImRightWidth(imRight.current?.getBoundingClientRect()?.width);
-  };
-
-  useEffect(() => {
-    window.addEventListener('resize', onResize);
-    // massive hack, but failure isn't critical
-    setTimeout(onResize, 0);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   const uploadWrapper = async (i: number, initial: PendingItem) => {
     const updateState = (next: PendingItem) => {
@@ -178,10 +163,6 @@ export function Home() {
       }))
       .reverse(),
   ];
-
-  const rightCount = Math.floor((imRightWidth ?? 330) / 330);
-  const displayRight = displayItems.slice(0, rightCount);
-  const displayBottom = displayItems.slice(rightCount);
 
   const triggerUploads = (files: OurFile[], ctx: string) => {
     const additional: PendingItem[] = files.map((file) => ({
@@ -273,27 +254,16 @@ export function Home() {
           });
         }}
       />
-      <div class={'row'}>
-        <div class={'col-md'}>
+      <div class={'home--image-grid'}>
+        <div class={'home--upload-grid'}>
           <Upload
             printer={printerRef.current}
             triggerUploads={triggerUploads}
           />
         </div>
-        {displayRight.length > 0 && (
-          <div class={'col-md'} ref={imRight}>
-            <ThumbList items={displayRight} picking={pickingProp} />
-          </div>
-        )}
+        <ThumbList items={displayItems} picking={pickingProp} />
       </div>
-      {displayBottom.length > 0 && (
-        <div class={'row'}>
-          <div className={'col'}>
-            <ThumbList items={displayBottom} picking={pickingProp} />
-            <div className={'util--clear'} />
-          </div>
-        </div>
-      )}
+      <div className={'util--clear'} />
       <div class={'row'}>
         <footer>
           <p className="text-center text-body-secondary">

@@ -120,6 +120,49 @@
   cursor: pointer;
 }
 
+.home--image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 1em 10px;
+  align-items: stretch;
+}
+
+.home--upload-grid {
+  grid-column: span 2;
+}
+
+/* Avoid the upload control shrinking when a fifth thumbnail column fits. */
+@media (min-width: 1500px) {
+  .home--upload-grid {
+    grid-column: span 3;
+  }
+}
+
+.home--image-grid .thumb--frame {
+  display: contents;
+}
+
+.home--image-grid .thumb--frame li {
+  display: flex;
+  flex-direction: column;
+  width: auto;
+  margin: 0;
+}
+
+.home--image-grid .thumb--frame-imgbox {
+  flex-grow: 1;
+}
+
+@media (max-width: 620px) {
+  .home--image-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home--upload-grid {
+    grid-column: span 1;
+  }
+}
+
 .thumb--frame li {
   display: inline-block;
   list-style: none;
