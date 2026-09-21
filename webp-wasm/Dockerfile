@@ -28,7 +28,7 @@ RUN set -eux; \
     mkdir -p /out; \
     emcc /build/baseline/libwebp.a /build/baseline/libsharpyuv.a -O3 --no-entry \
       -s STANDALONE_WASM=1 -s ALLOW_MEMORY_GROWTH=1 \
-      -s EXPORTED_FUNCTIONS='["_WebPEncodeRGBA","_WebPFree","_malloc","_free"]' \
+      -s EXPORTED_FUNCTIONS='["_WebPEncodeRGBA","_WebPEncodeLosslessRGBA","_WebPFree","_malloc","_free"]' \
       -o /out/webp-encode.wasm; \
     emcc /build/lossless/libwebp.a -Oz -flto --no-entry \
       -s STANDALONE_WASM=1 \
