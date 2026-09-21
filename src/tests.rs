@@ -23,9 +23,17 @@ fn write_an_image() -> Result<()> {
     let saved = store(include_bytes!("test.png"))?;
     store(include_bytes!("../tests/parrot.gif"))?;
 
-    let saved_webp =
-        image::load_from_memory_with_format(&fs::read(saved)?, image::ImageFormat::WebP)?;
+    let saved_bytes = fs::read(saved)?;
+    let saved_webp = image::load_from_memory_with_format(&saved_bytes, image::ImageFormat::WebP)?;
     assert_eq!(source.to_rgba8(), saved_webp.to_rgba8());
+
+    let resaved = store(&saved_bytes)?;
+    assert_eq!(
+        Some("webp"),
+        std::path::Path::new(&resaved)
+            .extension()
+            .and_then(|e| e.to_str())
+    );
 
     let mut now_extensions = fs::read_dir(&e)?
         .map(|e| {
@@ -41,7 +49,7 @@ fn write_an_image() -> Result<()> {
     now_extensions.sort();
 
     assert_eq!(
-        &["gif", "webp"],
+        &["gif", "webp", "webp"],
         now_extensions.as_slice(),
         "created one of each"
     );

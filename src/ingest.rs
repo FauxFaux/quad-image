@@ -40,6 +40,48 @@ fn guess_format(data: &[u8]) -> Result<ImageFormat> {
     })
 }
 
+fn is_lossless_webp(data: &[u8]) -> bool {
+    if data.len() < 12 || &data[..4] != b"RIFF" || &data[8..12] != b"WEBP" {
+        return false;
+    }
+
+    let riff_size = u32::from_le_bytes(data[4..8].try_into().unwrap()) as usize;
+    let Some(riff_end) = riff_size.checked_add(8) else {
+        return false;
+    };
+    if riff_end > data.len() {
+        return false;
+    }
+
+    let mut offset = 12;
+    while offset + 8 <= riff_end {
+        let chunk_type = &data[offset..offset + 4];
+        let chunk_size =
+            u32::from_le_bytes(data[offset + 4..offset + 8].try_into().unwrap()) as usize;
+
+        if chunk_type == b"VP8L" {
+            return true;
+        }
+        if chunk_type == b"VP8 " {
+            return false;
+        }
+
+        let Some(next_offset) = offset
+            .checked_add(8)
+            .and_then(|value| value.checked_add(chunk_size))
+            .and_then(|value| value.checked_add(chunk_size % 2))
+        else {
+            return false;
+        };
+        if next_offset > riff_end {
+            return false;
+        }
+        offset = next_offset;
+    }
+
+    false
+}
+
 fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage> {
     let mut loaded =
         image::load_from_memory_with_format(data, format).with_context(|| anyhow!("load"))?;
@@ -104,6 +146,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
 
     let mut target_format = match guessed_format {
         Png | Pnm | Tiff | Bmp | Ico | Hdr | Tga => WebP,
+        WebP if is_lossless_webp(data) => WebP,
         Gif => unreachable!(),
         _ => Jpeg,
     };
