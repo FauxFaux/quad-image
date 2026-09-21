@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { ThumbList } from './components/thumb-list';
 import { Upload } from './components/upload';
-import { SignIn, Theme } from './components/sign-in';
+import { GalleryAddResult, SignIn, Theme } from './components/sign-in';
 import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
 import { GallerySecret, generateGallerySecret, ImageId } from './types';
@@ -10,6 +10,7 @@ import { readMagic } from './locket/resize';
 import { encodeWebP } from './locket/encode';
 import { orPrinter } from './locket/result';
 import * as z from 'zod/mini';
+import ensureError from 'ensure-error';
 
 export type OurFile = Blob & { name?: string };
 
@@ -44,7 +45,7 @@ export function Home() {
   );
   const [messages, setMessages] = useState<['warn' | 'error', string][]>([]);
   const [uploads, setUploads] = useState<PendingItem[]>([]);
-  const [pees, setPees] = useState<string[]>([]);
+  const [pees, setPees] = useState<string[]>(() => getLocalOrEmpty('quadpees'));
   const [configuredGallery, setConfiguredGallery] = useState<
     GallerySecret | undefined
   >(() => localStorage.getItem('gallery') ?? generateGallerySecret());
@@ -57,14 +58,7 @@ export function Home() {
   const [picking, setPicking] = useState<Record<ImageId, boolean> | undefined>(
     undefined,
   );
-  // copy-pasta localStorage management
   useEffect(() => {
-    setPees(getLocalOrEmpty('quadpees'));
-  }, []);
-
-  useEffect(() => {
-    // try not to corrupt existing data
-    if (!Array.isArray(pees) || !(pees.length > 0)) return;
     localStorage.setItem('quadpees', JSON.stringify(pees));
   }, [pees]);
 
@@ -225,6 +219,29 @@ export function Home() {
   const setPickingState = (pickingEnabled: boolean) =>
     setPicking(pickingEnabled ? {} : undefined);
 
+  const removePicked = () => {
+    if (!picking) return;
+    const selected = new Set(
+      Object.entries(picking).flatMap(([image, picked]) =>
+        picked ? [image] : [],
+      ),
+    );
+    setPees((current) => removeSelectedImages(current, selected));
+    setUploads((current) =>
+      current.filter(
+        (upload) => upload.state !== 'done' || !selected.has(upload.base),
+      ),
+    );
+    setPicking({});
+  };
+
+  const addPicked = async (gallery: string): Promise<GalleryAddResult> => {
+    const selected = Object.entries(picking ?? {}).flatMap(([image, picked]) =>
+      picked ? [image] : [],
+    );
+    return addImagesToGallery(gallery, selected);
+  };
+
   const pickingProp = {
     v: picking,
     set: (newPicking: Record<ImageId, boolean> | undefined) => {
@@ -242,6 +259,8 @@ export function Home() {
         theme={{ v: configuredTheme, set: setTheme }}
         picking={{ v: picking !== undefined, set: setPickingState }}
         currentlyPicked={Object.values(picking ?? {}).filter(Boolean).length}
+        addPicked={addPicked}
+        removePicked={removePicked}
         syncingNewGallery={syncingNewGallery}
       />
       <Messages
@@ -287,6 +306,42 @@ export function Home() {
 }
 
 const peesSchema = z.array(z.string());
+
+export function removeSelectedImages(
+  images: string[],
+  selected: ReadonlySet<string>,
+): string[] {
+  return images.filter((image) => !selected.has(image));
+}
+
+export async function addImagesToGallery(
+  gallery: string,
+  images: string[],
+  galleryPut = putGallery,
+): Promise<GalleryAddResult> {
+  const results = await Promise.allSettled(
+    images.map(async (image) => ({
+      image,
+      gallery: await galleryPut(gallery, [image]),
+    })),
+  );
+
+  const failures: GalleryAddResult['failures'] = [];
+  let added = 0;
+  let publicGallery: string | undefined;
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      added++;
+      publicGallery = result.value.gallery.id;
+    } else {
+      failures.push({
+        image: images[index],
+        error: ensureError(result.reason).message,
+      });
+    }
+  });
+  return { added, publicGallery, failures };
+}
 
 function getLocalOrEmpty(key: string): string[] {
   const value = localStorage.getItem(key);

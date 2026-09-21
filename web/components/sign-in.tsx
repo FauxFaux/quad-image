@@ -18,16 +18,36 @@ export type Theme = 'light' | 'dark' | undefined | null;
 
 export type Prop<T> = { v: T; set: (v: T) => void };
 
+export interface GalleryAddResult {
+  added: number;
+  publicGallery?: string;
+  failures: { image: string; error: string }[];
+}
+
 interface SignInProps {
   gallery: Prop<string | undefined>;
   theme: Prop<Theme>;
   picking: Prop<boolean>;
   currentlyPicked?: number;
+  addPicked: (gallery: string) => Promise<GalleryAddResult>;
+  removePicked: () => void;
   syncingNewGallery?: boolean;
 }
 
 export function SignIn(props: SignInProps) {
   const [configuring, setConfiguring] = useState<boolean>(false);
+  const [addingPicked, setAddingPicked] = useState(false);
+  const [addResult, setAddResult] = useState<GalleryAddResult | undefined>();
+
+  const addPicked = async (gallery: string) => {
+    setAddingPicked(true);
+    setAddResult(undefined);
+    try {
+      setAddResult(await props.addPicked(gallery));
+    } finally {
+      setAddingPicked(false);
+    }
+  };
 
   const doneConfiguring = () => {
     props.picking.set(false);
@@ -99,18 +119,41 @@ export function SignIn(props: SignInProps) {
       pickedActions = (
         <div>
           <GalleryInput
-            accept={() => {}}
+            accept={(gallery) => {
+              void addPicked(gallery);
+            }}
             cancel={() => {
               props.picking.set(false);
             }}
             label={<>add {selectedImages} to a gallery</>}
-            submitName={'(wip) add'}
-            enabled={false}
+            submitName={addingPicked ? 'adding…' : 'add'}
+            enabled={c > 0 && !addingPicked}
             placeholder={'husband!valley forge'}
           />
+          {addResult?.publicGallery && (
+            <div>
+              added {addResult.added} image{addResult.added === 1 ? '' : 's'} to{' '}
+              <a href={`/gallery/#${addResult.publicGallery}`}>
+                {addResult.publicGallery}
+              </a>
+            </div>
+          )}
+          {addResult && addResult.failures.length > 0 && (
+            <ul className={'text-danger home--sign_in-validation'}>
+              {addResult.failures.map(({ image, error }) => (
+                <li key={image}>
+                  failed to add {image}: {error}
+                </li>
+              ))}
+            </ul>
+          )}
           <br />
-          <button className={'btn btn-danger'} disabled={true}>
-            <TrashCanIcon /> (wip) remove {selectedImages} from local storage
+          <button
+            className={'btn btn-danger'}
+            disabled={c === 0}
+            onClick={props.removePicked}
+          >
+            <TrashCanIcon /> remove {selectedImages} from local storage
           </button>
         </div>
       );
