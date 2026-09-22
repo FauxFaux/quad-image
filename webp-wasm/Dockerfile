@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG EMSDK_VERSION=6.0.9
+ARG EMSDK_VERSION=6.0.10
 FROM emscripten/emsdk:${EMSDK_VERSION} AS build
 
 ARG LIBWEBP_TAG=v1.6.0
