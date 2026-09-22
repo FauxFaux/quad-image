@@ -25,6 +25,7 @@ export interface GalleryAddResult {
 
 interface SignInProps {
   gallery: Prop<string | undefined>;
+  syncGallery: (gallery: string) => void;
   theme: Prop<Theme>;
   picking: Prop<boolean>;
   currentlyPicked?: number;
@@ -63,7 +64,7 @@ export function SignIn(props: SignInProps) {
         initialValue={props.gallery.v}
         submitName={'sync'}
         accept={(gallery) => {
-          props.gallery.set(gallery);
+          props.syncGallery(gallery);
           doneConfiguring();
         }}
         enabled={true}

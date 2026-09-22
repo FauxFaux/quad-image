@@ -241,6 +241,9 @@ export function Home() {
           v: configuredGallery,
           set: (e) => orPrinter(async () => setGallery(e), printerRef.current),
         }}
+        syncGallery={(gallery) =>
+          orPrinter(async () => setGallery(gallery), printerRef.current)
+        }
         theme={{ v: configuredTheme, set: setTheme }}
         picking={{ v: picking !== undefined, set: setPickingState }}
         currentlyPicked={Object.values(picking ?? {}).filter(Boolean).length}
