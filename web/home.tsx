@@ -7,7 +7,7 @@ import { driveUpload, putGallery } from './locket/client';
 import { Messages, printer } from './locket/err';
 import { GallerySecret, generateGallerySecret, ImageId } from './types';
 import { readMagic } from './locket/resize';
-import { encodeWebP } from './locket/encode';
+import { encodeWebP, encodeWebPLossless } from './locket/encode';
 import { orPrinter } from './locket/result';
 import * as z from 'zod/mini';
 import ensureError from 'ensure-error';
@@ -22,7 +22,7 @@ export interface UploadStats {
   originalType: string;
   /** the smallest encode we managed, if we tried to encode at all */
   resizedSize?: number;
-  /** the webp quality of that encode */
+  /** the webp quality of a lossy encode; absent for a lossless encode */
   quality?: number;
   /** which of the two we actually put on the wire */
   used: 'resized' | 'original';
@@ -108,7 +108,11 @@ export function Home() {
     const magic = await readMagic(next.file);
     const originalType = magic ?? next.file.type ?? 'unknown';
 
-    if (next.file.size > 1024 * 1024 || magic === 'image/heic') {
+    if (
+      next.file.size > shrinkThreshold ||
+      magic === 'image/heic' ||
+      isLosslessFormat(originalType)
+    ) {
       next = {
         ...next,
         state: 'resizing',
@@ -345,25 +349,35 @@ const attemptShrinkage = async (
     });
   });
 
-  let quality = 0.8;
+  let quality: number | undefined;
 
   let resized;
   try {
-    await unblock();
-    resized = await encodeWebP(image, quality);
-
-    if (resized.size > 5 * 1024 * 1024) {
-      resized = undefined;
+    if (isLosslessFormat(originalType)) {
       await unblock();
-      quality = 0.5;
-      resized = await encodeWebP(image, quality);
+      resized = await encodeWebPLossless(image);
     }
 
-    if (resized.size > 9 * 1024 * 1024) {
-      resized = undefined;
+    // Small lossless images are worth preserving exactly. Larger ones fall
+    // through to the existing quality-based encoding strategy.
+    if (!resized || resized.size > shrinkThreshold) {
       await unblock();
-      quality = 0.2;
+      quality = 0.8;
       resized = await encodeWebP(image, quality);
+
+      if (resized.size > 5 * 1024 * 1024) {
+        resized = undefined;
+        await unblock();
+        quality = 0.5;
+        resized = await encodeWebP(image, quality);
+      }
+
+      if (resized.size > 9 * 1024 * 1024) {
+        resized = undefined;
+        await unblock();
+        quality = 0.2;
+        resized = await encodeWebP(image, quality);
+      }
     }
   } finally {
     image.close();
@@ -390,6 +404,13 @@ const attemptShrinkage = async (
     stats,
   };
 };
+
+const shrinkThreshold = 1024 * 1024;
+
+// GIF is excluded: it can be losslessly encoded, but decoding it to an
+// ImageBitmap would discard animation. PNG is the lossless still-image format
+// accepted by the uploader.
+const isLosslessFormat = (type: string) => type === 'image/png';
 
 const unblock = async () => sleep(15);
 

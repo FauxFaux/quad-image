@@ -51,7 +51,7 @@ export const encodeWebP = async (
 };
 
 export const encodeWebPLossless = async (image: ImageBitmap): Promise<Blob> => {
-  const encoder = await (await canvasWebPSupported
+  const encoder = await ((await canvasWebPSupported)
     ? loadLosslessEncoder()
     : loadEncoder());
   return encodeWebPLosslessUsingWasm(image, encoder);

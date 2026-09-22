@@ -133,7 +133,7 @@ export const describeStats = (stats: UploadStats) => {
   if (resizedSize === undefined) {
     return `sent ${was} unchanged`;
   }
-  const encode = `webp q${quality} ${humanSize(resizedSize)}`;
+  const encode = `webp ${quality === undefined ? 'lossless' : `q${quality}`} ${humanSize(resizedSize)}`;
   if (used === 'resized') {
     return `sent ${encode}, from ${was}`;
   }

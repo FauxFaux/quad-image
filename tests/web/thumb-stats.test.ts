@@ -35,4 +35,15 @@ describe('describeStats', () => {
       }),
     ).toBe('sent 29kB image/png unchanged');
   });
+
+  test('describes a lossless webp encode', () => {
+    expect(
+      describeStats({
+        originalSize: 30_000,
+        originalType: 'image/png',
+        resizedSize: 20_000,
+        used: 'resized',
+      }),
+    ).toBe('sent webp lossless 20kB, from 29kB image/png');
+  });
 });
