@@ -1,11 +1,15 @@
 import { KnownImageFormat, readDimensions } from '../../../web/locket/resize';
 import {
   encodeWebP,
-  encodeWebPLossless,
   encodeWebPUsingCanvas,
   canvasSupportsWebP,
 } from '../../../web/locket/encode';
-import { encodeWebPUsingWasm } from '../../../web/locket/webp-wasm';
+import {
+  encodeWebPLosslessUsingWasm,
+  encodeWebPUsingWasm,
+  loadEncoder,
+  loadLosslessEncoder,
+} from '../../../web/locket/webp-wasm';
 
 describe('image ops', () => {
   it('supports webp', async () => {
@@ -37,9 +41,33 @@ describe('image ops', () => {
     cy.then(() => expectWebP(encodeWebPUsingWasm));
   });
 
-  it('encodes lossless webp', () => {
-    cy.then(() => expectWebP((image) => encodeWebPLossless(image)));
-  });
+  it(
+    'isolates the large-image crash to the lossless-only wasm build',
+    { defaultCommandTimeout: 120_000 },
+    () => {
+      cy.then(async () => {
+        // 28.1 MiB of decoded RGBA is large enough to exercise the allocator
+        // failure seen in the lossless-only build.
+        const png = await randomImage(3, 5120, 1440, 'image/png');
+        const image = await createImageBitmap(png);
+        try {
+          const fullEncoder = await loadEncoder();
+          const webp = encodeWebPLosslessUsingWasm(image, fullEncoder);
+          expect(await readDimensions(webp)).to.deep.equal({
+            width: 5120,
+            height: 1440,
+          });
+
+          const losslessEncoder = await loadLosslessEncoder();
+          expect(() =>
+            encodeWebPLosslessUsingWasm(image, losslessEncoder),
+          ).to.throw();
+        } finally {
+          image.close();
+        }
+      });
+    },
+  );
 
   it('fails to open large images', () => {
     withBlob('tests/30k.png', async (blob) => {
