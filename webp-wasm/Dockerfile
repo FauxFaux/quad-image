@@ -33,7 +33,6 @@ RUN set -eux; \
     emcc /build/lossless/libwebp.a -Oz -flto --no-entry \
       -s STANDALONE_WASM=1 \
       -s ALLOW_MEMORY_GROWTH=1 \
-      -s MALLOC=emmalloc \
       -s EXPORTED_FUNCTIONS='["_WebPEncodeLosslessRGBA","_WebPFree","_malloc","_free"]' \
       -o /out/webp-encode-lossless.wasm
 

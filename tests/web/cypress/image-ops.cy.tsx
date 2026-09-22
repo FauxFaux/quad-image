@@ -42,12 +42,12 @@ describe('image ops', () => {
   });
 
   it(
-    'isolates the large-image crash to the lossless-only wasm build',
+    'encodes large images with both lossless wasm entry points',
     { defaultCommandTimeout: 120_000 },
     () => {
       cy.then(async () => {
-        // 28.1 MiB of decoded RGBA is large enough to exercise the allocator
-        // failure seen in the lossless-only build.
+        // 28.1 MiB of decoded RGBA guards the allocator regression previously
+        // seen in the lossless-only build.
         const png = await randomImage(3, 5120, 1440, 'image/png');
         const image = await createImageBitmap(png);
         try {
@@ -59,9 +59,14 @@ describe('image ops', () => {
           });
 
           const losslessEncoder = await loadLosslessEncoder();
-          expect(() =>
-            encodeWebPLosslessUsingWasm(image, losslessEncoder),
-          ).to.throw();
+          const losslessWebp = encodeWebPLosslessUsingWasm(
+            image,
+            losslessEncoder,
+          );
+          expect(await readDimensions(losslessWebp)).to.deep.equal({
+            width: 5120,
+            height: 1440,
+          });
         } finally {
           image.close();
         }
