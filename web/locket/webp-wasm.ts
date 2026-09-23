@@ -1,5 +1,6 @@
 export interface WebPEncoderExports extends WebAssembly.Exports {
   memory: WebAssembly.Memory;
+  _initialize(): void;
   malloc(size: number): number;
   free(pointer: number): void;
   WebPEncodeLosslessRGBA(
@@ -42,7 +43,9 @@ const instantiateEncoder = async <Encoder extends WebPEncoderExports>(
       },
     },
   );
-  return instance.exports as Encoder;
+  const encoder = instance.exports as Encoder;
+  encoder._initialize();
+  return encoder;
 };
 
 export const loadEncoder = async () => {

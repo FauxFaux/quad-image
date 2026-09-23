@@ -27,12 +27,15 @@ RUN set -eux; \
     cmake --build /build/lossless --parallel; \
     mkdir -p /out; \
     emcc /build/baseline/libwebp.a /build/baseline/libsharpyuv.a -O3 --no-entry \
-      -s STANDALONE_WASM=1 -s ALLOW_MEMORY_GROWTH=1 \
+      -s STANDALONE_WASM=1 \
+      -s ALLOW_MEMORY_GROWTH=1 \
+      -s MALLOC=emmalloc \
       -s EXPORTED_FUNCTIONS='["_WebPEncodeRGBA","_WebPEncodeLosslessRGBA","_WebPFree","_malloc","_free"]' \
       -o /out/webp-encode.wasm; \
     emcc /build/lossless/libwebp.a -Oz -flto --no-entry \
       -s STANDALONE_WASM=1 \
       -s ALLOW_MEMORY_GROWTH=1 \
+      -s MALLOC=emmalloc \
       -s EXPORTED_FUNCTIONS='["_WebPEncodeLosslessRGBA","_WebPFree","_malloc","_free"]' \
       -o /out/webp-encode-lossless.wasm
 
