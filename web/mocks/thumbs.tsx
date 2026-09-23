@@ -1,4 +1,4 @@
-import { OurFile, PendingItem } from '../home';
+import type { OurFile, PendingItem } from '../upload';
 
 const b64toBlob = (b64Data: string, contentType = '', sliceSize = 512) => {
   const byteCharacters = atob(b64Data);

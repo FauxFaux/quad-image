@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest';
 
-import { addImagesToGallery, removeSelectedImages } from '../../web/home';
+import {
+  addImagesToGallery,
+  removeSelectedImages,
+} from '../../web/gallery-actions';
 
 describe('removeSelectedImages', () => {
   test('removes selected images while preserving order', () => {

@@ -1,7 +1,7 @@
 import { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import type { ImageId } from '../types';
-import type { PendingItem, UploadStats } from '../home';
+import type { PendingItem, UploadStats } from '../upload';
 import type { Prop } from './sign-in';
 import CheckboxBlankCircleOutlineIcon from 'mdi-preact/CheckboxBlankCircleOutlineIcon';
 import CheckboxMarkedCircleOutlineIcon from 'mdi-preact/CheckboxMarkedCircleOutlineIcon';

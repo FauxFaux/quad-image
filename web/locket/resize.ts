@@ -1,4 +1,4 @@
-import { OurFile } from '../home';
+import type { OurFile } from '../upload';
 
 export type KnownImageFormat =
   'image/jpeg' | 'image/webp' | 'image/png' | 'image/gif' | 'image/heic';

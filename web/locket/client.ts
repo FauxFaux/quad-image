@@ -1,4 +1,4 @@
-import { PendingItem } from '../home';
+import type { PendingItem } from '../upload';
 import * as z from 'zod/mini';
 
 export async function getGallery(
