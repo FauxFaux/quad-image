@@ -13,8 +13,8 @@ android {
         applicationId = "pe.quad.android"
         minSdk = 25
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2026-09-30.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -22,7 +22,10 @@ android {
     buildTypes {
         release {
             optimization {
-                enable = false
+                enable = true
+            }
+            ndk {
+                debugSymbolLevel = "FULL"
             }
         }
     }
