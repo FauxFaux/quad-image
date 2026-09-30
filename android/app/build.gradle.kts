@@ -13,8 +13,8 @@ android {
         applicationId = "pe.quad.android"
         minSdk = 25
         targetSdk = 37
-        versionCode = 2
-        versionName = "2026-09-30.1"
+        versionCode = 3
+        versionName = "2026-09-30.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

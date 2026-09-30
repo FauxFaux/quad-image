@@ -53,6 +53,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
+private const val DEFAULT_SERVER_URL = "https://quad.pe"
+
 internal data class UploadRow(
     val key: String = UUID.randomUUID().toString(),
     val source: Uri? = null,
@@ -68,12 +70,13 @@ class MainActivity : ComponentActivity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val uploadMutex = Mutex()
     private val rows = mutableStateListOf<UploadRow>()
-    private var baseUrl by mutableStateOf("")
+    private var baseUrl by mutableStateOf(DEFAULT_SERVER_URL)
     private val pickImages = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { enqueue(it) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        baseUrl = preferences.getString("base_url", "") ?: ""
+        baseUrl = preferences.getString("base_url", DEFAULT_SERVER_URL)
+            ?.ifBlank { DEFAULT_SERVER_URL } ?: DEFAULT_SERVER_URL
         rows.addAll(ResultStore.load(preferences))
         handleShare(intent)
         setContent {
@@ -188,7 +191,7 @@ private fun UploadScreen(
         OutlinedTextField(
             value = baseUrl, onValueChange = onBaseUrlChange,
             label = { Text("Server base URL") },
-            placeholder = { Text("https://images.example.com") },
+            placeholder = { Text(DEFAULT_SERVER_URL) },
             supportingText = { if (!valid) Text("Enter a full http or https server URL") },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
