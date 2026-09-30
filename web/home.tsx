@@ -9,7 +9,7 @@ import { Messages, printer } from './locket/err';
 import { GallerySecret, generateGallerySecret, ImageId } from './types';
 import { readMagic } from './locket/resize';
 import { orPrinter } from './locket/result';
-import { attemptShrinkage, isLosslessFormat } from './upload';
+import { attemptShrinkage, isLosslessFormat, shrinkThreshold } from './upload';
 import type { OurFile, PendingItem } from './upload';
 import { addImagesToGallery, removeSelectedImages } from './gallery-actions';
 import * as z from 'zod/mini';

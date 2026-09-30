@@ -99,7 +99,7 @@ export const attemptShrinkage = async (
   };
 };
 
-const shrinkThreshold = 1024 * 1024;
+export const shrinkThreshold = 1024 * 1024;
 
 // GIF is excluded: it can be losslessly encoded, but decoding it to an
 // ImageBitmap would discard animation. PNG is the lossless still-image format

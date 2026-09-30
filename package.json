@@ -2,7 +2,7 @@
   "name": "quad-image",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
     "build:webp-wasm": "docker build --target wasm --output type=local,dest=web/assets webp-wasm",
     "build:webp-wasm:lossless": "docker build --target wasm-lossless --output type=local,dest=web/assets webp-wasm",
     "dev": "vite",
