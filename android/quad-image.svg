@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Quad Image</title>
+  <desc id="description">A muted blue-violet circular button with four rounded, clipped-corner image files. The upper-left file is highlighted.</desc>
+  <defs>
+    <!-- Restrained lighting keeps the artwork readable at small sizes. -->
+    <linearGradient id="button-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#353e7e"/>
+      <stop offset="1" stop-color="#303975"/>
+    </linearGradient>
+    <linearGradient id="rim-light" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7374af" stop-opacity="0.8"/>
+      <stop offset="0.48" stop-color="#5b5fa0" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#555b99" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+  <!-- Button face and rim are independently editable. -->
+  <circle id="button-face" cx="256" cy="256" r="250" fill="url(#button-fill)"/>
+  <circle id="button-rim" cx="256" cy="256" r="249" fill="none" stroke="url(#rim-light)" stroke-width="2"/>
+  <!-- Each file is one closed path, with rounded corners and a clipped top-right corner. -->
+  <g id="image-files">
+    <path id="file-top-left" fill="#e1e1e2" d="M 143,102 H 182 Q 185,102 188,105 L 220,133 Q 222,135 222,139 V 195 Q 222,222 196,222 H 146 Q 118,222 118,197 V 131 Q 118,102 143,102 Z"/>
+    <path id="file-top-right" fill="#a9a9ae" d="M 315,102 H 354 Q 357,102 360,105 L 392,133 Q 394,135 394,139 V 195 Q 394,222 368,222 H 318 Q 290,222 290,197 V 131 Q 290,102 315,102 Z"/>
+    <path id="file-bottom-left" fill="#a9a9ae" d="M 143,292 H 182 Q 185,292 188,295 L 220,323 Q 222,325 222,329 V 385 Q 222,412 196,412 H 146 Q 118,412 118,387 V 321 Q 118,292 143,292 Z"/>
+    <path id="file-bottom-right" fill="#a9a9ae" d="M 315,292 H 354 Q 357,292 360,295 L 392,323 Q 394,325 394,329 V 385 Q 394,412 368,412 H 318 Q 290,412 290,387 V 321 Q 290,292 315,292 Z"/>
+  </g>
+</svg>
