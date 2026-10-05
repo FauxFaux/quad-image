@@ -41,6 +41,50 @@ describe('image ops', () => {
     cy.then(() => expectWebP(encodeWebPUsingWasm));
   });
 
+  it('encodes narrow and odd-sized images across SIMD block boundaries', () => {
+    cy.then(async () => {
+      const encoders = [await loadEncoder(), await loadLosslessEncoder()];
+      for (const width of [1, 7, 15, 16, 17, 31, 33]) {
+        const height = 19;
+        const pixels = new ImageData(width, height);
+        for (let i = 0; i < pixels.data.length; i += 4) {
+          pixels.data[i] = (i * 13) & 255;
+          pixels.data[i + 1] = (i * 7) & 255;
+          pixels.data[i + 2] = (i * 3) & 255;
+          pixels.data[i + 3] = 255;
+        }
+        const image = await createImageBitmap(pixels);
+        try {
+          for (const quality of [0, 0.75, 1]) {
+            const webp = await encodeWebPUsingWasm(image, quality);
+            expect(await readDimensions(webp)).to.deep.equal({ width, height });
+          }
+          for (const encoder of encoders) {
+            const webp = encodeWebPLosslessUsingWasm(image, encoder);
+            const decoded = await createImageBitmap(webp);
+            const canvas = new OffscreenCanvas(width, height);
+            try {
+              expect(decoded.width).to.equal(width);
+              expect(decoded.height).to.equal(height);
+              const context = canvas.getContext('2d');
+              if (!context) throw new Error('could not create 2d context');
+              context.drawImage(decoded, 0, 0);
+              expect(
+                context.getImageData(0, 0, width, height).data,
+              ).to.deep.equal(pixels.data);
+            } finally {
+              decoded.close();
+              canvas.width = 0;
+              canvas.height = 0;
+            }
+          }
+        } finally {
+          image.close();
+        }
+      }
+    });
+  });
+
   it(
     'encodes large images with both lossless wasm entry points',
     { defaultCommandTimeout: 120_000 },

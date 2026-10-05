@@ -1,0 +1,34 @@
+diff --git a/cmake/cpu.cmake b/cmake/cpu.cmake
+--- a/cmake/cpu.cmake
++++ b/cmake/cpu.cmake
+@@ -74,13 +74,13 @@
+ math(EXPR WEBP_SIMD_FLAGS_RANGE "${WEBP_SIMD_FLAGS_LENGTH} - 1")
+ 
+ foreach(I_SIMD RANGE ${WEBP_SIMD_FLAGS_RANGE})
+-  # With Emscripten 2.0.9 -msimd128 -mfpu=neon will enable NEON, but the source
+-  # will fail to compile.
+-  if(EMSCRIPTEN AND ${I_SIMD} GREATER_EQUAL 2)
+-    break()
++  list(GET WEBP_SIMD_FLAGS ${I_SIMD} WEBP_SIMD_FLAG)
++  # WASM uses SSE2/SSE4.1 translated to SIMD128. AVX2 is not dispatched by
++  # cpu.c, and the other architectures are not supported here.
++  if(EMSCRIPTEN AND NOT WEBP_SIMD_FLAG MATCHES "^SSE(2|41)$")
++    continue()
+   endif()
+ 
+-  list(GET WEBP_SIMD_FLAGS ${I_SIMD} WEBP_SIMD_FLAG)
+ 
+   # First try with no extra flag added as the compiler might have default flags
+   # (especially on Android).
+diff --git a/src/dsp/cpu.c b/src/dsp/cpu.c
+--- a/src/dsp/cpu.c
++++ b/src/dsp/cpu.c
+@@ -179,7 +179,7 @@
+ }
+ WEBP_EXTERN VP8CPUInfo VP8GetCPUInfo;
+ VP8CPUInfo VP8GetCPUInfo = AndroidCPUInfo;
+-#elif defined(EMSCRIPTEN) // also needs to be before generic NEON test
++#elif defined(__EMSCRIPTEN__) // also needs to be before generic NEON test
+ // Use compile flags as an indicator of SIMD support instead of a runtime check.
+ static int wasmCPUInfo(CPUFeature feature) {
+   switch (feature) {

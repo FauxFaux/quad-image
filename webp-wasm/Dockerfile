@@ -12,11 +12,15 @@ RUN git clone --depth 1 --branch "${LIBWEBP_TAG}" --single-branch \
  && test "$(git -C libwebp describe --exact-match --tags)" = "${LIBWEBP_TAG}"
 
 COPY lossless-only.patch /tmp/lossless-only.patch
+COPY simd.patch /tmp/simd.patch
+
+RUN git -C libwebp apply /tmp/simd.patch
 
 RUN set -eux; \
     common_cmake_args='-DBUILD_SHARED_LIBS=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Threads=TRUE -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF -DWEBP_ENABLE_SIMD=OFF'; \
     emcmake cmake -S libwebp -B /build/baseline ${common_cmake_args} \
-      -DCMAKE_BUILD_TYPE=Release; \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DWEBP_ENABLE_SIMD=ON; \
     cmake --build /build/baseline --parallel; \
     git -C libwebp apply /tmp/lossless-only.patch; \
     emcmake cmake -S libwebp -B /build/lossless ${common_cmake_args} \
@@ -26,7 +30,7 @@ RUN set -eux; \
       -DWEBP_BUILD_LIBWEBPMUX=OFF; \
     cmake --build /build/lossless --parallel; \
     mkdir -p /out; \
-    emcc /build/baseline/libwebp.a /build/baseline/libsharpyuv.a -O3 --no-entry \
+    emcc /build/baseline/libwebp.a /build/baseline/libsharpyuv.a -O3 -msimd128 --no-entry \
       -s STANDALONE_WASM=1 \
       -s ALLOW_MEMORY_GROWTH=1 \
       -s MALLOC=emmalloc \
