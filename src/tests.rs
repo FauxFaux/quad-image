@@ -54,5 +54,57 @@ fn write_an_image() -> Result<()> {
         "created one of each"
     );
 
+    // A single-worker pool cannot run the queued WebP encode until store
+    // returns, so this also checks that JPEG storage does not join the worker.
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build()?;
+    let jpeg_data = include_bytes!("../tests/orient_1.jpg");
+    let jpeg = pool.install(|| -> Result<String> {
+        let saved = store(jpeg_data)?;
+        assert!(saved.ends_with(".jpg"));
+        assert!(!std::path::Path::new(&raw_path(&saved)).exists());
+        Ok(saved)
+    })?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !std::path::Path::new(&raw_path(&jpeg)).exists() {
+        anyhow::ensure!(
+            std::time::Instant::now() < deadline,
+            "raw WebP was not saved"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let source = image::load_from_memory(jpeg_data)?;
+    let raw = image::open(raw_path(&jpeg))?;
+    assert_eq!(source.to_rgba8(), raw.to_rgba8());
+
+    // Incompressible pixels force the existing >1 MiB JPEG fallback. Its
+    // companion must preserve the pixels from before the lossy conversion.
+    let mut state = 1_u32;
+    let noisy = image::RgbImage::from_fn(768, 768, |_, _| {
+        image::Rgb(std::array::from_fn(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as u8
+        }))
+    });
+    let mut png = std::io::Cursor::new(Vec::new());
+    noisy.write_to(&mut png, image::ImageFormat::Png)?;
+    let jpeg = store(png.get_ref())?;
+    assert!(jpeg.ends_with(".jpg"));
+    assert_eq!(
+        image::ImageFormat::Jpeg,
+        image::guess_format(&fs::read(&jpeg)?)?
+    );
+    let raw_bytes = fs::read(raw_path(&jpeg))?;
+    assert!(raw_bytes.len() > 1024 * 1024);
+    assert_eq!(
+        noisy,
+        image::load_from_memory_with_format(&raw_bytes, image::ImageFormat::WebP)?.to_rgb8()
+    );
+
     Ok(())
+}
+
+fn raw_path(saved: &str) -> String {
+    format!("{}.raw.webp", saved.strip_suffix(".jpg").unwrap())
 }

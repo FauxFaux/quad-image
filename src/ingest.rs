@@ -1,7 +1,6 @@
 use std::fs;
 use std::io;
 use std::io::Seek;
-use std::io::SeekFrom;
 
 use anyhow::anyhow;
 use anyhow::bail;
@@ -153,6 +152,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
 
     let mut temp = temp_file()?;
     write_image(temp.as_mut(), loaded.clone(), target_format).with_context(|| anyhow!("save"))?;
+    let mut raw = None;
 
     if target_format == WebP {
         // Chrome seems to convert everything pasted to PNG, even if it's huge.
@@ -165,15 +165,12 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
             .with_context(|| anyhow!("temp metadata"))?
             .len();
         if webp_length > 1024 * 1024 {
-            temp.seek(SeekFrom::Start(0))
-                .with_context(|| anyhow!("truncating temp file 2"))?;
-
-            temp.set_len(0)
-                .with_context(|| anyhow!("truncating temp file"))?;
+            raw = Some(temp);
+            temp = temp_file()?;
 
             target_format = Jpeg;
 
-            write_image(temp.as_mut(), loaded, target_format)
+            write_image(temp.as_mut(), loaded.clone(), target_format)
                 .with_context(|| anyhow!("save attempt 2"))?;
 
             let jpeg_length = temp
@@ -192,7 +189,41 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
         _ => unreachable!(),
     };
 
-    write_out(temp, ext)
+    let saved = write_out(temp, ext)?;
+    if target_format == Jpeg {
+        let raw_path =
+            std::env::current_dir()?.join(saved.trim_end_matches(".jpg").to_owned() + ".raw.webp");
+        if let Some(raw) = raw {
+            // The size decision already required encoding this WebP. Keep it
+            // instead of encoding it again or overwriting it with the JPEG.
+            persist_raw(raw, &raw_path)?;
+        } else {
+            // JPEG uploads can be served as soon as their primary file is ready.
+            // Own both the decoded pixels and an absolute path in the worker.
+            rayon::spawn(move || {
+                let result = (|| -> Result<()> {
+                    let mut temp = PersistableTempFile::new_in(raw_path.parent().unwrap())?;
+                    write_image(temp.as_mut(), loaded, WebP)?;
+                    persist_raw(temp, &raw_path)
+                })();
+                if let Err(error) = result {
+                    eprintln!(
+                        "couldn't save lossless image {}: {error:?}",
+                        raw_path.display()
+                    );
+                }
+            });
+        }
+    }
+    Ok(saved)
+}
+
+fn persist_raw(temp: PersistableTempFile, path: &std::path::Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    temp.set_permissions(fs::Permissions::from_mode(0o0644))?;
+    temp.persist_noclobber(path)
+        .map_err(|error| anyhow!("couldn't save lossless image {}: {error:?}", path.display()))?;
+    Ok(())
 }
 
 fn write_image(
@@ -202,6 +233,7 @@ fn write_image(
 ) -> Result<()> {
     let im = match target_format {
         Jpeg => DynamicImage::from(im.into_rgb8()),
+        ImageFormat::WebP if has_only_opaque_alpha(&im) => DynamicImage::from(im.into_rgb8()),
         _ => im,
     };
 
@@ -209,6 +241,17 @@ fn write_image(
         .with_context(|| anyhow!("save"))?;
 
     Ok(())
+}
+
+fn has_only_opaque_alpha(im: &DynamicImage) -> bool {
+    match im {
+        DynamicImage::ImageRgba8(buffer) => buffer.pixels().all(|pixel| pixel[3] == u8::MAX),
+        DynamicImage::ImageLumaA8(buffer) => buffer.pixels().all(|pixel| pixel[1] == u8::MAX),
+        DynamicImage::ImageRgba16(buffer) => buffer.pixels().all(|pixel| pixel[3] == u16::MAX),
+        DynamicImage::ImageLumaA16(buffer) => buffer.pixels().all(|pixel| pixel[1] == u16::MAX),
+        DynamicImage::ImageRgba32F(buffer) => buffer.pixels().all(|pixel| pixel[3] == 1.0),
+        _ => false,
+    }
 }
 
 fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
@@ -379,6 +422,23 @@ mod tests {
         let png = im(include_bytes!("../tests/16-bit.png"));
         write_image(&mut io::Cursor::new(vec![]), png, ImageFormat::Jpeg)
             .expect("able to write a loaded image, even if it was naughty");
+    }
+
+    #[test]
+    fn webp_omits_opaque_alpha_and_preserves_transparency() {
+        for alpha in [255, 128] {
+            let pixels = image::RgbaImage::from_pixel(2, 2, image::Rgba([12, 34, 56, alpha]));
+            let mut encoded = io::Cursor::new(Vec::new());
+            write_image(
+                &mut encoded,
+                image::DynamicImage::ImageRgba8(pixels.clone()),
+                ImageFormat::WebP,
+            )
+            .unwrap();
+            let decoded = image::load_from_memory(encoded.get_ref()).unwrap();
+            assert_eq!(decoded.color().has_alpha(), alpha != 255);
+            assert_eq!(decoded.to_rgba8(), pixels);
+        }
     }
 
     #[test]
