@@ -69,6 +69,22 @@ pub fn encode_rgba(
     quality: f32,
     limits: Limits,
 ) -> Result<Vec<u8>> {
+    encode_rgba_with_alpha_quality(rgba, width, height, quality, 100, limits)
+}
+
+/// Encode lossy RGBA with independent alpha quality (0..=100; 100 is lossless).
+pub fn encode_rgba_with_alpha_quality(
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    quality: f32,
+    alpha_quality: u8,
+    limits: Limits,
+) -> Result<Vec<u8>> {
+    ensure!(
+        alpha_quality <= 100,
+        "alpha quality must be between 0 and 100"
+    );
     ensure!((1..=16383).contains(&width), "invalid WebP width");
     ensure!((1..=16383).contains(&height), "invalid WebP height");
     ensure!(
@@ -101,8 +117,10 @@ pub fn encode_rgba(
         let malloc = instance.get_typed_func::<u32, u32>(&mut *store, "malloc")?;
         let free = instance.get_typed_func::<u32, ()>(&mut *store, "free")?;
         let webp_free = instance.get_typed_func::<u32, ()>(&mut *store, "WebPFree")?;
-        let encode = instance
-            .get_typed_func::<(u32, u32, u32, u32, f32, u32), u32>(&mut *store, "WebPEncodeRGBA")?;
+        let encode = instance.get_typed_func::<(u32, u32, u32, u32, f32, u32, u32), u32>(
+            &mut *store,
+            "WebPEncodeRGBAWithAlphaQuality",
+        )?;
 
         let input = malloc.call(&mut *store, input_size as u32)?;
         ensure!(input != 0, "could not allocate RGBA input");
@@ -112,7 +130,15 @@ pub fn encode_rgba(
         memory.write(&mut *store, output as usize, &[0; 4])?;
         let size = encode.call(
             &mut *store,
-            (input, width, height, width * 4, quality, output),
+            (
+                input,
+                width,
+                height,
+                width * 4,
+                quality,
+                u32::from(alpha_quality),
+                output,
+            ),
         )?;
         let mut pointer = [0; 4];
         memory.read(&*store, output as usize, &mut pointer)?;

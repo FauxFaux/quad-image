@@ -14,6 +14,15 @@ export interface WebPEncoderExports extends WebAssembly.Exports {
 }
 
 interface FullWebPEncoderExports extends WebPEncoderExports {
+  WebPEncodeRGBAWithAlphaQuality(
+    rgba: number,
+    width: number,
+    height: number,
+    stride: number,
+    quality: number,
+    alphaQuality: number,
+    output: number,
+  ): number;
   WebPEncodeRGBA(
     rgba: number,
     width: number,

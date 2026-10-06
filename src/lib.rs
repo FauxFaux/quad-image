@@ -1,2 +1,2 @@
-//! Standalone experiments; these are not used by the HTTP application.
+//! WebP encoder shared by the HTTP application and standalone experiments.
 pub mod webp_encoder;

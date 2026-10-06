@@ -3,11 +3,29 @@
 Run `npm run build:webp-wasm` to regenerate `web/assets/webp-encode.wasm`.
 The full encoder uses WebAssembly SIMD128, with libwebp's SSE2 and SSE4.1
 intrinsics translated by Emscripten. The final link also needs `-msimd128`.
-Its exports and imports are unchanged; it requires a WASM SIMD-capable runtime.
+It requires a WASM SIMD-capable runtime.
 
 Run `npm run build:webp-wasm:lossless` to regenerate the separate, scalar,
 size-optimized lossless encoder. Both commands use libwebp v1.6.0 and
 Emscripten 6.0.10, and apply `simd.patch` before building either library.
+
+## Independent alpha quality
+
+The full module additionally exports `WebPEncodeRGBAWithAlphaQuality(rgba,
+width, height, stride, quality, alpha_quality, output)`, implemented by
+`alpha-quality.c`. It uses libwebp's default lossy preset and RGBA importer,
+but sets `WebPConfig.alpha_quality` separately. The return value is the byte
+length, and the output pointer must be released with `WebPFree`, just like
+`WebPEncodeRGBA`. All failure paths free the picture and memory writer;
+the output pointer is cleared before validation.
+
+Alpha quality 100 preserves alpha losslessly. Lower qualities quantize alpha:
+30 gives eight levels and 10 gives four. Server thumbnails use 30 for both
+colour and alpha; existing browser upload and lossless entry points keep their
+original behavior. Rust and TypeScript declarations include the new export.
+The full module is now 438,116 bytes; the lossless-only module is unchanged.
+Alpha quality 100 preserves the original encoder's output byte for byte.
+See `docs/thumbnail-webp.md` for quality tradeoffs and benchmarking instructions.
 
 ## Why simply enabling SIMD failed
 

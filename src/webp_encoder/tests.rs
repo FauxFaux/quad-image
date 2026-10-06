@@ -40,6 +40,67 @@ fn embedded_encoder_produces_decodable_lossy_webp() -> Result<()> {
 }
 
 #[test]
+fn alpha_quality_reduces_size_and_preserves_transparency_endpoints() -> Result<()> {
+    let mut state = 1_u32;
+    let pixels = image::RgbaImage::from_fn(128, 128, |_, _| {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        image::Rgba([80, 120, 160, state as u8])
+    });
+    let lossless_alpha = encode_rgba(pixels.as_raw(), 128, 128, 30.0, Limits::default())?;
+    let reduced_alpha =
+        encode_rgba_with_alpha_quality(pixels.as_raw(), 128, 128, 30.0, 30, Limits::default())?;
+    assert!(reduced_alpha.len() < lossless_alpha.len());
+    let original = image::load_from_memory(&lossless_alpha)?.into_rgba8();
+    let reduced = image::load_from_memory(&reduced_alpha)?.into_rgba8();
+    assert_eq!(reduced.dimensions(), pixels.dimensions());
+    let mut changed = false;
+    for ((source, original), reduced) in
+        pixels.pixels().zip(original.pixels()).zip(reduced.pixels())
+    {
+        assert_eq!(source[3], original[3]);
+        if source[3] == 0 || source[3] == 255 {
+            assert_eq!(source[3], reduced[3]);
+        }
+        changed |= source[3] != reduced[3];
+    }
+    assert!(changed, "low alpha quality should quantize translucency");
+    assert!(encode_rgba_with_alpha_quality(
+        pixels.as_raw(),
+        128,
+        128,
+        30.0,
+        101,
+        Limits::default(),
+    )
+    .is_err());
+    Ok(())
+}
+
+#[test]
+fn alpha_quality_does_not_change_opaque_images() -> Result<()> {
+    let pixels = image::load_from_memory(include_bytes!("../../tests/orient.png"))?.into_rgba8();
+    let original = encode_rgba(
+        pixels.as_raw(),
+        pixels.width(),
+        pixels.height(),
+        30.0,
+        Limits::default(),
+    )?;
+    let reduced = encode_rgba_with_alpha_quality(
+        pixels.as_raw(),
+        pixels.width(),
+        pixels.height(),
+        30.0,
+        30,
+        Limits::default(),
+    )?;
+    assert_eq!(original, reduced);
+    Ok(())
+}
+
+#[test]
 fn rejects_invalid_input_before_starting_guest() {
     let limits = Limits::default();
     for (pixels, width, height, quality) in [
