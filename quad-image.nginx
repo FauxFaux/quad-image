@@ -24,7 +24,7 @@ location / {
 
 # Internal rewrite keeps thumbnail requests to one round trip. The rewritten
 # .webp extension selects image/webp from nginx's standard mime.types table.
-location ~ ^/e/([a-zA-Z0-9]{10}\.(?:png|webp|jpg|gif))$ {
+location ~ "^/e/([a-zA-Z0-9]{10}\.(?:png|webp|jpg|gif))$" {
     root /opt/quad-image/;
     expires 30d;
     if ($arg_variant = thumbnail) {
