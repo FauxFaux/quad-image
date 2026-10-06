@@ -21,6 +21,52 @@ fn guest_module(module: &Module, limits: Limits) -> Result<Vec<u8>> {
 }
 
 #[test]
+fn embedded_encoders_trap_on_c_stack_overflow() -> Result<()> {
+    for wasm in [
+        ENCODER,
+        include_bytes!("../../web/assets/webp-encode-lossless.wasm").as_slice(),
+    ] {
+        let module = compile(wasm)?;
+        let error = run(Limits::default(), &module, |store, module| {
+            let mut linker = Linker::new(module.engine());
+            linker.func_wrap("env", "emscripten_notify_memory_growth", |_: i32| {})?;
+            let instance = linker.instantiate(&mut *store, module)?;
+            instance
+                .get_typed_func::<(), ()>(&mut *store, "emscripten_stack_init")?
+                .call(&mut *store, ())?;
+            let base = instance
+                .get_typed_func::<(), u32>(&mut *store, "emscripten_stack_get_base")?
+                .call(&mut *store, ())?;
+            let end = instance
+                .get_typed_func::<(), u32>(&mut *store, "emscripten_stack_get_end")?
+                .call(&mut *store, ())?;
+            instance
+                .get_typed_func::<(u32, u32), ()>(&mut *store, "__set_stack_limits")?
+                .call(&mut *store, (base, end))?;
+            instance
+                .get_typed_func::<(), ()>(&mut *store, "_initialize")?
+                .call(&mut *store, ())?;
+            // A valid stack-pointer assignment must succeed first.
+            instance
+                .get_typed_func::<u32, ()>(&mut *store, "_emscripten_stack_restore")?
+                .call(&mut *store, base - 16)?;
+            // Move the C stack pointer below its lower bound. WASM memory still
+            // contains this address, so only the added stack checks reject it.
+            instance
+                .get_typed_func::<u32, ()>(&mut *store, "_emscripten_stack_restore")?
+                .call(&mut *store, end - 16)?;
+            Ok(Vec::new())
+        })
+        .expect_err("C stack overflow must trap");
+        assert!(matches!(
+            error.downcast_ref::<Trap>(),
+            Some(Trap::UnreachableCodeReached)
+        ));
+    }
+    Ok(())
+}
+
+#[test]
 fn embedded_encoder_produces_decodable_lossy_webp() -> Result<()> {
     let compiled = compiled_encoder()?;
     let image = image::load_from_memory(include_bytes!("../../tests/orient.webp"))?.to_rgba8();

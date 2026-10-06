@@ -108,6 +108,20 @@ pub fn encode_rgba_with_alpha_quality(
         let mut linker = Linker::new(module.engine());
         linker.func_wrap("env", "emscripten_notify_memory_growth", |_: i32| {})?;
         let instance = linker.instantiate(&mut *store, module)?;
+        // Standalone hosts must initialize Emscripten's C-stack bounds before
+        // entering code instrumented with STACK_OVERFLOW_CHECK=2.
+        instance
+            .get_typed_func::<(), ()>(&mut *store, "emscripten_stack_init")?
+            .call(&mut *store, ())?;
+        let stack_base = instance
+            .get_typed_func::<(), u32>(&mut *store, "emscripten_stack_get_base")?
+            .call(&mut *store, ())?;
+        let stack_end = instance
+            .get_typed_func::<(), u32>(&mut *store, "emscripten_stack_get_end")?
+            .call(&mut *store, ())?;
+        instance
+            .get_typed_func::<(u32, u32), ()>(&mut *store, "__set_stack_limits")?
+            .call(&mut *store, (stack_base, stack_end))?;
         instance
             .get_typed_func::<(), ()>(&mut *store, "_initialize")?
             .call(&mut *store, ())?;

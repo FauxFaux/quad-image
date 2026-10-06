@@ -1,5 +1,9 @@
 export interface WebPEncoderExports extends WebAssembly.Exports {
   memory: WebAssembly.Memory;
+  emscripten_stack_init(): void;
+  emscripten_stack_get_base(): number;
+  emscripten_stack_get_end(): number;
+  __set_stack_limits(base: number, end: number): void;
   _initialize(): void;
   malloc(size: number): number;
   free(pointer: number): void;
@@ -53,6 +57,11 @@ const instantiateEncoder = async <Encoder extends WebPEncoderExports>(
     },
   );
   const encoder = instance.exports as Encoder;
+  encoder.emscripten_stack_init();
+  encoder.__set_stack_limits(
+    encoder.emscripten_stack_get_base(),
+    encoder.emscripten_stack_get_end(),
+  );
   encoder._initialize();
   return encoder;
 };

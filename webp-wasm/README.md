@@ -9,6 +9,20 @@ Run `npm run build:webp-wasm:lossless` to regenerate the separate, scalar,
 size-optimized lossless encoder. Both commands use libwebp v1.6.0 and
 Emscripten 6.0.10, and apply `simd.patch` before building either library.
 
+Both modules link with `STACK_OVERFLOW_CHECK=2`, which checks C-stack pointer
+assignments against the stack bounds inside WASM linear memory. Standalone
+hosts must call `emscripten_stack_init()`, then pass
+`emscripten_stack_get_base()` and `emscripten_stack_get_end()` to
+`__set_stack_limits(base, end)` before calling `_initialize()` or encoding.
+The Rust and browser hosts perform this setup. A Rust regression test checks
+that both modules accept a valid stack pointer and trap below the stack bound.
+These checks detect C-stack exhaustion, not every buffer overflow within an
+allocation.
+
+CFI is not enabled: the pinned Emscripten driver rejects `-fsanitize=cfi-icall`.
+Passing the sanitizer directly to Clang with `-Xclang` also crashes the bundled
+WASM linker on a minimal indirect-call example. No sanitizer fallback is enabled.
+
 ## Independent alpha quality
 
 The full module additionally exports `WebPEncodeRGBAWithAlphaQuality(rgba,
