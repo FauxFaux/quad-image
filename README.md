@@ -17,6 +17,13 @@ Feature creep:
     and list images in the gallery (if they know the less secret)
  * There's also a UI.
 
+Append `?variant=thumbnail` to an image URL to fetch its still WebP thumbnail
+directly, without a redirect. Clients can derive this URL from stored original
+image URLs; the thumbnail's storage path, dimensions, and encoding settings
+are server-controlled. The legacy `.thumb.jpg` URLs continue to serve JPEG.
+The nginx fragment expects the standard `mime.types` table to be included so
+that `.webp` files are served with `Content-Type: image/webp`.
+
 ### Building
 
 `quad-image` probably only works on libc/Unix operating systems.

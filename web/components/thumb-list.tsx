@@ -106,7 +106,7 @@ export function ThumbDone(props: ThumbDoneProps) {
   return (
     <li>
       <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
-        <img src={`${bare}.thumb.jpg`} loading={'lazy'} />
+        <img src={`${bare}?variant=thumbnail`} loading={'lazy'} />
       </a>
       {props.stats && <StatsLine stats={props.stats} />}
       {footer}

@@ -2,6 +2,7 @@ mod gallery;
 pub mod ingest;
 #[cfg(test)]
 mod tests;
+mod thumbnail_response;
 mod thumbs;
 use quad_image::webp_encoder;
 
@@ -446,7 +447,8 @@ async fn main() -> Result<()> {
         .layer(DefaultBodyLimit::max(10 * MB))
         .with_state(Arc::clone(&ctx))
         .nest_service("/e", serve_dir(path::Path::new("e")))
-        .fallback_service(serve_dir(dist.as_path()));
+        .fallback_service(serve_dir(dist.as_path()))
+        .layer(axum::middleware::from_fn(thumbnail_response::serve));
 
     let mut servers = JoinSet::new();
     for addr in bind_resolved {

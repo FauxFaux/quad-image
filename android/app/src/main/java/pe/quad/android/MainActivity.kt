@@ -204,7 +204,7 @@ private fun UploadScreen(
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         val imageUrl = row.imageId?.let { id -> "${row.origin}/$id" }
                         if (imageUrl != null) {
-                            Thumbnail("$imageUrl.thumb.jpg")
+                            Thumbnail("$imageUrl?variant=thumbnail")
                             Text(imageUrl, style = MaterialTheme.typography.bodyMedium)
                             Button(onClick = { onCopy(imageUrl) }) { Text("Copy URL") }
                         } else if (row.busy) {
