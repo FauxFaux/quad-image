@@ -3,6 +3,7 @@ pub mod ingest;
 #[cfg(test)]
 mod tests;
 mod thumbs;
+mod webp_encoder;
 
 use std::future::IntoFuture;
 use std::io::Read;

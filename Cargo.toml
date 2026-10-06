@@ -31,6 +31,7 @@ sha2 = "0.11"
 tower-http = { version = "0.7", features = ["fs"] }
 tempfile-fast = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+wasmtime = { version = "49", default-features = false, features = ["anyhow", "cranelift", "runtime", "std"] }
 
 [dependencies.image]
 version = "0.25.1"
@@ -44,6 +45,7 @@ features = ["bundled"]
 
 [dev-dependencies]
 tempfile = "3"
+wat = "1"
 
 [profile.release]
 lto = true
