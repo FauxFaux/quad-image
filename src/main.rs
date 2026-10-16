@@ -6,6 +6,7 @@ mod thumbnail_response;
 mod thumbs;
 use quad_image::webp_encoder;
 
+use std::convert::Infallible;
 use std::future::IntoFuture;
 use std::io::Read;
 use std::io::Write;
@@ -18,8 +19,10 @@ use anyhow::{anyhow, Context, Error, Result};
 use axum::body::Bytes;
 use axum::extract::{ConnectInfo, DefaultBodyLimit, Multipart, Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use futures_util::{stream, StreamExt as _};
 use once_cell::sync::Lazy;
 use rand::Rng;
 use regex::Regex;
@@ -125,25 +128,9 @@ async fn upload(
         Err(message) => return nh(bad_request(message)),
     };
 
-    match ingest::store(&form.image) {
+    match process_upload(&form.image, gallery, &state) {
         Ok(image_id) => {
             println!("{caller:?}: {image_id}");
-
-            if let Err(e) = thumbs::thumbnail(&image_id) {
-                return nh(log_error("thumbnailing just written", &caller, &e));
-            }
-
-            if let Some((gallery, private)) = gallery {
-                if let Err(e) = gallery::gallery_store(
-                    &state.conn,
-                    &state.secret,
-                    gallery,
-                    private,
-                    &[image_id.as_str()],
-                ) {
-                    return nh(log_error("saving uploaded image to gallery", &caller, &e));
-                }
-            }
 
             let status = if form.return_redirect {
                 StatusCode::SEE_OTHER
@@ -192,6 +179,92 @@ async fn upload(
         }
         Err(e) => nh(log_error("storing image", &caller, &e)),
     }
+}
+
+// Both upload endpoints use the same trusted decode/re-encode and gallery path.
+fn process_upload(image: &[u8], gallery: Option<(&str, &str)>, state: &Ctx) -> Result<String> {
+    let image_id = ingest::store(image).context("storing image")?;
+    thumbs::thumbnail(&image_id).context("thumbnailing just written")?;
+    if let Some((gallery, private)) = gallery {
+        gallery::gallery_store(
+            &state.conn,
+            &state.secret,
+            gallery,
+            private,
+            &[image_id.as_str()],
+        )
+        .context("saving uploaded image to gallery")?;
+    }
+    Ok(image_id)
+}
+
+async fn upload_stream(
+    ConnectInfo(conn_info): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    State(state): State<Arc<Ctx>>,
+    body: Multipart,
+) -> Response {
+    let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
+    let form = match extract_image_form(body).await {
+        Ok(UploadFormStatus::Form(form)) => form,
+        Ok(UploadFormStatus::BadRequest(message)) => return bad_request(message).into_response(),
+        Err(e) => return log_error("parsing image form", &caller, &e).into_response(),
+    };
+    if let Err(message) = form.gallery.as_deref().map(parse_gallery_spec).transpose() {
+        return bad_request(message).into_response();
+    }
+
+    // Yield accepted before even starting the expensive work. The response stays
+    // HTTP 200: failures after acceptance are terminal SSE error events.
+    let accepted = stream::once(async {
+        Ok::<_, Infallible>(
+            Event::default()
+                .event("accepted")
+                .data(json!({"message": "Upload accepted, going to transcode"}).to_string()),
+        )
+    });
+    let complete = stream::once(async move {
+        let result = tokio::task::spawn_blocking(move || {
+            let gallery = form
+                .gallery
+                .as_deref()
+                .map(parse_gallery_spec)
+                .transpose()
+                .map_err(|message| anyhow!(message))?;
+            process_upload(&form.image, gallery, &state)
+        })
+        .await;
+        let event = match result {
+            Ok(Ok(image_id)) => {
+                println!("{conn_info:?}: {image_id}");
+                Event::default().event("complete").data(
+                    json!({
+                        "message": "Encoding complete, image available",
+                        "data": resource_object(image_id, "image"),
+                    })
+                    .to_string(),
+                )
+            }
+            result => {
+                println!("{conn_info:?}: failed processing upload: {result:?}");
+                Event::default().event("error").data(
+                    json!({
+                        "message": "Image processing failed",
+                    })
+                    .to_string(),
+                )
+            }
+        };
+        Ok::<_, Infallible>(event)
+    });
+    let mut response = Sse::new(accepted.chain(complete))
+        .keep_alive(KeepAlive::default())
+        .into_response();
+    // nginx otherwise buffers the small status events until processing finishes.
+    response
+        .headers_mut()
+        .insert("X-Accel-Buffering", HeaderValue::from_static("no"));
+    response
 }
 
 /// http://jsonapi.org/format/#errors
@@ -442,6 +515,7 @@ async fn main() -> Result<()> {
     use axum::routing::{get, post, put};
     let app = axum::Router::new()
         .route("/api/upload", post(upload))
+        .route("/api/upload-stream", post(upload_stream))
         .route("/api/gallery/{public}", get(gallery_get))
         .route("/api/gallery", put(gallery_put))
         .layer(DefaultBodyLimit::max(10 * MB))

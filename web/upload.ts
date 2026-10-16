@@ -22,6 +22,7 @@ export type PendingItem = { ctx: string; stats?: UploadStats } & (
   | { state: 'ready'; file: OurFile }
   | { state: 'starting'; file: OurFile }
   | { state: 'uploading'; progress: number; file: OurFile }
+  | { state: 'processing'; message: string; file: OurFile }
   | { state: 'done'; base: string }
   | { state: 'error'; error: string; file: OurFile }
 );

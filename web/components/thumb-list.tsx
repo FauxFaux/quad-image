@@ -224,6 +224,8 @@ const simpleMessage = (item: PendingItem) => {
       return 'ready';
     case 'starting':
       return 'starting';
+    case 'processing':
+      return item.message;
     case 'uploading': {
       if (Number.isNaN(item.progress)) {
         return 'transferring (progress not available)';

@@ -1,5 +1,6 @@
 import type { PendingItem } from '../upload';
 import * as z from 'zod/mini';
+import { ServerEventParser } from './sse';
 
 export async function getGallery(
   gallery: string,
@@ -44,6 +45,7 @@ export async function putGallery(gallery: string, images: string[]) {
   return body.data;
 }
 
+// TYOOL 2026, fetch() actively discourages progress reporting on uploads
 export async function driveUpload(
   initial: PendingItem,
   updateState: (next: PendingItem) => void,
@@ -60,60 +62,140 @@ export async function driveUpload(
     if (gallery) formData.append('gallery', gallery);
   }
 
-  const xhr = new XMLHttpRequest();
-  xhr.responseType = 'json';
-  xhr.open('POST', '/api/upload');
-  xhr.upload.addEventListener('progress', (e) => {
-    updateState({
-      state: 'uploading',
-      progress: e.lengthComputable ? e.loaded / e.total : NaN,
-      ctx: initial.ctx,
-      file: initial.file,
-      stats: initial.stats,
-    });
-  });
-  const code = await new Promise((resolve) => {
-    xhr.addEventListener('load', () => resolve('load'));
-    xhr.addEventListener('abort', () => resolve('error'));
-    xhr.addEventListener('error', () => resolve('error'));
-    xhr.send(formData);
-    updateState({
-      state: 'starting',
-      file: initial.file,
-      ctx: initial.ctx,
-      stats: initial.stats,
-    });
-  });
+  const common = {
+    ctx: initial.ctx,
+    file: initial.file,
+    stats: initial.stats,
+  };
+  updateState({ ...common, state: 'starting' });
+  try {
+    const base = await new Promise<string>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/upload-stream');
+      xhr.responseType = 'text';
+      xhr.setRequestHeader('Accept', 'text/event-stream');
+      const parser = new ServerEventParser();
+      let offset = 0;
+      let settled = false;
+      let processing = false;
 
-  if (xhr.status !== 200 || code !== 'load') {
-    let msg = 'unexpected request error: ';
-    msg += `${xhr.status}: ${xhr.statusText}`;
-    if (code === 'error') {
-      msg += ' + [opaque networking failure]';
-    }
-
-    // the tile shows msg and the stats separately, but the console wants both
-    console.error(msg, 'sending', initial.file.size, 'bytes', initial.stats);
-
-    updateState({
-      state: 'error',
-      error: msg,
-      ctx: initial.ctx,
-      file: initial.file,
-      stats: initial.stats,
+      const cleanup = () => {
+        xhr.upload.removeEventListener('progress', uploadProgress);
+        xhr.removeEventListener('progress', responseProgress);
+        xhr.removeEventListener('load', loaded);
+        xhr.removeEventListener('error', failed);
+        xhr.removeEventListener('abort', failed);
+        xhr.removeEventListener('timeout', failed);
+      };
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+        xhr.abort();
+      };
+      const uploadProgress = (event: ProgressEvent) => {
+        if (settled || processing) return;
+        updateState({
+          ...common,
+          state: 'uploading',
+          progress: event.lengthComputable ? event.loaded / event.total : NaN,
+        });
+      };
+      const readResponse = (done: boolean) => {
+        if (settled) return;
+        try {
+          if (xhr.status !== 200) {
+            // Wait for load to include the full HTTP error response body.
+            if (!done) return;
+            throw new Error(
+              `unexpected request error: ${xhr.status}: ${xhr.statusText}: ${xhr.responseText}`,
+            );
+          }
+          if (
+            xhr.getResponseHeader('Content-Type')?.split(';')[0].trim() !==
+            'text/event-stream'
+          ) {
+            throw new Error('Expected an SSE upload response');
+          }
+          const text = xhr.responseText;
+          // Only consume complete lines while loading. Browsers may temporarily
+          // replace an incomplete trailing UTF-8 character in responseText.
+          const end = done
+            ? text.length
+            : Math.max(
+                text.lastIndexOf('\n'),
+                text.lastIndexOf('\r', text.length - 2),
+              ) + 1;
+          const events = parser.push(text.slice(offset, end), done);
+          offset = end;
+          for (const event of events) {
+            if (!['accepted', 'complete', 'error'].includes(event.event))
+              continue;
+            const payload: unknown = JSON.parse(event.data);
+            const { message } = uploadMessageSchema.parse(payload);
+            if (event.event === 'error') throw new Error(message);
+            if (event.event === 'complete') {
+              const { data } = uploadCompleteSchema.parse(payload);
+              settled = true;
+              cleanup();
+              resolve(data.id);
+              xhr.abort();
+              return;
+            }
+            processing = true;
+            updateState({ ...common, state: 'processing', message });
+          }
+          if (done) throw new Error('Upload stream ended before completion');
+        } catch (error) {
+          fail(error);
+        }
+      };
+      const responseProgress = () => readResponse(false);
+      const loaded = () => readResponse(true);
+      const failed = (event: ProgressEvent) => {
+        fail(new Error(`Upload ${event.type}: [opaque networking failure]`));
+      };
+      xhr.upload.addEventListener('progress', uploadProgress);
+      xhr.addEventListener('progress', responseProgress);
+      xhr.addEventListener('load', loaded);
+      xhr.addEventListener('error', failed);
+      xhr.addEventListener('abort', failed);
+      xhr.addEventListener('timeout', failed);
+      try {
+        xhr.send(formData);
+      } catch (error) {
+        fail(error);
+      }
     });
+    return {
+      state: 'done',
+      ctx: initial.ctx,
+      base,
+      stats: initial.stats,
+    } as const;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      message,
+      'sending',
+      initial.file.size,
+      'bytes',
+      initial.stats,
+    );
+    updateState({ ...common, state: 'error', error: message });
     return;
   }
-
-  const response: any = xhr.response;
-  const base: any = response.data.id;
-  return {
-    state: 'done',
-    ctx: initial.ctx,
-    base,
-    stats: initial.stats,
-  } as const;
 }
+
+const uploadMessageSchema = z.object({ message: z.string() });
+const uploadCompleteSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    id: z.string().check(z.regex(/^e\/[a-zA-Z0-9]{10}\.(?:png|webp|jpg|gif)$/)),
+    type: z.literal('image'),
+  }),
+});
 
 const resourceObjectSchema = z.object({
   id: z.string(),

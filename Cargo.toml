@@ -17,6 +17,7 @@ anyhow = "1"
 axum = { version = "0.8", features = ["multipart"] }
 axum-macros = "0.5"
 base64 = "0.23"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 gif = "0.14"
 hmac = "0.13"
 kamadak-exif = "0.6"

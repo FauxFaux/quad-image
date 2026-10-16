@@ -102,9 +102,133 @@ fn write_an_image() -> Result<()> {
         image::load_from_memory_with_format(&raw_bytes, image::ImageFormat::WebP)?.to_rgb8()
     );
 
+    tokio::runtime::Runtime::new()?.block_on(stream_upload_roundtrip())?;
+
     Ok(())
 }
 
 fn raw_path(saved: &str) -> String {
     format!("{}.raw.webp", saved.strip_suffix(".jpg").unwrap())
+}
+
+fn stream_context() -> std::sync::Arc<crate::Ctx> {
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    crate::gallery::migrate_gallery(&conn).unwrap();
+    std::sync::Arc::new(crate::Ctx {
+        conn: std::sync::Arc::new(std::sync::Mutex::new(conn)),
+        secret: [0; 32],
+    })
+}
+
+async fn stream_request(
+    fields: &[(&str, &[u8])],
+    state: std::sync::Arc<crate::Ctx>,
+) -> axum::response::Response {
+    use axum::extract::FromRequest as _;
+    let mut body = Vec::new();
+    for (name, value) in fields {
+        body.extend_from_slice(
+            format!("--test-boundary\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n")
+                .as_bytes(),
+        );
+        body.extend_from_slice(value);
+        body.extend_from_slice(b"\r\n");
+    }
+    body.extend_from_slice(b"--test-boundary--\r\n");
+    let request = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/upload-stream")
+        .header(
+            "Content-Type",
+            "multipart/form-data; boundary=test-boundary",
+        )
+        .body(axum::body::Body::from(body))
+        .unwrap();
+    let multipart = axum::extract::Multipart::from_request(request, &())
+        .await
+        .unwrap();
+    crate::upload_stream(
+        axum::extract::ConnectInfo("127.0.0.1:1234".parse().unwrap()),
+        axum::http::HeaderMap::new(),
+        axum::extract::State(state),
+        multipart,
+    )
+    .await
+}
+
+// Runs within write_an_image's temporary working directory, since storage is
+// relative to cwd and changing cwd in a separate test would race that test.
+async fn stream_upload_roundtrip() -> Result<()> {
+    use futures_util::StreamExt as _;
+    let state = stream_context();
+    let before = fs::read_dir("e")?.count();
+    let response = stream_request(
+        &[
+            ("image", include_bytes!("test.png")),
+            ("gallery", b"album!secret"),
+        ],
+        state.clone(),
+    )
+    .await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "text/event-stream");
+    assert_eq!(response.headers()["x-accel-buffering"], "no");
+    assert_eq!(fs::read_dir("e")?.count(), before);
+    let mut stream = response.into_body().into_data_stream();
+    let accepted = stream.next().await.unwrap()?;
+    assert!(std::str::from_utf8(&accepted)?.starts_with("event: accepted\n"));
+    // The first body frame is delivered before processing has started.
+    assert_eq!(fs::read_dir("e")?.count(), before);
+    let complete = stream.next().await.unwrap()?;
+    let complete = std::str::from_utf8(&complete)?;
+    assert!(complete.starts_with("event: complete\n"));
+    let data = complete
+        .lines()
+        .find_map(|line| line.strip_prefix("data: "))
+        .unwrap();
+    let data: serde_json::Value = serde_json::from_str(data)?;
+    let id = data["data"]["id"].as_str().unwrap();
+    assert!(crate::is_image_id(id));
+    assert_eq!(data["data"]["type"], "image");
+    assert!(std::path::Path::new(id).exists());
+    assert!(std::path::Path::new(&format!(
+        "e/.thumbs/{}.thumb.webp",
+        id.strip_prefix("e/").unwrap()
+    ))
+    .exists());
+    let conn = state.conn.lock().unwrap();
+    let saved: String = conn.query_row("select image from gallery_images", [], |row| row.get(0))?;
+    assert_eq!(id, saved);
+    assert!(stream.next().await.is_none());
+    Ok(())
+}
+
+#[tokio::test]
+async fn stream_upload_rejects_invalid_forms_before_acceptance() {
+    for fields in [
+        vec![],
+        vec![("image", b"x".as_slice()), ("image", b"y".as_slice())],
+        vec![("image", b"x".as_slice()), ("gallery", b"bad".as_slice())],
+    ] {
+        let response = stream_request(&fields, stream_context()).await;
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(response.headers()["content-type"], "application/json");
+    }
+}
+
+#[tokio::test]
+async fn stream_upload_reports_processing_errors_after_acceptance() {
+    use futures_util::StreamExt as _;
+    let response = stream_request(&[("image", b"not an image")], stream_context()).await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let mut stream = response.into_body().into_data_stream();
+    let accepted = stream.next().await.unwrap().unwrap();
+    assert!(std::str::from_utf8(&accepted)
+        .unwrap()
+        .starts_with("event: accepted\n"));
+    let error = stream.next().await.unwrap().unwrap();
+    assert!(std::str::from_utf8(&error)
+        .unwrap()
+        .starts_with("event: error\n"));
+    assert!(stream.next().await.is_none());
 }

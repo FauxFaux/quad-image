@@ -1233,6 +1233,7 @@ dependencies = [
  "axum",
  "axum-macros",
  "base64",
+ "futures-util",
  "gif",
  "hmac",
  "image",

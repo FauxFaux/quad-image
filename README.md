@@ -24,6 +24,38 @@ are server-controlled. The legacy `.thumb.jpg` URLs continue to serve JPEG.
 The nginx fragment expects the standard `mime.types` table to be included so
 that `.webp` files are served with `Content-Type: image/webp`.
 
+### Streaming uploads
+
+`POST /api/upload-stream` accepts multipart `image` and optional `gallery` fields,
+using the same validation and storage pipeline as `/api/upload`. After parsing
+and validating the form, it responds with HTTP 200 and `text/event-stream`:
+
+```text
+event: accepted
+data: {"message":"Upload accepted, going to transcode"}
+
+event: complete
+data: {"message":"Encoding complete, image available","data":{"id":"e/abcdefghij.webp","type":"image"}}
+
+```
+
+Completion means the image, thumbnails, and optional gallery entry are ready.
+Processing failures produce a terminal `error` event with a JSON `message`;
+form validation failures return an HTTP error before streaming starts. The stream
+closes after its terminal event. Keep-alive comments may appear during processing.
+The streaming endpoint always returns image IDs; the legacy `return_json`,
+`return_redirect`, and `return_full_url` options apply to `/api/upload` only.
+
+To inspect events as they arrive:
+
+```sh
+curl -N -F image=@picture.png http://127.0.0.1:6699/api/upload-stream
+```
+
+The web client uses XMLHttpRequest upload progress events to report transfer
+progress, then reads SSE events incrementally from `responseText` during response
+progress events. Processing messages appear in the upload's state and tile.
+
 ### Building
 
 `quad-image` probably only works on libc/Unix operating systems.
