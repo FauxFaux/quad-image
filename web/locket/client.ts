@@ -130,12 +130,12 @@ export async function driveUpload(
           const events = parser.push(text.slice(offset, end), done);
           offset = end;
           for (const event of events) {
-            if (!['accepted', 'complete', 'error'].includes(event.event))
-              continue;
             const payload: unknown = JSON.parse(event.data);
-            const { message } = uploadMessageSchema.parse(payload);
-            if (event.event === 'error') throw new Error(message);
-            if (event.event === 'complete') {
+            if (event.event === 'error') {
+              const { message } = uploadErrorSchema.parse(payload);
+              throw new Error(message);
+            }
+            if (event.event === 'done') {
               const { data } = uploadCompleteSchema.parse(payload);
               settled = true;
               cleanup();
@@ -143,6 +143,7 @@ export async function driveUpload(
               xhr.abort();
               return;
             }
+            const { message } = uploadStatusSchema.parse(payload);
             processing = true;
             updateState({ ...common, state: 'processing', message });
           }
@@ -188,9 +189,12 @@ export async function driveUpload(
   }
 }
 
-const uploadMessageSchema = z.object({ message: z.string() });
-const uploadCompleteSchema = z.object({
+const uploadErrorSchema = z.object({ message: z.string() });
+const uploadStatusSchema = z.object({
+  kind: z.string(),
   message: z.string(),
+});
+const uploadCompleteSchema = z.object({
   data: z.object({
     id: z.string().check(z.regex(/^e\/[a-zA-Z0-9]{10}\.(?:png|webp|jpg|gif)$/)),
     type: z.literal('image'),

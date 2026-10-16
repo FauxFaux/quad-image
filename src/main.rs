@@ -201,9 +201,8 @@ fn process_upload(
         .context("saving uploaded image to gallery")?;
     }
     emit(
-        Event::default().event("complete").data(
+        Event::default().event("done").data(
             json!({
-                "message": "Encoding complete, image available",
                 "data": resource_object(image_id.clone(), "image"),
             })
             .to_string(),
@@ -230,8 +229,8 @@ async fn upload_stream(
 
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(8);
 
-    tx.send(Ok(Event::default().event("accepted").data(
-        json!({"message": "Upload accepted, going to transcode"}).to_string(),
+    tx.send(Ok(Event::default().event("status").data(
+        json!({"kind": "accepted", "message": "Upload accepted, going to transcode"}).to_string(),
     )))
     .await
     .expect("upload event receiver is still owned by this handler");

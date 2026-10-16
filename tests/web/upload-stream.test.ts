@@ -9,9 +9,10 @@ const initial: PendingItem = {
   file: new File(['image bytes'], 'picture.png'),
   stats: { originalSize: 11, originalType: 'image/png', used: 'original' },
 };
-const accepted = 'event: accepted\ndata: {"message":"Transcoding…"}\n\n';
+const accepted =
+  'event: status\ndata: {"kind":"accepted","message":"Transcoding…"}\n\n';
 const complete =
-  'event: complete\ndata: {"message":"Available","data":{"id":"e/abcdefghij.webp","type":"image"}}\n\n';
+  'event: done\ndata: {"data":{"id":"e/abcdefghij.webp","type":"image"}}\n\n';
 
 class FakeRequest extends EventTarget {
   static latest: FakeRequest;
@@ -128,7 +129,9 @@ describe('streaming upload', () => {
     const update = vi.fn<(next: PendingItem) => void>();
     const upload = driveUpload(initial, update);
     const xhr = FakeRequest.latest;
-    xhr.progress('event: accepted\ndata: {"message":"Transcoding\uFFFD');
+    xhr.progress(
+      'event: status\ndata: {"kind":"accepted","message":"Transcoding\uFFFD',
+    );
     expect(update).toHaveBeenCalledOnce();
     xhr.progress(accepted);
     expect(update).toHaveBeenLastCalledWith(
@@ -145,7 +148,7 @@ describe('streaming upload', () => {
       'Encoding failed',
     ],
     ['interrupted stream', accepted, 'ended before completion'],
-    ['invalid JSON', 'event: complete\ndata: nope\n\n', 'JSON'],
+    ['invalid JSON', 'event: done\ndata: nope\n\n', 'JSON'],
     [
       'invalid payload',
       complete.replace('e/abcdefghij.webp', '../unsafe'),
@@ -233,17 +236,17 @@ describe('streaming upload', () => {
 
 test('SSE parser handles split CRLF, Unicode, comments, multiple events and data lines', () => {
   const text =
-    ': keepalive\r\nevent: accepted\r\ndata: héllo\r\ndata: world\r\n\r\n' +
+    ': keepalive\r\nevent: status\r\ndata: héllo\r\ndata: world\r\n\r\n' +
     complete;
   const parser = new ServerEventParser();
   const events = [];
   for (const char of text) events.push(...parser.push(char));
   events.push(...parser.push('', true));
   expect(events).toEqual([
-    { event: 'accepted', data: 'héllo\nworld' },
+    { event: 'status', data: 'héllo\nworld' },
     {
-      event: 'complete',
-      data: '{"message":"Available","data":{"id":"e/abcdefghij.webp","type":"image"}}',
+      event: 'done',
+      data: '{"data":{"id":"e/abcdefghij.webp","type":"image"}}',
     },
   ]);
 });

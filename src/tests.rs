@@ -174,15 +174,24 @@ async fn stream_upload_roundtrip() -> Result<()> {
     assert_eq!(response.headers()["x-accel-buffering"], "no");
     let mut stream = response.into_body().into_data_stream();
     let accepted = stream.next().await.unwrap()?;
-    assert!(std::str::from_utf8(&accepted)?.starts_with("event: accepted\n"));
+    assert!(std::str::from_utf8(&accepted)?.starts_with("event: status\n"));
+    let status: serde_json::Value = serde_json::from_str(
+        std::str::from_utf8(&accepted)?
+            .lines()
+            .find_map(|line| line.strip_prefix("data: "))
+            .unwrap(),
+    )?;
+    assert_eq!(status["kind"], "accepted");
+    assert!(status["message"].is_string());
     let complete = stream.next().await.unwrap()?;
     let complete = std::str::from_utf8(&complete)?;
-    assert!(complete.starts_with("event: complete\n"));
+    assert!(complete.starts_with("event: done\n"));
     let data = complete
         .lines()
         .find_map(|line| line.strip_prefix("data: "))
         .unwrap();
     let data: serde_json::Value = serde_json::from_str(data)?;
+    assert_eq!(data.as_object().unwrap().len(), 1);
     let id = data["data"]["id"].as_str().unwrap();
     assert!(crate::is_image_id(id));
     assert_eq!(data["data"]["type"], "image");
@@ -233,10 +242,19 @@ async fn stream_upload_reports_processing_errors_after_acceptance() {
     let accepted = stream.next().await.unwrap().unwrap();
     assert!(std::str::from_utf8(&accepted)
         .unwrap()
-        .starts_with("event: accepted\n"));
+        .starts_with("event: status\n"));
     let error = stream.next().await.unwrap().unwrap();
     assert!(std::str::from_utf8(&error)
         .unwrap()
         .starts_with("event: error\n"));
+    let status: serde_json::Value = serde_json::from_str(
+        std::str::from_utf8(&error)
+            .unwrap()
+            .lines()
+            .find_map(|line| line.strip_prefix("data: "))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(status["message"], "Image processing failed");
     assert!(stream.next().await.is_none());
 }

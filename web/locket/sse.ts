@@ -1,5 +1,5 @@
 export interface ServerEvent {
-  event: string;
+  event: 'status' | 'done' | 'error';
   data: string;
 }
 
@@ -25,7 +25,12 @@ export class ServerEventParser {
       const line = this.buffer.slice(0, match.index);
       this.buffer = this.buffer.slice(match.index + match[0].length);
       if (line === '') {
-        if (this.data.length) {
+        if (
+          this.data.length &&
+          (this.event === 'status' ||
+            this.event === 'done' ||
+            this.event === 'error')
+        ) {
           events.push({ event: this.event, data: this.data.join('\n') });
         }
         this.event = 'message';
