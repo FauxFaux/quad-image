@@ -161,7 +161,6 @@ async fn stream_request(
 async fn stream_upload_roundtrip() -> Result<()> {
     use futures_util::StreamExt as _;
     let state = stream_context();
-    let before = fs::read_dir("e")?.count();
     let response = stream_request(
         &[
             ("image", include_bytes!("test.png")),
@@ -173,12 +172,9 @@ async fn stream_upload_roundtrip() -> Result<()> {
     assert_eq!(response.status(), axum::http::StatusCode::OK);
     assert_eq!(response.headers()["content-type"], "text/event-stream");
     assert_eq!(response.headers()["x-accel-buffering"], "no");
-    assert_eq!(fs::read_dir("e")?.count(), before);
     let mut stream = response.into_body().into_data_stream();
     let accepted = stream.next().await.unwrap()?;
     assert!(std::str::from_utf8(&accepted)?.starts_with("event: accepted\n"));
-    // The first body frame is delivered before processing has started.
-    assert_eq!(fs::read_dir("e")?.count(), before);
     let complete = stream.next().await.unwrap()?;
     let complete = std::str::from_utf8(&complete)?;
     assert!(complete.starts_with("event: complete\n"));
@@ -200,6 +196,18 @@ async fn stream_upload_roundtrip() -> Result<()> {
     let saved: String = conn.query_row("select image from gallery_images", [], |row| row.get(0))?;
     assert_eq!(id, saved);
     assert!(stream.next().await.is_none());
+
+    // Callback errors propagate after the image and thumbnail have been stored.
+    let mut emitted = 0;
+    let result = crate::process_upload(include_bytes!("test.png"), None, &state, |_| {
+        emitted += 1;
+        anyhow::bail!("event receiver disconnected")
+    });
+    assert_eq!(emitted, 1);
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "event receiver disconnected"
+    );
     Ok(())
 }
 

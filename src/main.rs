@@ -22,7 +22,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use futures_util::{stream, StreamExt as _};
+use futures_util::stream;
 use once_cell::sync::Lazy;
 use rand::Rng;
 use regex::Regex;
@@ -128,7 +128,7 @@ async fn upload(
         Err(message) => return nh(bad_request(message)),
     };
 
-    match process_upload(&form.image, gallery, &state) {
+    match process_upload(&form.image, gallery, &state, |_| Ok(())) {
         Ok(image_id) => {
             println!("{caller:?}: {image_id}");
 
@@ -182,7 +182,12 @@ async fn upload(
 }
 
 // Both upload endpoints use the same trusted decode/re-encode and gallery path.
-fn process_upload(image: &[u8], gallery: Option<(&str, &str)>, state: &Ctx) -> Result<String> {
+fn process_upload(
+    image: &[u8],
+    gallery: Option<(&str, &str)>,
+    state: &Ctx,
+    mut emit: impl FnMut(Event) -> Result<()>,
+) -> Result<String> {
     let image_id = ingest::store(image).context("storing image")?;
     thumbs::thumbnail(&image_id).context("thumbnailing just written")?;
     if let Some((gallery, private)) = gallery {
@@ -195,6 +200,15 @@ fn process_upload(image: &[u8], gallery: Option<(&str, &str)>, state: &Ctx) -> R
         )
         .context("saving uploaded image to gallery")?;
     }
+    emit(
+        Event::default().event("complete").data(
+            json!({
+                "message": "Encoding complete, image available",
+                "data": resource_object(image_id.clone(), "image"),
+            })
+            .to_string(),
+        ),
+    )?;
     Ok(image_id)
 }
 
@@ -214,16 +228,16 @@ async fn upload_stream(
         return bad_request(message).into_response();
     }
 
-    // Yield accepted before even starting the expensive work. The response stays
-    // HTTP 200: failures after acceptance are terminal SSE error events.
-    let accepted = stream::once(async {
-        Ok::<_, Infallible>(
-            Event::default()
-                .event("accepted")
-                .data(json!({"message": "Upload accepted, going to transcode"}).to_string()),
-        )
-    });
-    let complete = stream::once(async move {
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(8);
+
+    tx.send(Ok(Event::default().event("accepted").data(
+        json!({"message": "Upload accepted, going to transcode"}).to_string(),
+    )))
+    .await
+    .expect("upload event receiver is still owned by this handler");
+
+    tokio::spawn(async move {
+        let worker_tx = tx.clone();
         let result = tokio::task::spawn_blocking(move || {
             let gallery = form
                 .gallery
@@ -231,39 +245,37 @@ async fn upload_stream(
                 .map(parse_gallery_spec)
                 .transpose()
                 .map_err(|message| anyhow!(message))?;
-            process_upload(&form.image, gallery, &state)
+            process_upload(&form.image, gallery, &state, |event| {
+                worker_tx.blocking_send(Ok(event))?;
+                Ok(())
+            })
         })
         .await;
-        let event = match result {
-            Ok(Ok(image_id)) => {
-                println!("{conn_info:?}: {image_id}");
-                Event::default().event("complete").data(
-                    json!({
-                        "message": "Encoding complete, image available",
-                        "data": resource_object(image_id, "image"),
-                    })
-                    .to_string(),
-                )
-            }
+        match result {
+            Ok(Ok(image_id)) => println!("{conn_info:?}: {image_id}"),
             result => {
                 println!("{conn_info:?}: failed processing upload: {result:?}");
-                Event::default().event("error").data(
-                    json!({
-                        "message": "Image processing failed",
-                    })
-                    .to_string(),
-                )
+                let _ = tx
+                    .send(Ok(Event::default().event("error").data(
+                        json!({"message": "Image processing failed"}).to_string(),
+                    )))
+                    .await;
             }
-        };
-        Ok::<_, Infallible>(event)
+        }
     });
-    let mut response = Sse::new(accepted.chain(complete))
+
+    let events = stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|event| (event, rx))
+    });
+
+    let mut response = Sse::new(events)
         .keep_alive(KeepAlive::default())
         .into_response();
-    // nginx otherwise buffers the small status events until processing finishes.
+
     response
         .headers_mut()
         .insert("X-Accel-Buffering", HeaderValue::from_static("no"));
+
     response
 }
 
