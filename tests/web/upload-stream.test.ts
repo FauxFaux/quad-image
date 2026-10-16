@@ -115,6 +115,26 @@ describe('streaming upload', () => {
     expect(updates).toHaveLength(count);
   });
 
+  test('reports a validated thumbnail while the full image is still processing', async () => {
+    const update = vi.fn<(next: PendingItem) => void>();
+    const upload = driveUpload(initial, update);
+    const thumbnail =
+      'event: status\ndata: {"kind":"thumbnail","id":"e/abcdefghij.webp"}\n\n';
+    const xhr = FakeRequest.latest;
+    xhr.progress(accepted + thumbnail);
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        state: 'processing',
+        thumbnail: 'e/abcdefghij.webp',
+        file: initial.file,
+        stats: initial.stats,
+      }),
+    );
+    expect(xhr.abort).not.toHaveBeenCalled();
+    xhr.load(accepted + thumbnail + complete);
+    expect((await upload)?.base).toBe('e/abcdefghij.webp');
+  });
+
   test('drains final response text on load even without response progress events', async () => {
     const update = vi.fn<(next: PendingItem) => void>();
     const upload = driveUpload(initial, update);
@@ -148,6 +168,11 @@ describe('streaming upload', () => {
       'Encoding failed',
     ],
     ['interrupted stream', accepted, 'ended before completion'],
+    [
+      'invalid thumbnail ID',
+      'event: status\ndata: {"kind":"thumbnail","id":"../unsafe"}\n\n',
+      'Invalid',
+    ],
     ['invalid JSON', 'event: done\ndata: nope\n\n', 'JSON'],
     [
       'invalid payload',

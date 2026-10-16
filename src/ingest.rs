@@ -134,6 +134,13 @@ fn handle_gif(data: &[u8]) -> Result<SavedImage> {
 }
 
 pub fn store(data: &[u8]) -> Result<SavedImage> {
+    store_with_thumbnail(data, |_| Ok(()))
+}
+
+pub fn store_with_thumbnail(
+    data: &[u8],
+    mut emit_thumbnail: impl FnMut(&str) -> Result<()> + Send,
+) -> Result<SavedImage> {
     let guessed_format = guess_format(data)?;
 
     use image::ImageFormat::*;
@@ -142,7 +149,101 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
     }
 
     let loaded = load_image(data, guessed_format)?;
+    // Scoped Rayon work borrows the decoded pixels and the callback. Neither
+    // needs an Arc or a 'static lifetime, and thumbnailing needs no pixel copy.
+    let (pending, encoded) = rayon::join(
+        || {
+            let pending = PendingImage::thumbnail(&loaded)?;
+            emit_thumbnail(&pending.id)?;
+            Ok::<_, anyhow::Error>(pending)
+        },
+        || encode_image(&loaded, guessed_format, data),
+    );
+    // Both branches have finished, including thumbnail persistence and emit,
+    // before publishing the primary image or starting gallery writes.
+    let mut pending = pending?;
+    let (temp, raw, target_format) = encoded?;
+    temp.persist_noclobber(&pending.id)
+        .map_err(|error| anyhow!("couldn't save image {}: {error:?}", pending.id))?;
+    pending.persisted = true;
+    make_readable(&pending.id)?;
+    let saved = pending.id.clone();
+    if target_format == Jpeg {
+        let raw_path =
+            std::env::current_dir()?.join(std::path::Path::new(&saved).with_extension("raw.webp"));
+        if let Some(raw) = raw {
+            persist_raw(raw, &raw_path)?;
+        } else {
+            rayon::spawn(move || {
+                let result = (|| -> Result<()> {
+                    let mut temp = PersistableTempFile::new_in(raw_path.parent().unwrap())?;
+                    write_image(temp.as_mut(), loaded, WebP)?;
+                    persist_raw(temp, &raw_path)
+                })();
+                if let Err(error) = result {
+                    eprintln!(
+                        "couldn't save lossless image {}: {error:?}",
+                        raw_path.display()
+                    );
+                }
+            });
+        }
+    }
+    Ok(saved)
+}
 
+/// The atomically published thumbnail claims the name for still-image uploads.
+/// Until the primary is committed, failure (including a disconnected receiver)
+/// releases that claim. The primary is also persisted without clobbering.
+struct PendingImage {
+    id: String,
+    thumbnail: std::path::PathBuf,
+    persisted: bool,
+}
+
+impl PendingImage {
+    fn thumbnail(image: &DynamicImage) -> Result<Self> {
+        let encoded = crate::thumbs::encode_webp(image)?;
+        for _ in 0..32768 {
+            let id = format!("e/{}.webp", random_name());
+            if std::path::Path::new(&id).try_exists()? {
+                continue;
+            }
+            if let Some(thumbnail) = crate::thumbs::claim_webp(&id, &encoded)? {
+                return Ok(Self {
+                    id,
+                    thumbnail,
+                    persisted: false,
+                });
+            }
+        }
+        bail!("couldn't find a viable file name")
+    }
+}
+
+impl Drop for PendingImage {
+    fn drop(&mut self) {
+        if !self.persisted {
+            if let Err(error) = fs::remove_file(&self.thumbnail) {
+                eprintln!(
+                    "couldn't remove abandoned thumbnail {}: {error}",
+                    self.thumbnail.display()
+                );
+            }
+        }
+    }
+}
+
+fn encode_image(
+    loaded: &DynamicImage,
+    guessed_format: ImageFormat,
+    data: &[u8],
+) -> Result<(
+    PersistableTempFile,
+    Option<PersistableTempFile>,
+    ImageFormat,
+)> {
+    use image::ImageFormat::*;
     let mut target_format = match guessed_format {
         Png | Pnm | Tiff | Bmp | Ico | Hdr | Tga => WebP,
         WebP if is_lossless_webp(data) => WebP,
@@ -183,39 +284,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
             );
         }
     }
-    let ext = match target_format {
-        WebP => "webp",
-        Jpeg => "jpg",
-        _ => unreachable!(),
-    };
-
-    let saved = write_out(temp, ext)?;
-    if target_format == Jpeg {
-        let raw_path =
-            std::env::current_dir()?.join(saved.trim_end_matches(".jpg").to_owned() + ".raw.webp");
-        if let Some(raw) = raw {
-            // The size decision already required encoding this WebP. Keep it
-            // instead of encoding it again or overwriting it with the JPEG.
-            persist_raw(raw, &raw_path)?;
-        } else {
-            // JPEG uploads can be served as soon as their primary file is ready.
-            // Own both the decoded pixels and an absolute path in the worker.
-            rayon::spawn(move || {
-                let result = (|| -> Result<()> {
-                    let mut temp = PersistableTempFile::new_in(raw_path.parent().unwrap())?;
-                    write_image(temp.as_mut(), loaded, WebP)?;
-                    persist_raw(temp, &raw_path)
-                })();
-                if let Err(error) = result {
-                    eprintln!(
-                        "couldn't save lossless image {}: {error:?}",
-                        raw_path.display()
-                    );
-                }
-            });
-        }
-    }
-    Ok(saved)
+    Ok((temp, raw, target_format))
 }
 
 fn persist_raw(temp: PersistableTempFile, path: &std::path::Path) -> Result<()> {
@@ -255,14 +324,8 @@ fn has_only_opaque_alpha(im: &DynamicImage) -> bool {
 }
 
 fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
-    let mut rand = rand::rng();
-
     for _ in 0..32768 {
-        let rand_bit: String = Alphanumeric
-            .sample_iter(&mut rand)
-            .map(char::from)
-            .take(10)
-            .collect();
+        let rand_bit = random_name();
         let cand = format!("e/{}.{}", rand_bit, ext);
         temp = match temp.persist_noclobber(&cand) {
             Ok(_) => {
@@ -277,6 +340,14 @@ fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
     }
 
     bail!("couldn't find a viable file name")
+}
+
+fn random_name() -> String {
+    Alphanumeric
+        .sample_iter(&mut rand::rng())
+        .map(char::from)
+        .take(10)
+        .collect()
 }
 
 fn exif_rotation(from: &[u8]) -> Result<u32> {

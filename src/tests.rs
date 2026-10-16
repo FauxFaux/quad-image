@@ -36,6 +36,7 @@ fn write_an_image() -> Result<()> {
     );
 
     let mut now_extensions = fs::read_dir(&e)?
+        .filter(|entry| entry.as_ref().unwrap().file_type().unwrap().is_file())
         .map(|e| {
             e.unwrap()
                 .path()
@@ -60,7 +61,7 @@ fn write_an_image() -> Result<()> {
     let jpeg_data = include_bytes!("../tests/orient_1.jpg");
     let jpeg = pool.install(|| -> Result<String> {
         let saved = store(jpeg_data)?;
-        assert!(saved.ends_with(".jpg"));
+        assert!(saved.ends_with(".webp"));
         assert!(!std::path::Path::new(&raw_path(&saved)).exists());
         Ok(saved)
     })?;
@@ -90,7 +91,7 @@ fn write_an_image() -> Result<()> {
     let mut png = std::io::Cursor::new(Vec::new());
     noisy.write_to(&mut png, image::ImageFormat::Png)?;
     let jpeg = store(png.get_ref())?;
-    assert!(jpeg.ends_with(".jpg"));
+    assert!(jpeg.ends_with(".webp"));
     assert_eq!(
         image::ImageFormat::Jpeg,
         image::guess_format(&fs::read(&jpeg)?)?
@@ -108,7 +109,7 @@ fn write_an_image() -> Result<()> {
 }
 
 fn raw_path(saved: &str) -> String {
-    format!("{}.raw.webp", saved.strip_suffix(".jpg").unwrap())
+    format!("{}.raw.webp", saved.strip_suffix(".webp").unwrap())
 }
 
 fn stream_context() -> std::sync::Arc<crate::Ctx> {
@@ -183,6 +184,16 @@ async fn stream_upload_roundtrip() -> Result<()> {
     )?;
     assert_eq!(status["kind"], "accepted");
     assert!(status["message"].is_string());
+    let thumbnail = stream.next().await.unwrap()?;
+    let thumbnail = std::str::from_utf8(&thumbnail)?;
+    assert!(thumbnail.starts_with("event: status\n"));
+    let thumbnail: serde_json::Value = serde_json::from_str(
+        thumbnail
+            .lines()
+            .find_map(|line| line.strip_prefix("data: "))
+            .unwrap(),
+    )?;
+    assert_eq!(thumbnail["kind"], "thumbnail");
     let complete = stream.next().await.unwrap()?;
     let complete = std::str::from_utf8(&complete)?;
     assert!(complete.starts_with("event: done\n"));
@@ -194,6 +205,7 @@ async fn stream_upload_roundtrip() -> Result<()> {
     assert_eq!(data.as_object().unwrap().len(), 1);
     let id = data["data"]["id"].as_str().unwrap();
     assert!(crate::is_image_id(id));
+    assert_eq!(thumbnail["id"], id);
     assert_eq!(data["data"]["type"], "image");
     assert!(std::path::Path::new(id).exists());
     assert!(std::path::Path::new(&format!(
@@ -206,17 +218,43 @@ async fn stream_upload_roundtrip() -> Result<()> {
     assert_eq!(id, saved);
     assert!(stream.next().await.is_none());
 
-    // Callback errors propagate after the image and thumbnail have been stored.
+    // Early notification sees a complete, readable thumbnail before the primary
+    // exists. A disconnected receiver releases the thumbnail's name claim.
     let mut emitted = 0;
-    let result = crate::process_upload(include_bytes!("test.png"), None, &state, |_| {
+    let mut early_id = String::new();
+    let result = crate::ingest::store_with_thumbnail(include_bytes!("test.png"), |id| {
         emitted += 1;
+        early_id = id.to_owned();
+        assert!(!std::path::Path::new(id).exists());
+        let thumb = format!("e/.thumbs/{}.thumb.webp", id.strip_prefix("e/").unwrap());
+        image::open(thumb)?;
         anyhow::bail!("event receiver disconnected")
     });
     assert_eq!(emitted, 1);
+    assert!(!std::path::Path::new(&early_id).exists());
+    assert!(!std::path::Path::new(&format!(
+        "e/.thumbs/{}.thumb.webp",
+        early_id.strip_prefix("e/").unwrap()
+    ))
+    .exists());
     assert_eq!(
         result.unwrap_err().to_string(),
         "event receiver disconnected"
     );
+    // Even a primary appearing after the thumbnail claim cannot be overwritten.
+    let mut collided = String::new();
+    let result = crate::ingest::store_with_thumbnail(include_bytes!("test.png"), |id| {
+        collided = id.to_owned();
+        fs::write(id, b"existing primary")?;
+        Ok(())
+    });
+    assert!(result.is_err());
+    assert_eq!(fs::read(&collided)?, b"existing primary");
+    assert!(!std::path::Path::new(&format!(
+        "e/.thumbs/{}.thumb.webp",
+        collided.strip_prefix("e/").unwrap()
+    ))
+    .exists());
     Ok(())
 }
 

@@ -186,9 +186,16 @@ fn process_upload(
     image: &[u8],
     gallery: Option<(&str, &str)>,
     state: &Ctx,
-    mut emit: impl FnMut(Event) -> Result<()>,
+    mut emit: impl FnMut(Event) -> Result<()> + Send,
 ) -> Result<String> {
-    let image_id = ingest::store(image).context("storing image")?;
+    let image_id = ingest::store_with_thumbnail(image, |id| {
+        emit(
+            Event::default()
+                .event("status")
+                .data(json!({"kind": "thumbnail", "id": id}).to_string()),
+        )
+    })
+    .context("storing image")?;
     thumbs::thumbnail(&image_id).context("thumbnailing just written")?;
     if let Some((gallery, private)) = gallery {
         gallery::gallery_store(

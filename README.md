@@ -31,14 +31,20 @@ using the same validation and storage pipeline as `/api/upload`. After parsing
 and validating the form, it responds with HTTP 200 and `text/event-stream`:
 
 ```text
-event: accepted
-data: {"message":"Upload accepted, going to transcode"}
+event: status
+data: {"kind":"accepted","message":"Upload accepted, going to transcode"}
 
-event: complete
-data: {"message":"Encoding complete, image available","data":{"id":"e/abcdefghij.webp","type":"image"}}
+event: status
+data: {"kind":"thumbnail","id":"e/abcdefghij.webp"}
+
+event: done
+data: {"data":{"id":"e/abcdefghij.webp","type":"image"}}
 
 ```
 
+For still images, the `thumbnail` status announces that
+`/{id}?variant=thumbnail` is ready while the full image is being encoded. The
+full image may still fail; wait for `done` before treating the upload as complete.
 Completion means the image, thumbnails, and optional gallery entry are ready.
 Processing failures produce a terminal `error` event with a JSON `message`;
 form validation failures return an HTTP error before streaming starts. The stream

@@ -143,9 +143,15 @@ export async function driveUpload(
               xhr.abort();
               return;
             }
-            const { message } = uploadStatusSchema.parse(payload);
+            const status = uploadStatusSchema.parse(payload);
             processing = true;
-            updateState({ ...common, state: 'processing', message });
+            updateState({
+              ...common,
+              state: 'processing',
+              message:
+                status.kind === 'thumbnail' ? 'Transcoding…' : status.message,
+              ...(status.kind === 'thumbnail' ? { thumbnail: status.id } : {}),
+            });
           }
           if (done) throw new Error('Upload stream ended before completion');
         } catch (error) {
@@ -190,13 +196,16 @@ export async function driveUpload(
 }
 
 const uploadErrorSchema = z.object({ message: z.string() });
-const uploadStatusSchema = z.object({
-  kind: z.string(),
-  message: z.string(),
-});
+const imageIdSchema = z
+  .string()
+  .check(z.regex(/^e\/[a-zA-Z0-9]{10}\.(?:png|webp|jpg|gif)$/));
+const uploadStatusSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('accepted'), message: z.string() }),
+  z.object({ kind: z.literal('thumbnail'), id: imageIdSchema }),
+]);
 const uploadCompleteSchema = z.object({
   data: z.object({
-    id: z.string().check(z.regex(/^e\/[a-zA-Z0-9]{10}\.(?:png|webp|jpg|gif)$/)),
+    id: imageIdSchema,
     type: z.literal('image'),
   }),
 });

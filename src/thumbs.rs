@@ -81,18 +81,7 @@ fn thumbnail_path(path: &Path) -> Result<()> {
     }
 
     if need_webp {
-        // Double the JPEG dimensions for denser displays, with a low lossy
-        // quality to keep the additional pixels affordable to lazy-load.
-        let shrunk = image.thumbnail(640, 320).into_rgba8();
-        let encoded = crate::webp_encoder::encode_rgba_with_alpha_quality(
-            shrunk.as_raw(),
-            shrunk.width(),
-            shrunk.height(),
-            30.0,
-            // Eight alpha levels, instead of libwebp's lossless default.
-            30,
-            crate::webp_encoder::Limits::default(),
-        )?;
+        let encoded = encode_webp(&image)?;
         persist_thumb(&webp, |buf| {
             buf.write_all(&encoded)?;
             Ok(())
@@ -102,10 +91,35 @@ fn thumbnail_path(path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn encode_webp(image: &image::DynamicImage) -> Result<Vec<u8>> {
+    // Double the JPEG dimensions for denser displays, with a low lossy
+    // quality to keep the additional pixels affordable to lazy-load.
+    let shrunk = image.thumbnail(640, 320).into_rgba8();
+    crate::webp_encoder::encode_rgba_with_alpha_quality(
+        shrunk.as_raw(),
+        shrunk.width(),
+        shrunk.height(),
+        30.0,
+        // Eight alpha levels, instead of libwebp's lossless default.
+        30,
+        crate::webp_encoder::Limits::default(),
+    )
+}
+
+/// Unlike backfilling, an existing thumbnail means this upload lost the name.
+pub(crate) fn claim_webp(image_id: &str, encoded: &[u8]) -> Result<Option<PathBuf>> {
+    let (_, path) = thumb_names(Path::new(image_id))?;
+    let claimed = persist_thumb(&path, |buf| {
+        buf.write_all(encoded)?;
+        Ok(())
+    })?;
+    Ok(claimed.then_some(path))
+}
+
 fn persist_thumb(
     path: &Path,
     write: impl FnOnce(&mut BufWriter<tempfile_fast::PersistableTempFile>) -> Result<()>,
-) -> Result<()> {
+) -> Result<bool> {
     let parent = path.parent().context("thumbnail has no parent directory")?;
     fs::create_dir_all(parent)?;
     let temp = tempfile_fast::PersistableTempFile::new_in(parent)?;
@@ -114,13 +128,14 @@ fn persist_thumb(
 
     // into_inner() is documented to flush. Publish only complete files.
     let temp = buf.into_inner()?;
+    use std::os::unix::fs::PermissionsExt;
+    temp.set_permissions(fs::Permissions::from_mode(0o0644))?;
     match temp.persist_noclobber(path) {
         Ok(()) => {}
-        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => return Ok(()),
+        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
         Err(e) => return Err(e.error.into()),
     }
-    crate::ingest::make_readable(path.to_str().context("thumbnail path is not UTF-8")?)?;
-    Ok(())
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -177,6 +192,44 @@ mod tests {
             format!("{}.thumb.jpg", path.display())
         );
         generate_all_thumbs_in(dir.path())?;
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_uploads_cannot_claim_the_same_thumbnail() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let id = dir.path().join("abcdefghij.webp");
+        let id = id.to_str().unwrap();
+        let (first, second) = rayon::join(
+            || claim_webp(id, b"first thumbnail"),
+            || claim_webp(id, b"second thumbnail"),
+        );
+        let (first, second) = (first?, second?);
+        assert_ne!(first.is_some(), second.is_some());
+        let path = first.as_ref().or(second.as_ref()).unwrap();
+        assert_eq!(
+            fs::read(path)?,
+            if first.is_some() {
+                b"first thumbnail".as_slice()
+            } else {
+                b"second thumbnail".as_slice()
+            }
+        );
+        assert!(claim_webp(id, b"replacement")?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn failed_thumbnail_write_publishes_nothing() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("thumbnail.webp");
+        assert!(persist_thumb(&path, |buf| {
+            buf.write_all(b"partial thumbnail")?;
+            anyhow::bail!("write failed")
+        })
+        .is_err());
+        assert!(!path.exists());
+        assert_eq!(fs::read_dir(dir.path())?.count(), 0);
         Ok(())
     }
 
