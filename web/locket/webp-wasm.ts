@@ -18,6 +18,14 @@ export interface WebPEncoderExports extends WebAssembly.Exports {
 }
 
 interface FullWebPEncoderExports extends WebPEncoderExports {
+  WebPEncodeRGBAWithNearLossless(
+    rgba: number,
+    width: number,
+    height: number,
+    stride: number,
+    nearLossless: number,
+    output: number,
+  ): number;
   WebPEncodeRGBAWithAlphaQuality(
     rgba: number,
     width: number,

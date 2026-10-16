@@ -14,6 +14,7 @@ RUN git clone --depth 1 --branch "${LIBWEBP_TAG}" --single-branch \
 COPY lossless-only.patch /tmp/lossless-only.patch
 COPY simd.patch /tmp/simd.patch
 COPY alpha-quality.c /src/alpha-quality.c
+COPY near-lossless.c /src/near-lossless.c
 
 RUN git -C libwebp apply /tmp/simd.patch
 
@@ -31,12 +32,12 @@ RUN set -eux; \
       -DWEBP_BUILD_LIBWEBPMUX=OFF; \
     cmake --build /build/lossless --parallel; \
     mkdir -p /out; \
-    emcc /src/alpha-quality.c -I/src/libwebp/src /build/baseline/libwebp.a /build/baseline/libsharpyuv.a -O3 -msimd128 --no-entry \
+    emcc /src/alpha-quality.c /src/near-lossless.c -I/src/libwebp/src /build/baseline/libwebp.a /build/baseline/libsharpyuv.a -O3 -msimd128 --no-entry \
       -s STANDALONE_WASM=1 \
       -s STACK_OVERFLOW_CHECK=2 \
       -s ALLOW_MEMORY_GROWTH=1 \
       -s MALLOC=emmalloc \
-      -s EXPORTED_FUNCTIONS='["_WebPEncodeRGBA","_WebPEncodeRGBAWithAlphaQuality","_WebPEncodeLosslessRGBA","_WebPFree","_malloc","_free"]' \
+      -s EXPORTED_FUNCTIONS='["_WebPEncodeRGBA","_WebPEncodeRGBAWithAlphaQuality","_WebPEncodeRGBAWithNearLossless","_WebPEncodeLosslessRGBA","_WebPFree","_malloc","_free"]' \
       -o /out/webp-encode.wasm; \
     emcc /build/lossless/libwebp.a -Oz -flto --no-entry \
       -s STANDALONE_WASM=1 \

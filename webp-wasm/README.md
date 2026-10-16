@@ -23,6 +23,20 @@ CFI is not enabled: the pinned Emscripten driver rejects `-fsanitize=cfi-icall`.
 Passing the sanitizer directly to Clang with `-Xclang` also crashes the bundled
 WASM linker on a minimal indirect-call example. No sanitizer fallback is enabled.
 
+## Near-lossless encoding
+
+The full module exports `WebPEncodeRGBAWithNearLossless(rgba, width, height,
+stride, near_lossless, output)`, implemented by `near-lossless.c`.
+`near_lossless` is an integer from 0 (strongest pixel preprocessing) to 100
+(no preprocessing, matching `WebPEncodeLosslessRGBA`). This uses lossless WebP
+compression after preprocessing; lower values may change RGB pixels to improve
+compression. Alpha remains lossless. The existing upload encoding policy is
+unchanged, and the size-optimized lossless module does not expose this export.
+
+The return value is the encoded byte length, or zero on failure (including
+values outside 0–100). A non-null output slot is cleared before validation.
+Copy the encoded bytes before releasing the returned pointer with `WebPFree`.
+
 ## Independent alpha quality
 
 The full module additionally exports `WebPEncodeRGBAWithAlphaQuality(rgba,

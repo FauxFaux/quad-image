@@ -41,6 +41,84 @@ describe('image ops', () => {
     cy.then(() => expectWebP(encodeWebPUsingWasm));
   });
 
+  it('exposes near-lossless preprocessing and validates its range', () => {
+    cy.then(async () => {
+      const encoder = await loadEncoder();
+      const width = 128;
+      const height = 128;
+      const pixels = new Uint8Array(width * height * 4);
+      let state = 1;
+      for (let i = 0; i < pixels.length; i += 4) {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        pixels[i] = state & 255;
+        pixels[i + 1] = (state >>> 8) & 255;
+        pixels[i + 2] = (state >>> 16) & 255;
+        pixels[i + 3] = 255;
+      }
+      const input = encoder.malloc(pixels.length);
+      const output = encoder.malloc(4);
+      expect(input).not.to.equal(0);
+      expect(output).not.to.equal(0);
+      try {
+        new Uint8Array(encoder.memory.buffer, input, pixels.length).set(pixels);
+        const encode = (nearLossless?: number) => {
+          new DataView(encoder.memory.buffer).setUint32(output, 123, true);
+          const size =
+            nearLossless === undefined
+              ? encoder.WebPEncodeLosslessRGBA(
+                  input,
+                  width,
+                  height,
+                  width * 4,
+                  output,
+                )
+              : encoder.WebPEncodeRGBAWithNearLossless(
+                  input,
+                  width,
+                  height,
+                  width * 4,
+                  nearLossless,
+                  output,
+                );
+          const pointer = new DataView(encoder.memory.buffer).getUint32(
+            output,
+            true,
+          );
+          if (!size) {
+            expect(pointer).to.equal(0);
+            return undefined;
+          }
+          try {
+            return new Uint8Array(encoder.memory.buffer, pointer, size).slice();
+          } finally {
+            encoder.WebPFree(pointer);
+          }
+        };
+        const original = encode();
+        expect(encode(100)).to.deep.equal(original);
+        for (const level of [0, 60]) {
+          const bytes = encode(level);
+          if (!bytes) throw new Error('near-lossless encoding failed');
+          expect(bytes).not.to.deep.equal(original);
+          const decoded = await createImageBitmap(
+            new Blob([bytes], { type: 'image/webp' }),
+          );
+          try {
+            expect(decoded.width).to.equal(width);
+            expect(decoded.height).to.equal(height);
+          } finally {
+            decoded.close();
+          }
+        }
+        expect(encode(-1)).to.equal(undefined);
+        expect(encode(101)).to.equal(undefined);
+      } finally {
+        encoder.free(input);
+        encoder.free(output);
+      }
+    });
+  });
+
   it('encodes narrow and odd-sized images across SIMD block boundaries', () => {
     cy.then(async () => {
       const encoders = [await loadEncoder(), await loadLosslessEncoder()];
