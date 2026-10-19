@@ -1,13 +1,12 @@
 use std::fs;
 use std::io;
-use std::io::Seek;
+use std::io::Write;
 
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use image::ImageFormat;
-use image::ImageFormat::Jpeg;
 use image::{imageops, DynamicImage};
 use rand::distr::Alphanumeric;
 use rand::distr::Distribution;
@@ -37,48 +36,6 @@ fn guess_format(data: &[u8]) -> Result<ImageFormat> {
             )
         })?
     })
-}
-
-fn is_lossless_webp(data: &[u8]) -> bool {
-    if data.len() < 12 || &data[..4] != b"RIFF" || &data[8..12] != b"WEBP" {
-        return false;
-    }
-
-    let riff_size = u32::from_le_bytes(data[4..8].try_into().unwrap()) as usize;
-    let Some(riff_end) = riff_size.checked_add(8) else {
-        return false;
-    };
-    if riff_end > data.len() {
-        return false;
-    }
-
-    let mut offset = 12;
-    while offset + 8 <= riff_end {
-        let chunk_type = &data[offset..offset + 4];
-        let chunk_size =
-            u32::from_le_bytes(data[offset + 4..offset + 8].try_into().unwrap()) as usize;
-
-        if chunk_type == b"VP8L" {
-            return true;
-        }
-        if chunk_type == b"VP8 " {
-            return false;
-        }
-
-        let Some(next_offset) = offset
-            .checked_add(8)
-            .and_then(|value| value.checked_add(chunk_size))
-            .and_then(|value| value.checked_add(chunk_size % 2))
-        else {
-            return false;
-        };
-        if next_offset > riff_end {
-            return false;
-        }
-        offset = next_offset;
-    }
-
-    false
 }
 
 fn load_image(data: &[u8], format: ImageFormat) -> Result<image::DynamicImage> {
@@ -157,38 +114,17 @@ pub fn store_with_thumbnail(
             emit_thumbnail(&pending.id)?;
             Ok::<_, anyhow::Error>(pending)
         },
-        || encode_image(&loaded, guessed_format, data),
+        || encode_image(&loaded),
     );
     // Both branches have finished, including thumbnail persistence and emit,
     // before publishing the primary image or starting gallery writes.
     let mut pending = pending?;
-    let (temp, raw, target_format) = encoded?;
+    let temp = encoded?;
     temp.persist_noclobber(&pending.id)
         .map_err(|error| anyhow!("couldn't save image {}: {error:?}", pending.id))?;
     pending.persisted = true;
     make_readable(&pending.id)?;
     let saved = pending.id.clone();
-    if target_format == Jpeg {
-        let raw_path =
-            std::env::current_dir()?.join(std::path::Path::new(&saved).with_extension("raw.webp"));
-        if let Some(raw) = raw {
-            persist_raw(raw, &raw_path)?;
-        } else {
-            rayon::spawn(move || {
-                let result = (|| -> Result<()> {
-                    let mut temp = PersistableTempFile::new_in(raw_path.parent().unwrap())?;
-                    write_image(temp.as_mut(), loaded, WebP)?;
-                    persist_raw(temp, &raw_path)
-                })();
-                if let Err(error) = result {
-                    eprintln!(
-                        "couldn't save lossless image {}: {error:?}",
-                        raw_path.display()
-                    );
-                }
-            });
-        }
-    }
     Ok(saved)
 }
 
@@ -234,93 +170,12 @@ impl Drop for PendingImage {
     }
 }
 
-fn encode_image(
-    loaded: &DynamicImage,
-    guessed_format: ImageFormat,
-    data: &[u8],
-) -> Result<(
-    PersistableTempFile,
-    Option<PersistableTempFile>,
-    ImageFormat,
-)> {
-    use image::ImageFormat::*;
-    let mut target_format = match guessed_format {
-        Png | Pnm | Tiff | Bmp | Ico | Hdr | Tga => WebP,
-        WebP if is_lossless_webp(data) => WebP,
-        Gif => unreachable!(),
-        _ => Jpeg,
-    };
-
+fn encode_image(loaded: &DynamicImage) -> Result<PersistableTempFile> {
+    let rgba = loaded.to_rgba8();
+    let bytes = crate::webp_policy::encode_rgba(rgba.as_raw(), rgba.width(), rgba.height())?;
     let mut temp = temp_file()?;
-    write_image(temp.as_mut(), loaded.clone(), target_format).with_context(|| anyhow!("save"))?;
-    let mut raw = None;
-
-    if target_format == WebP {
-        // Chrome seems to convert everything pasted to PNG, even if it's huge.
-        // So, if the lossless WebP output is too big, down-convert it to JPEG,
-        // and log about how proud we are of having ruined the internet.
-        // Alternatively, we could record whether it was a pasted upload?
-
-        let webp_length = temp
-            .metadata()
-            .with_context(|| anyhow!("temp metadata"))?
-            .len();
-        if webp_length > 1024 * 1024 {
-            raw = Some(temp);
-            temp = temp_file()?;
-
-            target_format = Jpeg;
-
-            write_image(temp.as_mut(), loaded.clone(), target_format)
-                .with_context(|| anyhow!("save attempt 2"))?;
-
-            let jpeg_length = temp
-                .metadata()
-                .with_context(|| anyhow!("temp metadata 2"))?
-                .len();
-            println!(
-                "lossless webp came out too big so we jpeg'd it: {} -> {}",
-                webp_length, jpeg_length
-            );
-        }
-    }
-    Ok((temp, raw, target_format))
-}
-
-fn persist_raw(temp: PersistableTempFile, path: &std::path::Path) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    temp.set_permissions(fs::Permissions::from_mode(0o0644))?;
-    temp.persist_noclobber(path)
-        .map_err(|error| anyhow!("couldn't save lossless image {}: {error:?}", path.display()))?;
-    Ok(())
-}
-
-fn write_image(
-    dest: &mut (impl io::Write + Seek),
-    im: DynamicImage,
-    target_format: ImageFormat,
-) -> Result<()> {
-    let im = match target_format {
-        Jpeg => DynamicImage::from(im.into_rgb8()),
-        ImageFormat::WebP if has_only_opaque_alpha(&im) => DynamicImage::from(im.into_rgb8()),
-        _ => im,
-    };
-
-    im.write_to(dest, target_format)
-        .with_context(|| anyhow!("save"))?;
-
-    Ok(())
-}
-
-fn has_only_opaque_alpha(im: &DynamicImage) -> bool {
-    match im {
-        DynamicImage::ImageRgba8(buffer) => buffer.pixels().all(|pixel| pixel[3] == u8::MAX),
-        DynamicImage::ImageLumaA8(buffer) => buffer.pixels().all(|pixel| pixel[1] == u8::MAX),
-        DynamicImage::ImageRgba16(buffer) => buffer.pixels().all(|pixel| pixel[3] == u16::MAX),
-        DynamicImage::ImageLumaA16(buffer) => buffer.pixels().all(|pixel| pixel[1] == u16::MAX),
-        DynamicImage::ImageRgba32F(buffer) => buffer.pixels().all(|pixel| pixel[3] == 1.0),
-        _ => false,
-    }
+    temp.write_all(&bytes).context("writing selected WebP")?;
+    Ok(temp)
 }
 
 fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
@@ -402,8 +257,6 @@ mod tests {
     use std::{fs, io};
 
     use image::ImageFormat;
-
-    use super::write_image;
 
     #[test]
     fn exif() {
@@ -491,23 +344,18 @@ mod tests {
     #[test]
     fn sixteen() {
         let png = im(include_bytes!("../tests/16-bit.png"));
-        write_image(&mut io::Cursor::new(vec![]), png, ImageFormat::Jpeg)
-            .expect("able to write a loaded image, even if it was naughty");
+        let rgba = png.to_rgba8();
+        let encoded = crate::webp_policy::encode_rgba(rgba.as_raw(), rgba.width(), rgba.height())
+            .expect("able to encode a 16-bit input as 8-bit WebP");
+        assert_eq!(image::load_from_memory(&encoded).unwrap().to_rgba8(), rgba);
     }
 
     #[test]
-    fn webp_omits_opaque_alpha_and_preserves_transparency() {
+    fn selected_webp_preserves_pixels_and_alpha() {
         for alpha in [255, 128] {
             let pixels = image::RgbaImage::from_pixel(2, 2, image::Rgba([12, 34, 56, alpha]));
-            let mut encoded = io::Cursor::new(Vec::new());
-            write_image(
-                &mut encoded,
-                image::DynamicImage::ImageRgba8(pixels.clone()),
-                ImageFormat::WebP,
-            )
-            .unwrap();
-            let decoded = image::load_from_memory(encoded.get_ref()).unwrap();
-            assert_eq!(decoded.color().has_alpha(), alpha != 255);
+            let encoded = crate::webp_policy::encode_rgba(pixels.as_raw(), 2, 2).unwrap();
+            let decoded = image::load_from_memory(&encoded).unwrap();
             assert_eq!(decoded.to_rgba8(), pixels);
         }
     }

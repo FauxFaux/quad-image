@@ -1,4 +1,4 @@
-//! A disposable Wasmtime sandbox for the checked-in lossy WebP encoder.
+//! A disposable Wasmtime sandbox for the checked-in WebP encoder.
 //!
 //! The trusted, embedded module is compiled once and shared across calls. Only
 //! compiled code and engine metadata are shared: each call instantiates it in a
@@ -81,16 +81,70 @@ pub fn encode_rgba_with_alpha_quality(
     alpha_quality: u8,
     limits: Limits,
 ) -> Result<Vec<u8>> {
-    ensure!(
-        alpha_quality <= 100,
-        "alpha quality must be between 0 and 100"
-    );
+    encode(
+        rgba,
+        width,
+        height,
+        Encoding::Lossy {
+            quality,
+            alpha_quality,
+        },
+        limits,
+    )
+}
+
+/// Encode RGBA using lossless WebP with near-lossless preprocessing (0..=100).
+/// At 100 preprocessing is disabled. Alpha is always lossless.
+pub fn encode_rgba_with_near_lossless(
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    near_lossless: u8,
+    limits: Limits,
+) -> Result<Vec<u8>> {
+    encode(
+        rgba,
+        width,
+        height,
+        Encoding::NearLossless(near_lossless),
+        limits,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum Encoding {
+    Lossy { quality: f32, alpha_quality: u8 },
+    NearLossless(u8),
+}
+
+fn encode(
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    encoding: Encoding,
+    limits: Limits,
+) -> Result<Vec<u8>> {
+    match encoding {
+        Encoding::Lossy {
+            quality,
+            alpha_quality,
+        } => {
+            ensure!(
+                alpha_quality <= 100,
+                "alpha quality must be between 0 and 100"
+            );
+            ensure!(
+                quality.is_finite() && (0.0..=100.0).contains(&quality),
+                "quality must be finite and between 0 and 100"
+            );
+        }
+        Encoding::NearLossless(quality) => ensure!(
+            quality <= 100,
+            "near-lossless level must be between 0 and 100"
+        ),
+    }
     ensure!((1..=16383).contains(&width), "invalid WebP width");
     ensure!((1..=16383).contains(&height), "invalid WebP height");
-    ensure!(
-        quality.is_finite() && (0.0..=100.0).contains(&quality),
-        "quality must be finite and between 0 and 100"
-    );
     let input_size = (width as usize)
         .checked_mul(height as usize)
         .and_then(|pixels| pixels.checked_mul(4))
@@ -131,29 +185,43 @@ pub fn encode_rgba_with_alpha_quality(
         let malloc = instance.get_typed_func::<u32, u32>(&mut *store, "malloc")?;
         let free = instance.get_typed_func::<u32, ()>(&mut *store, "free")?;
         let webp_free = instance.get_typed_func::<u32, ()>(&mut *store, "WebPFree")?;
-        let encode = instance.get_typed_func::<(u32, u32, u32, u32, f32, u32, u32), u32>(
-            &mut *store,
-            "WebPEncodeRGBAWithAlphaQuality",
-        )?;
-
         let input = malloc.call(&mut *store, input_size as u32)?;
         ensure!(input != 0, "could not allocate RGBA input");
         let output = malloc.call(&mut *store, 4)?;
         ensure!(output != 0, "could not allocate output pointer");
         memory.write(&mut *store, input as usize, rgba)?;
         memory.write(&mut *store, output as usize, &[0; 4])?;
-        let size = encode.call(
-            &mut *store,
-            (
-                input,
-                width,
-                height,
-                width * 4,
+        let size = match encoding {
+            Encoding::Lossy {
                 quality,
-                u32::from(alpha_quality),
-                output,
-            ),
-        )?;
+                alpha_quality,
+            } => instance
+                .get_typed_func::<(u32, u32, u32, u32, f32, u32, u32), u32>(
+                    &mut *store,
+                    "WebPEncodeRGBAWithAlphaQuality",
+                )?
+                .call(
+                    &mut *store,
+                    (
+                        input,
+                        width,
+                        height,
+                        width * 4,
+                        quality,
+                        u32::from(alpha_quality),
+                        output,
+                    ),
+                )?,
+            Encoding::NearLossless(quality) => instance
+                .get_typed_func::<(u32, u32, u32, u32, u32, u32), u32>(
+                    &mut *store,
+                    "WebPEncodeRGBAWithNearLossless",
+                )?
+                .call(
+                    &mut *store,
+                    (input, width, height, width * 4, u32::from(quality), output),
+                )?,
+        };
         let mut pointer = [0; 4];
         memory.read(&*store, output as usize, &mut pointer)?;
         let encoded = u32::from_le_bytes(pointer);

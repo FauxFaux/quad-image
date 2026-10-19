@@ -86,6 +86,43 @@ fn embedded_encoder_produces_decodable_lossy_webp() -> Result<()> {
 }
 
 #[test]
+fn near_lossless_preserves_alpha_and_limits_rgb_changes() -> Result<()> {
+    let mut state = 1_u32;
+    let pixels = image::RgbaImage::from_fn(128, 128, |x, y| {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        image::Rgba([
+            state as u8,
+            (state >> 8) as u8,
+            (state >> 16) as u8,
+            ((x + y) % 255 + 1) as u8,
+        ])
+    });
+    let exact = encode_rgba_with_near_lossless(pixels.as_raw(), 128, 128, 100, Limits::default())?;
+    assert_eq!(image::load_from_memory(&exact)?.to_rgba8(), pixels);
+    let near = encode_rgba_with_near_lossless(pixels.as_raw(), 128, 128, 40, Limits::default())?;
+    let decoded = image::load_from_memory(&near)?.to_rgba8();
+    let mut changed = false;
+    for (source, output) in pixels.pixels().zip(decoded.pixels()) {
+        assert_eq!(source[3], output[3]);
+        for channel in 0..3 {
+            assert!(source[channel].abs_diff(output[channel]) <= 4);
+            changed |= source[channel] != output[channel];
+        }
+    }
+    assert!(
+        changed,
+        "near-lossless preprocessing should change noisy RGB"
+    );
+    assert!(
+        encode_rgba_with_near_lossless(pixels.as_raw(), 128, 128, 101, Limits::default()).is_err()
+    );
+    assert!(encode_rgba_with_near_lossless(&[0; 3], 1, 1, 100, Limits::default()).is_err());
+    Ok(())
+}
+
+#[test]
 fn alpha_quality_reduces_size_and_preserves_transparency_endpoints() -> Result<()> {
     let mut state = 1_u32;
     let pixels = image::RgbaImage::from_fn(128, 128, |_, _| {

@@ -4,7 +4,7 @@ pub mod ingest;
 mod tests;
 mod thumbnail_response;
 mod thumbs;
-use quad_image::webp_encoder;
+use quad_image::{webp_encoder, webp_policy};
 
 use std::convert::Infallible;
 use std::future::IntoFuture;
@@ -128,7 +128,22 @@ async fn upload(
         Err(message) => return nh(bad_request(message)),
     };
 
-    match process_upload(&form.image, gallery, &state, |_| Ok(())) {
+    let gallery = gallery.map(|(public, private)| (public.to_owned(), private.to_owned()));
+    let image = form.image.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        process_upload(
+            &image,
+            gallery
+                .as_ref()
+                .map(|(public, private)| (public.as_str(), private.as_str())),
+            &state,
+            |_| Ok(()),
+        )
+    })
+    .await
+    .context("joining upload worker")
+    .and_then(|result| result);
+    match result {
         Ok(image_id) => {
             println!("{caller:?}: {image_id}");
 

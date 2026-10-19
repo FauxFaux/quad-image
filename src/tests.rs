@@ -21,7 +21,15 @@ fn write_an_image() -> Result<()> {
     let source =
         image::load_from_memory_with_format(include_bytes!("test.png"), image::ImageFormat::Png)?;
     let saved = store(include_bytes!("test.png"))?;
-    store(include_bytes!("../tests/parrot.gif"))?;
+    let gif = store(include_bytes!("../tests/parrot.gif"))?;
+    assert!(gif.ends_with(".gif"));
+    let gif_bytes = fs::read(gif)?;
+    let mut decoder = gif::Decoder::new(std::io::Cursor::new(gif_bytes))?;
+    let mut frames = 0;
+    while decoder.read_next_frame()?.is_some() {
+        frames += 1;
+    }
+    assert!(frames > 1, "animated GIF frames must be retained");
 
     let saved_bytes = fs::read(saved)?;
     let saved_webp = image::load_from_memory_with_format(&saved_bytes, image::ImageFormat::WebP)?;
@@ -55,30 +63,22 @@ fn write_an_image() -> Result<()> {
         "created one of each"
     );
 
-    // A single-worker pool cannot run the queued WebP encode until store
-    // returns, so this also checks that JPEG storage does not join the worker.
+    // Primary encoding uses its own shared pool, including when called from
+    // a single-worker thumbnail pool. Incoming JPEGs get validated WebP too.
     let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build()?;
     let jpeg_data = include_bytes!("../tests/orient_1.jpg");
-    let jpeg = pool.install(|| -> Result<String> {
-        let saved = store(jpeg_data)?;
-        assert!(saved.ends_with(".webp"));
-        assert!(!std::path::Path::new(&raw_path(&saved)).exists());
-        Ok(saved)
-    })?;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while !std::path::Path::new(&raw_path(&jpeg)).exists() {
-        anyhow::ensure!(
-            std::time::Instant::now() < deadline,
-            "raw WebP was not saved"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    let source = image::load_from_memory(jpeg_data)?;
-    let raw = image::open(raw_path(&jpeg))?;
-    assert_eq!(source.to_rgba8(), raw.to_rgba8());
+    let saved = pool.install(|| store(jpeg_data))?;
+    assert!(saved.ends_with(".webp"));
+    let saved_bytes = fs::read(&saved)?;
+    assert_eq!(image::guess_format(&saved_bytes)?, image::ImageFormat::WebP);
+    assert_eq!(
+        image::load_from_memory(jpeg_data)?.to_rgba8(),
+        image::load_from_memory(&saved_bytes)?.to_rgba8()
+    );
+    assert!(!std::path::Path::new(&raw_path(&saved)).exists());
 
-    // Incompressible pixels force the existing >1 MiB JPEG fallback. Its
-    // companion must preserve the pixels from before the lossy conversion.
+    // Incompressible input cannot fit exact lossless. The selected lossy WebP
+    // must match its extension and preserve dimensions, without a raw archive.
     let mut state = 1_u32;
     let noisy = image::RgbImage::from_fn(768, 768, |_, _| {
         image::Rgb(std::array::from_fn(|_| {
@@ -92,18 +92,20 @@ fn write_an_image() -> Result<()> {
     noisy.write_to(&mut png, image::ImageFormat::Png)?;
     let jpeg = store(png.get_ref())?;
     assert!(jpeg.ends_with(".webp"));
+    let selected = fs::read(&jpeg)?;
+    assert_eq!(image::guess_format(&selected)?, image::ImageFormat::WebP);
+    assert!(selected.len() < 1_000_000);
     assert_eq!(
-        image::ImageFormat::Jpeg,
-        image::guess_format(&fs::read(&jpeg)?)?
+        image::load_from_memory(&selected)?.to_rgb8().dimensions(),
+        noisy.dimensions()
     );
-    let raw_bytes = fs::read(raw_path(&jpeg))?;
-    assert!(raw_bytes.len() > 1024 * 1024);
-    assert_eq!(
-        noisy,
-        image::load_from_memory_with_format(&raw_bytes, image::ImageFormat::WebP)?.to_rgb8()
-    );
+    assert!(selected.windows(4).any(|chunk| chunk == b"VP8 "));
+    assert!(!std::path::Path::new(&raw_path(&jpeg)).exists());
 
-    tokio::runtime::Runtime::new()?.block_on(stream_upload_roundtrip())?;
+    tokio::runtime::Runtime::new()?.block_on(async {
+        legacy_upload_roundtrip().await?;
+        stream_upload_roundtrip().await
+    })?;
 
     Ok(())
 }
@@ -121,10 +123,7 @@ fn stream_context() -> std::sync::Arc<crate::Ctx> {
     })
 }
 
-async fn stream_request(
-    fields: &[(&str, &[u8])],
-    state: std::sync::Arc<crate::Ctx>,
-) -> axum::response::Response {
+async fn request_multipart(fields: &[(&str, &[u8])]) -> axum::extract::Multipart {
     use axum::extract::FromRequest as _;
     let mut body = Vec::new();
     for (name, value) in fields {
@@ -145,16 +144,66 @@ async fn stream_request(
         )
         .body(axum::body::Body::from(body))
         .unwrap();
-    let multipart = axum::extract::Multipart::from_request(request, &())
+    axum::extract::Multipart::from_request(request, &())
         .await
-        .unwrap();
+        .unwrap()
+}
+
+async fn stream_request(
+    fields: &[(&str, &[u8])],
+    state: std::sync::Arc<crate::Ctx>,
+) -> axum::response::Response {
     crate::upload_stream(
         axum::extract::ConnectInfo("127.0.0.1:1234".parse().unwrap()),
         axum::http::HeaderMap::new(),
         axum::extract::State(state),
-        multipart,
+        request_multipart(fields).await,
     )
     .await
+}
+
+async fn legacy_upload_roundtrip() -> Result<()> {
+    let state = stream_context();
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert("host", "uploads.example".parse()?);
+    let (status, headers, response) = crate::upload(
+        axum::extract::ConnectInfo("127.0.0.1:1234".parse().unwrap()),
+        headers,
+        axum::extract::State(state.clone()),
+        request_multipart(&[
+            ("image", include_bytes!("../tests/orient_1.jpg")),
+            ("gallery", b"album!secret"),
+            ("return_json", b"true"),
+            ("return_full_url", b"true"),
+        ])
+        .await,
+    )
+    .await;
+    assert_eq!(status, axum::http::StatusCode::OK);
+    assert_eq!(
+        headers["content-type"],
+        "application/vnd.api+json; charset=utf-8"
+    );
+    let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
+    let data: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(data["data"]["type"], "image");
+    let id = data["data"]["id"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("https://uploads.example/")
+        .unwrap();
+    assert!(crate::is_image_id(id) && id.ends_with(".webp"));
+    assert_eq!(
+        image::guess_format(&fs::read(id)?)?,
+        image::ImageFormat::WebP
+    );
+    let thumb = format!("e/.thumbs/{}.thumb.webp", id.strip_prefix("e/").unwrap());
+    image::open(thumb)?;
+    let conn = state.conn.lock().unwrap();
+    let stored: String =
+        conn.query_row("select image from gallery_images", [], |row| row.get(0))?;
+    assert_eq!(stored, id);
+    Ok(())
 }
 
 // Runs within write_an_image's temporary working directory, since storage is
@@ -241,6 +290,27 @@ async fn stream_upload_roundtrip() -> Result<()> {
         result.unwrap_err().to_string(),
         "event receiver disconnected"
     );
+
+    // A valid decoded image outside WebP's dimension range can announce a
+    // thumbnail, but a failed primary encode must release that claim too.
+    let wide = image::RgbaImage::from_pixel(16_384, 1, image::Rgba([10, 20, 30, 255]));
+    let mut png = std::io::Cursor::new(Vec::new());
+    wide.write_to(&mut png, image::ImageFormat::Png)?;
+    let mut failed_id = String::new();
+    let result = crate::ingest::store_with_thumbnail(png.get_ref(), |id| {
+        failed_id = id.to_owned();
+        assert!(!std::path::Path::new(id).exists());
+        Ok(())
+    });
+    assert!(format!("{:#}", result.unwrap_err()).contains("invalid WebP width"));
+    assert!(!failed_id.is_empty());
+    assert!(!std::path::Path::new(&failed_id).exists());
+    assert!(!std::path::Path::new(&format!(
+        "e/.thumbs/{}.thumb.webp",
+        failed_id.strip_prefix("e/").unwrap()
+    ))
+    .exists());
+
     // Even a primary appearing after the thumbnail claim cannot be overwritten.
     let mut collided = String::new();
     let result = crate::ingest::store_with_thumbnail(include_bytes!("test.png"), |id| {

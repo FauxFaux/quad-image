@@ -5,8 +5,8 @@
 A very, very simple image hosting API, plus support files.
 
  * You send it an image.
- * The image is decoded and re-encoded using
-[image-rs](https://crates.io/crates/image).
+ * The image is decoded using [image-rs](https://crates.io/crates/image).
+   Still images are re-encoded as WebP using the server's sandboxed encoder.
  * The image is saved to the local disc.
  * The URL of the image is returned.
 
@@ -23,6 +23,13 @@ image URLs; the thumbnail's storage path, dimensions, and encoding settings
 are server-controlled. The legacy `.thumb.jpg` URLs continue to serve JPEG.
 The nginx fragment expects the standard `mime.types` table to be included so
 that `.webp` files are served with `Content-Type: image/webp`.
+
+Still uploads try **nl100, nl40, q90, q70** in parallel, followed by
+**q50, q35, q20, q5** only when all first-pass results exceed 2 MB. Selection
+prefers lossless/near-lossless and then higher lossy quality below 1 MB;
+otherwise it keeps the smallest output. Animated GIF handling is unchanged.
+See [the upload encoding policy](docs/upload-encoding.md) for exact byte
+thresholds, concurrency, resource limits, and failure behavior.
 
 ### Streaming uploads
 
@@ -108,8 +115,10 @@ weirdness.
 Users have no control over the target filename. They cannot plausibly
 overwrite files on the server, or generate URLs of their choosing.
 
-Images are decoded and re-encoded using `image-rs` before writing
-to the filesystem, there should be no way to get non-image data served.
+Images are decoded using `image-rs` and re-encoded by the server before writing
+to the filesystem. Still-image WebP encoding runs inside disposable Wasmtime
+sandboxes with memory and execution limits; GIFs use the GIF decode/re-encode
+path. There should be no way to get non-image data served.
 That is, all files that make it to the filesystem are valid, minimal
 images with no extra information in, either in metadata or elsewhere
 in the file.
