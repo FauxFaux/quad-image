@@ -255,19 +255,16 @@ const uploadErrorSchema = z.object({ message: z.string() });
 const imageIdSchema = z
   .string()
   .check(z.regex(/^e\/[a-zA-Z0-9]{10}\.(?:png|webp|jpg|gif)$/));
-const settingNameSchema = z
-  .string()
-  .check(z.regex(/^(?:q|nl)(?:100|[1-9]?\d)$/));
 const uploadStatusSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('accepted'), message: z.string() }),
   z.object({ kind: z.literal('thumbnail'), id: imageIdSchema }),
   z.object({
     kind: z.literal('planned'),
-    names: z.array(settingNameSchema).check(z.minLength(1), z.maxLength(8)),
+    names: z.array(z.string()),
   }),
   z.object({
     kind: z.literal('encoded'),
-    name: settingNameSchema,
+    name: z.string(),
     bytes: z.int().check(z.positive()),
     improved: z.optional(z.boolean()),
   }),

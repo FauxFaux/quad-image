@@ -335,24 +335,42 @@ describe('streaming upload', () => {
 
   test.each([
     { names: [] },
-    { names: ['unknown'] },
-    { names: ['q101'] },
-    { names: 'q90' },
-  ])('rejects invalid planned names $names', async ({ names }) => {
+    { names: ['', 'unknown', 'q101', 'AVIF quality 42', '近无损'] },
+    { names: Array.from({ length: 12 }, (_, index) => `candidate ${index}`) },
+  ])('accepts server-controlled encode plans %#', async ({ names }) => {
     const update = vi.fn<(next: PendingItem) => void>();
     const upload = driveUpload(initial, update);
     FakeRequest.latest.load(
-      `event: status\ndata: ${JSON.stringify({ kind: 'planned', names })}\n\n`,
+      accepted +
+        planned(names) +
+        names.map((name) => encoded(name, 123)).join('') +
+        complete,
     );
-    expect(await upload).toBeUndefined();
+    expect(await upload).toMatchObject({ state: 'done' });
     expect(update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ state: 'error' }),
+      expect.objectContaining({
+        encodes: names.map((name) => ({ name, bytes: 123 })),
+      }),
     );
   });
 
+  test.each([{ names: 'q90' }, { names: [123] }])(
+    'rejects invalid planned names $names',
+    async ({ names }) => {
+      const update = vi.fn<(next: PendingItem) => void>();
+      const upload = driveUpload(initial, update);
+      FakeRequest.latest.load(
+        `event: status\ndata: ${JSON.stringify({ kind: 'planned', names })}\n\n`,
+      );
+      expect(await upload).toBeUndefined();
+      expect(update).toHaveBeenLastCalledWith(
+        expect.objectContaining({ state: 'error' }),
+      );
+    },
+  );
+
   test.each([
-    ['unknown setting', { name: 'fast', bytes: 123 }],
-    ['out of range setting', { name: 'q101', bytes: 123 }],
+    ['non-string name', { name: 123, bytes: 123 }],
     ['negative size', { name: 'q90', bytes: -1 }],
     ['fractional size', { name: 'q90', bytes: 1.5 }],
     ['string size', { name: 'q90', bytes: '123' }],
