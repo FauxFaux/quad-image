@@ -42,7 +42,7 @@ internal fun prepareImage(resolver: ContentResolver, uri: Uri): PreparedImage {
         } else encodeLossy(bitmap)
 
         if (candidate != null && candidate.size <= MAX_IMAGE_BYTES &&
-            (original.size > MAX_IMAGE_BYTES || candidate.size < original.size * 0.9)
+            (original.size > MAX_IMAGE_BYTES || candidate.size <= original.size * 0.9)
         ) {
             return PreparedImage(candidate, "image/webp", "image.webp")
         }
@@ -96,7 +96,8 @@ private fun encodeLossy(bitmap: Bitmap): ByteArray {
     val format = if (Build.VERSION.SDK_INT >= 30) Bitmap.CompressFormat.WEBP_LOSSY else {
         @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP
     }
-    var bytes = encode(bitmap, format, 80)
+    // Match the browser's transfer policy; see docs/client-encoding.md.
+    var bytes = encode(bitmap, format, 90)
     if (bytes.size > 5 * 1024 * 1024) bytes = encode(bitmap, format, 50)
     if (bytes.size > MAX_IMAGE_BYTES) bytes = encode(bitmap, format, 20)
     return bytes

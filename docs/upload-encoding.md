@@ -1,8 +1,8 @@
 # Server upload encoding policy
 
 Both `/api/upload` and `/api/upload-stream` use this policy for still images.
-The browser's transcoding is an upload optimization; the server always detects
-the format from the bytes, decodes the image, applies supported EXIF orientation,
+The [client encoding policy](client-encoding.md) optimizes upload transfers;
+the server always detects the format from the bytes, decodes the image, applies supported EXIF orientation,
 and encodes its own output. Filenames, MIME types, incoming file sizes, and
 browser encoder choices do not determine persistence or candidate settings.
 
@@ -152,9 +152,9 @@ The existing GIF loop handling is unchanged.
 
 Multipart fields, image resource JSON, existing streaming events, gallery IDs,
 and `?variant=thumbnail` URLs keep their existing shapes. The streaming endpoint
-adds the `image` and `encoded` statuses described above. Web and Android clients already accept
-`.webp` image IDs. The browser upload policy itself is unchanged by this server
-implementation.
+adds the `image`, `planned`, and `encoded` statuses described above. Web and Android clients already accept
+`.webp` image IDs. Client transfer thresholds and qualities are documented in
+[the client encoding policy](client-encoding.md).
 
 ## Evidence and tests
 

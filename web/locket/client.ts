@@ -1,4 +1,5 @@
 import type { EncodeResult, PendingItem } from '../upload';
+import { maxUploadBytes } from '../upload-policy';
 import * as z from 'zod/mini';
 import { ServerEventParser } from './sse';
 
@@ -71,6 +72,9 @@ export async function driveUpload(
   let encodes: EncodeResult[] = [];
   updateState({ ...common, state: 'starting' });
   try {
+    if (initial.file.size > maxUploadBytes) {
+      throw new Error('Image exceeds the 9 MiB upload limit');
+    }
     const base = await new Promise<string>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/upload-stream');

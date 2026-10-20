@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { driveUpload } from '../../web/locket/client';
 import { ServerEventParser } from '../../web/locket/sse';
 import type { PendingItem } from '../../web/upload';
+import { maxUploadBytes } from '../../web/upload-policy';
 
 const initial: PendingItem = {
   state: 'ready',
@@ -52,6 +53,20 @@ beforeEach(() => vi.stubGlobal('XMLHttpRequest', FakeRequest));
 afterEach(() => vi.unstubAllGlobals());
 
 describe('streaming upload', () => {
+  test('rejects oversized ready files without starting a request', async () => {
+    const update = vi.fn<(next: PendingItem) => void>();
+    const previous = FakeRequest.latest;
+    const file = new File([new Uint8Array(maxUploadBytes + 1)], 'large.gif');
+    expect(await driveUpload({ ...initial, file }, update)).toBeUndefined();
+    expect(FakeRequest.latest).toBe(previous);
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        state: 'error',
+        error: 'Image exceeds the 9 MiB upload limit',
+        file,
+      }),
+    );
+  });
   test('reports upload percentages and processing before completion arrives', async () => {
     const updates: PendingItem[] = [];
     const upload = driveUpload(

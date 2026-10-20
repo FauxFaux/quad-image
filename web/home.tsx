@@ -86,9 +86,10 @@ export function Home() {
     const originalType = magic ?? next.file.type ?? 'unknown';
 
     if (
-      next.file.size > shrinkThreshold ||
-      magic === 'image/heic' ||
-      isLosslessFormat(originalType)
+      magic !== 'image/gif' &&
+      (next.file.size > shrinkThreshold ||
+        magic === 'image/heic' ||
+        isLosslessFormat(originalType))
     ) {
       next = {
         ...next,
@@ -96,7 +97,17 @@ export function Home() {
       };
       updateState(next);
 
-      next = await attemptShrinkage(next, originalType);
+      const preparing = next;
+      try {
+        next = await attemptShrinkage(next, originalType);
+      } catch (error) {
+        updateState({
+          ...preparing,
+          state: 'error',
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
       updateState(next);
     } else {
       next = {

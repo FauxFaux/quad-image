@@ -10,8 +10,152 @@ import {
   loadEncoder,
   loadLosslessEncoder,
 } from '../../../web/locket/webp-wasm';
+import { attemptShrinkage } from '../../../web/upload';
 
 describe('image ops', () => {
+  it('uses q90 for pasted photographic PNGs whose lossless encode exceeds 1 MiB', () => {
+    cy.then(async () => {
+      const png = await randomImage(3, 1024, 768, 'image/png');
+      const close = cy.spy(ImageBitmap.prototype, 'close');
+      const result = await attemptShrinkage(
+        { state: 'resizing', ctx: 'pasted', file: png },
+        'image/png',
+      );
+      expect(result.stats).to.include({ quality: 0.9, used: 'resized' });
+      if (result.state !== 'ready') throw new Error('expected a ready upload');
+      expect(result.file.type).to.equal('image/webp');
+      expect(close).to.have.been.calledOnce;
+      expect(await readDimensions(result.file)).to.deep.equal({
+        width: 1024,
+        height: 768,
+      });
+    });
+  });
+
+  it('starts JPEG transcoding at q90', () => {
+    withBlob('tests/orient.jpg', async (file) => {
+      const result = await attemptShrinkage(
+        { state: 'resizing', ctx: 'picked', file },
+        'image/jpeg',
+      );
+      expect(result.stats?.quality).to.equal(0.9);
+      expect(result.state).to.equal('ready');
+    });
+  });
+
+  it('retains small PNGs losslessly and keeps an original when re-encoding is not worthwhile', () => {
+    cy.then(async () => {
+      const canvas = new OffscreenCanvas(32, 32);
+      try {
+        const draw = canvas.getContext('2d');
+        if (!draw) throw new Error('could not create 2d context');
+        draw.fillStyle = '#4488cc';
+        draw.fillRect(0, 0, 32, 32);
+        const png = await canvas.convertToBlob({ type: 'image/png' });
+        const lossless = await attemptShrinkage(
+          { state: 'resizing', ctx: 'pasted', file: png },
+          'image/png',
+        );
+        expect(lossless.stats).to.include({
+          quality: undefined,
+          used: 'resized',
+        });
+        if (lossless.state !== 'ready')
+          throw new Error('expected a ready upload');
+        const decoded = await createImageBitmap(lossless.file);
+        const restored = new OffscreenCanvas(32, 32);
+        try {
+          const context = restored.getContext('2d');
+          if (!context) throw new Error('could not create 2d context');
+          context.drawImage(decoded, 0, 0);
+          expect(context.getImageData(0, 0, 32, 32).data).to.deep.equal(
+            draw.getImageData(0, 0, 32, 32).data,
+          );
+        } finally {
+          decoded.close();
+          restored.width = 0;
+          restored.height = 0;
+        }
+        const webp = await canvas.convertToBlob({
+          type: 'image/webp',
+          quality: 0.9,
+        });
+        const retained = await attemptShrinkage(
+          { state: 'resizing', ctx: 'picked', file: webp },
+          'image/webp',
+        );
+        if (retained.state !== 'ready')
+          throw new Error('expected a ready upload');
+        expect(retained.file).to.equal(webp);
+        expect(retained.stats?.used).to.equal('original');
+      } finally {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+    });
+  });
+
+  it('keeps GIF bytes intact without decoding a still frame', () => {
+    withBlob('tests/parrot.gif', async (file) => {
+      const decode = cy.spy(globalThis, 'createImageBitmap');
+      const result = await attemptShrinkage(
+        { state: 'resizing', ctx: 'picked', file },
+        'image/gif',
+      );
+      if (result.state !== 'ready') throw new Error('expected a ready upload');
+      expect(result.file).to.equal(file);
+      expect(result.stats?.used).to.equal('original');
+      expect(decode).not.to.have.been.called;
+    });
+  });
+
+  it(
+    'drops large photographic transfers to q50 above the 5 MiB threshold',
+    { defaultCommandTimeout: 120_000 },
+    () => {
+      cy.then(async () => {
+        const png = await randomImage(4, 3072, 3072, 'image/png');
+        const result = await attemptShrinkage(
+          { state: 'resizing', ctx: 'pasted', file: png },
+          'image/png',
+        );
+        expect(result.stats).to.include({ quality: 0.5, used: 'resized' });
+        if (result.state !== 'ready')
+          throw new Error('expected a ready upload');
+        expect(result.file.size).to.be.at.most(9 * MB);
+        expect(await readDimensions(result.file)).to.deep.equal({
+          width: 3072,
+          height: 3072,
+        });
+      });
+    },
+  );
+
+  it('reports malformed images and rejects oversized GIFs before decoding', () => {
+    cy.then(async () => {
+      for (const [file, type, message] of [
+        [new Blob(['invalid']), 'image/png', 'cannot decode image/png'],
+        [
+          new Blob([new Uint8Array(9 * MB + 1)]),
+          'image/gif',
+          'Animated GIF exceeds',
+        ],
+      ] as const) {
+        let failure: unknown;
+        try {
+          await attemptShrinkage(
+            { state: 'resizing', ctx: 'picked', file },
+            type,
+          );
+        } catch (error) {
+          failure = error;
+        }
+        expect(failure).to.be.instanceOf(Error);
+        expect((failure as Error).message).to.contain(message);
+      }
+    });
+  });
+
   it('supports webp', async () => {
     expect(await canvasSupportsWebP()).to.be.true;
   });

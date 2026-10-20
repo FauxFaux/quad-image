@@ -1,4 +1,12 @@
 import { encodeWebP, encodeWebPLossless } from './locket/encode';
+import {
+  initialLossyQuality,
+  maxUploadBytes,
+  nextLossyQuality,
+  selectUpload,
+  shrinkThreshold,
+} from './upload-policy';
+export { shrinkThreshold } from './upload-policy';
 
 export type OurFile = Blob & { name?: string };
 
@@ -55,6 +63,20 @@ export const attemptShrinkage = async (
   }
   const original = next.file;
 
+  if (originalType === 'image/gif') {
+    if (original.size > maxUploadBytes)
+      throw new Error('Animated GIF exceeds the 9 MiB upload limit');
+    return {
+      ...next,
+      state: 'ready',
+      stats: {
+        originalSize: original.size,
+        originalType,
+        used: 'original',
+      },
+    };
+  }
+
   await unblock();
   // firefox rejects with a bare, stackless InvalidStateError for anything it
   // can't decode (heic, tiff, ...), so say what we were holding at the time
@@ -76,21 +98,15 @@ export const attemptShrinkage = async (
     // through to the existing quality-based encoding strategy.
     if (!resized || resized.size > shrinkThreshold) {
       await unblock();
-      quality = 0.8;
+      quality = initialLossyQuality;
       resized = await encodeWebP(image, quality);
-
-      if (resized.size > 5 * 1024 * 1024) {
+      let retry = nextLossyQuality(quality, resized.size);
+      while (retry !== undefined) {
         resized = undefined;
         await unblock();
-        quality = 0.5;
+        quality = retry;
         resized = await encodeWebP(image, quality);
-      }
-
-      if (resized.size > 9 * 1024 * 1024) {
-        resized = undefined;
-        await unblock();
-        quality = 0.2;
-        resized = await encodeWebP(image, quality);
+        retry = nextLossyQuality(quality, resized.size);
       }
     }
   } finally {
@@ -98,15 +114,18 @@ export const attemptShrinkage = async (
   }
 
   await unblock();
-  const saveAtLeast = 0.1; // 0.1 = 10%
-  const worthIt = resized.size < original.size * (1 - saveAtLeast);
+  const used = selectUpload(
+    original.size,
+    resized.size,
+    originalType === 'image/heic',
+  );
 
   const stats: UploadStats = {
     originalSize: original.size,
     originalType,
     resizedSize: resized.size,
     quality,
-    used: worthIt ? 'resized' : 'original',
+    used,
   };
 
   console.log('resize', stats);
@@ -114,12 +133,10 @@ export const attemptShrinkage = async (
   return {
     ...next,
     state: 'ready',
-    file: worthIt ? resized : original,
+    file: used === 'resized' ? resized : original,
     stats,
   };
 };
-
-export const shrinkThreshold = 1024 * 1024;
 
 // GIF is excluded: it can be losslessly encoded, but decoding it to an
 // ImageBitmap would discard animation. PNG is the lossless still-image format
