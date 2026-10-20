@@ -218,6 +218,20 @@
   overflow-wrap: anywhere;
 }
 
+.thumb--stats summary {
+  cursor: pointer;
+}
+
+.thumb--stats table {
+  width: 100%;
+  text-align: left;
+}
+
+.thumb--stats th:last-child,
+.thumb--stats td:last-child {
+  text-align: right;
+}
+
 .gallery--header {
   font-size: 140%;
   margin-bottom: 1em;

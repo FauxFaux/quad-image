@@ -1,4 +1,4 @@
-import type { PendingItem } from '../upload';
+import type { EncodeResult, PendingItem } from '../upload';
 import * as z from 'zod/mini';
 import { ServerEventParser } from './sse';
 
@@ -67,6 +67,7 @@ export async function driveUpload(
     file: initial.file,
     stats: initial.stats,
   };
+  let encodes: EncodeResult[] = [];
   updateState({ ...common, state: 'starting' });
   try {
     const base = await new Promise<string>((resolve, reject) => {
@@ -78,6 +79,8 @@ export async function driveUpload(
       let offset = 0;
       let settled = false;
       let processing = false;
+      let thumbnail: string | undefined;
+      let available: { id: string; url: string } | undefined;
 
       const cleanup = () => {
         xhr.upload.removeEventListener('progress', uploadProgress);
@@ -145,12 +148,27 @@ export async function driveUpload(
             }
             const status = uploadStatusSchema.parse(payload);
             processing = true;
+            if (status.kind === 'thumbnail') thumbnail = status.id;
+            if (status.kind === 'image') {
+              available = { id: status.id, url: status.url };
+            }
+            if (status.kind === 'encoded') {
+              encodes = [
+                ...encodes,
+                { name: status.name, bytes: status.bytes },
+              ];
+            }
             updateState({
               ...common,
               state: 'processing',
-              message:
-                status.kind === 'thumbnail' ? 'Transcoding…' : status.message,
-              ...(status.kind === 'thumbnail' ? { thumbnail: status.id } : {}),
+              message: available
+                ? 'Image ready, optimizing…'
+                : status.kind === 'accepted'
+                  ? status.message
+                  : 'Upload accepted, server transcoding…',
+              thumbnail,
+              available,
+              encodes,
             });
           }
           if (done) throw new Error('Upload stream ended before completion');
@@ -180,6 +198,7 @@ export async function driveUpload(
       ctx: initial.ctx,
       base,
       stats: initial.stats,
+      ...(encodes.length ? { encodes } : {}),
     } as const;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -190,7 +209,12 @@ export async function driveUpload(
       'bytes',
       initial.stats,
     );
-    updateState({ ...common, state: 'error', error: message });
+    updateState({
+      ...common,
+      state: 'error',
+      error: message,
+      ...(encodes.length ? { encodes } : {}),
+    });
     return;
   }
 }
@@ -202,6 +226,18 @@ const imageIdSchema = z
 const uploadStatusSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('accepted'), message: z.string() }),
   z.object({ kind: z.literal('thumbnail'), id: imageIdSchema }),
+  z.object({
+    kind: z.literal('encoded'),
+    name: z.string().check(z.regex(/^(?:q|nl)(?:100|[1-9]?\d)$/)),
+    bytes: z.int().check(z.positive()),
+  }),
+  z
+    .object({
+      kind: z.literal('image'),
+      id: imageIdSchema,
+      url: z.string(),
+    })
+    .check(z.refine((value) => value.url === `${value.id}?work-in-progress`)),
 ]);
 const uploadCompleteSchema = z.object({
   data: z.object({

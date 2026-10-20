@@ -16,7 +16,16 @@ export interface UploadStats {
   used: 'resized' | 'original';
 }
 
-export type PendingItem = { ctx: string; stats?: UploadStats } & (
+export interface EncodeResult {
+  name: string;
+  bytes: number;
+}
+
+export type PendingItem = {
+  ctx: string;
+  stats?: UploadStats;
+  encodes?: EncodeResult[];
+} & (
   | { state: 'queued'; file: OurFile }
   | { state: 'resizing'; file: OurFile }
   | { state: 'ready'; file: OurFile }
@@ -27,6 +36,7 @@ export type PendingItem = { ctx: string; stats?: UploadStats } & (
       message: string;
       file: OurFile;
       thumbnail?: string;
+      available?: { id: string; url: string };
     }
   | { state: 'done'; base: string }
   | { state: 'error'; error: string; file: OurFile }

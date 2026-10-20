@@ -10,9 +10,11 @@ const initial: PendingItem = {
   stats: { originalSize: 11, originalType: 'image/png', used: 'original' },
 };
 const accepted =
-  'event: status\ndata: {"kind":"accepted","message":"Transcoding…"}\n\n';
+  'event: status\ndata: {"kind":"accepted","message":"Upload accepted, server transcoding…"}\n\n';
 const complete =
   'event: done\ndata: {"data":{"id":"e/abcdefghij.webp","type":"image"}}\n\n';
+const encoded = (name: string, bytes: number) =>
+  `event: status\ndata: ${JSON.stringify({ kind: 'encoded', name, bytes })}\n\n`;
 
 class FakeRequest extends EventTarget {
   static latest: FakeRequest;
@@ -94,7 +96,7 @@ describe('streaming upload', () => {
     xhr.progress(accepted);
     expect(updates.at(-1)).toMatchObject({
       state: 'processing',
-      message: 'Transcoding…',
+      message: 'Upload accepted, server transcoding…',
       stats: initial.stats,
     });
     const count = updates.length;
@@ -145,6 +147,44 @@ describe('streaming upload', () => {
     );
   });
 
+  test('offers a validated provisional image until the normal done event', async () => {
+    const update = vi.fn<(next: PendingItem) => void>();
+    const upload = driveUpload(initial, update);
+    const xhr = FakeRequest.latest;
+    const image =
+      'event: status\ndata: {"kind":"image","id":"e/abcdefghij.webp","url":"e/abcdefghij.webp?work-in-progress"}\n\n';
+    const thumbnail =
+      'event: status\ndata: {"kind":"thumbnail","id":"e/abcdefghij.webp"}\n\n';
+    xhr.progress(accepted + image);
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        state: 'processing',
+        message: 'Image ready, optimizing…',
+        available: {
+          id: 'e/abcdefghij.webp',
+          url: 'e/abcdefghij.webp?work-in-progress',
+        },
+      }),
+    );
+    xhr.progress(accepted + image + thumbnail + image);
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        thumbnail: 'e/abcdefghij.webp',
+        available: {
+          id: 'e/abcdefghij.webp',
+          url: 'e/abcdefghij.webp?work-in-progress',
+        },
+      }),
+    );
+    xhr.load(accepted + image + thumbnail + image + complete);
+    expect(await upload).toEqual({
+      state: 'done',
+      base: 'e/abcdefghij.webp',
+      ctx: initial.ctx,
+      stats: initial.stats,
+    });
+  });
+
   test('waits for complete lines before consuming possibly incomplete UTF-8 text', async () => {
     const update = vi.fn<(next: PendingItem) => void>();
     const upload = driveUpload(initial, update);
@@ -155,10 +195,89 @@ describe('streaming upload', () => {
     expect(update).toHaveBeenCalledOnce();
     xhr.progress(accepted);
     expect(update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ message: 'Transcoding…' }),
+      expect.objectContaining({
+        message: 'Upload accepted, server transcoding…',
+      }),
     );
     xhr.load(accepted + complete);
     expect((await upload)?.base).toBe('e/abcdefghij.webp');
+  });
+
+  test('retains all encode results through image updates and completion', async () => {
+    const updates: PendingItem[] = [];
+    const upload = driveUpload(initial, (next) => updates.push(next));
+    const xhr = FakeRequest.latest;
+    const first = accepted + encoded('q70', 200000);
+    xhr.progress(first);
+    expect(updates.at(-1)).toMatchObject({
+      state: 'processing',
+      message: 'Upload accepted, server transcoding…',
+      encodes: [{ name: 'q70', bytes: 200000 }],
+    });
+    const image =
+      'event: status\ndata: {"kind":"image","id":"e/abcdefghij.webp","url":"e/abcdefghij.webp?work-in-progress"}\n\n';
+    const rest =
+      first + image + encoded('nl40', 1200000) + encoded('q90', 400000);
+    xhr.progress(rest);
+    const encodes = [
+      { name: 'q70', bytes: 200000 },
+      { name: 'nl40', bytes: 1200000 },
+      { name: 'q90', bytes: 400000 },
+    ];
+    expect(updates.at(-1)).toMatchObject({
+      message: 'Image ready, optimizing…',
+      available: {
+        id: 'e/abcdefghij.webp',
+        url: 'e/abcdefghij.webp?work-in-progress',
+      },
+      encodes,
+    });
+    // Progress snapshots remain immutable as subsequent candidates finish.
+    expect(updates.find((u) => u.encodes?.length === 1)?.encodes).toEqual([
+      encodes[0],
+    ]);
+    xhr.load(rest + complete);
+    expect(await upload).toMatchObject({
+      state: 'done',
+      base: 'e/abcdefghij.webp',
+      encodes,
+    });
+  });
+
+  test('keeps completed results when a later encode fails', async () => {
+    const update = vi.fn<(next: PendingItem) => void>();
+    const upload = driveUpload(initial, update);
+    FakeRequest.latest.load(
+      accepted +
+        encoded('q90', 1234) +
+        'event: error\ndata: {"message":"Encoding failed"}\n\n',
+    );
+    expect(await upload).toBeUndefined();
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        state: 'error',
+        error: 'Encoding failed',
+        encodes: [{ name: 'q90', bytes: 1234 }],
+      }),
+    );
+  });
+
+  test.each([
+    ['unknown setting', { name: 'fast', bytes: 123 }],
+    ['out of range setting', { name: 'q101', bytes: 123 }],
+    ['negative size', { name: 'q90', bytes: -1 }],
+    ['fractional size', { name: 'q90', bytes: 1.5 }],
+    ['string size', { name: 'q90', bytes: '123' }],
+  ])('rejects encode metadata with %s', async (_name, fields) => {
+    const update = vi.fn<(next: PendingItem) => void>();
+    const upload = driveUpload(initial, update);
+    FakeRequest.latest.load(
+      `event: status\ndata: ${JSON.stringify({ kind: 'encoded', ...fields })}\n\n`,
+    );
+    expect(await upload).toBeUndefined();
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ state: 'error' }),
+    );
   });
 
   test.each([
@@ -174,6 +293,16 @@ describe('streaming upload', () => {
       'Invalid',
     ],
     ['invalid JSON', 'event: done\ndata: nope\n\n', 'JSON'],
+    [
+      'invalid provisional URL',
+      'event: status\ndata: {"kind":"image","id":"e/abcdefghij.webp","url":"https://example.com/unsafe"}\n\n',
+      'Invalid',
+    ],
+    [
+      'mismatched provisional URL',
+      'event: status\ndata: {"kind":"image","id":"e/abcdefghij.webp","url":"e/0123456789.webp?work-in-progress"}\n\n',
+      'Invalid',
+    ],
     [
       'invalid payload',
       complete.replace('e/abcdefghij.webp', '../unsafe'),

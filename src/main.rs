@@ -137,6 +137,7 @@ async fn upload(
                 .as_ref()
                 .map(|(public, private)| (public.as_str(), private.as_str())),
             &state,
+            false,
             |_| Ok(()),
         )
     })
@@ -201,15 +202,25 @@ fn process_upload(
     image: &[u8],
     gallery: Option<(&str, &str)>,
     state: &Ctx,
+    streamed: bool,
     mut emit: impl FnMut(Event) -> Result<()> + Send,
 ) -> Result<String> {
-    let image_id = ingest::store_with_thumbnail(image, |id| {
-        emit(
-            Event::default()
-                .event("status")
-                .data(json!({"kind": "thumbnail", "id": id}).to_string()),
-        )
-    })
+    let image_id = if streamed {
+        ingest::store_with_progress(image, |update| {
+            let status = match update {
+                ingest::StoreUpdate::Thumbnail(id) => json!({"kind": "thumbnail", "id": id}),
+                ingest::StoreUpdate::Image(id) => json!({
+                    "kind": "image", "id": id, "url": format!("{id}?work-in-progress"),
+                }),
+                ingest::StoreUpdate::Encoded { name, bytes } => json!({
+                    "kind": "encoded", "name": name, "bytes": bytes,
+                }),
+            };
+            emit(Event::default().event("status").data(status.to_string()))
+        })
+    } else {
+        ingest::store(image)
+    }
     .context("storing image")?;
     thumbs::thumbnail(&image_id).context("thumbnailing just written")?;
     if let Some((gallery, private)) = gallery {
@@ -252,7 +263,7 @@ async fn upload_stream(
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(8);
 
     tx.send(Ok(Event::default().event("status").data(
-        json!({"kind": "accepted", "message": "Upload accepted, going to transcode"}).to_string(),
+        json!({"kind": "accepted", "message": "Upload accepted, server transcoding…"}).to_string(),
     )))
     .await
     .expect("upload event receiver is still owned by this handler");
@@ -266,7 +277,7 @@ async fn upload_stream(
                 .map(parse_gallery_spec)
                 .transpose()
                 .map_err(|message| anyhow!(message))?;
-            process_upload(&form.image, gallery, &state, |event| {
+            process_upload(&form.image, gallery, &state, true, |event| {
                 worker_tx.blocking_send(Ok(event))?;
                 Ok(())
             })

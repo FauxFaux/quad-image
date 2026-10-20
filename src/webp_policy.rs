@@ -1,5 +1,6 @@
 //! Two-pass, size-targeted still-image encoding. See docs/upload-encoding.md.
 
+use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -42,24 +43,45 @@ struct Candidate {
     bytes: Vec<u8>,
 }
 
+pub struct EncodeProgress<'a> {
+    pub name: String,
+    pub bytes: &'a [u8],
+    pub improved: bool,
+}
+
 /// Encode already decoded, tightly packed RGBA. Input codec and byte size do
 /// not affect the candidates; alpha stays lossless even for lossy RGB encoding.
 /// This blocks until every started sandbox has exited, including on failure.
 pub fn encode_rgba(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+    encode_rgba_with_progress(rgba, width, height, |_| Ok(()))
+}
+
+/// Report every completed candidate, marking the first and later improvements.
+/// Calls are serialized, and all work is joined before returning, even on error.
+pub fn encode_rgba_with_progress(
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    report: impl FnMut(EncodeProgress<'_>) -> Result<()> + Send,
+) -> Result<Vec<u8>> {
     let pool = POOL.get_or_try_init(|| {
         rayon::ThreadPoolBuilder::new()
             .num_threads(4)
             .thread_name(|i| format!("upload-encoder-{i}"))
             .build()
     })?;
-    let selected = encode_with(pool, &|setting| match setting {
-        Setting::NearLossless(quality) => {
-            webp_encoder::encode_rgba_with_near_lossless(rgba, width, height, quality, LIMITS)
-        }
-        Setting::Lossy(quality) => {
-            webp_encoder::encode_rgba(rgba, width, height, f32::from(quality), LIMITS)
-        }
-    })?;
+    let selected = encode_with_progress(
+        pool,
+        &|setting| match setting {
+            Setting::NearLossless(quality) => {
+                webp_encoder::encode_rgba_with_near_lossless(rgba, width, height, quality, LIMITS)
+            }
+            Setting::Lossy(quality) => {
+                webp_encoder::encode_rgba(rgba, width, height, f32::from(quality), LIMITS)
+            }
+        },
+        report,
+    )?;
     println!(
         "upload WebP: {:?}, {} bytes ({}x{})",
         selected.setting,
@@ -70,10 +92,43 @@ pub fn encode_rgba(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     Ok(selected.bytes)
 }
 
+#[cfg(test)]
 fn encode_with(
     pool: &rayon::ThreadPool,
     encode: &(impl Fn(Setting) -> Result<Vec<u8>> + Sync),
 ) -> Result<Candidate> {
+    encode_with_progress(pool, encode, |_| Ok(()))
+}
+
+fn encode_with_progress(
+    pool: &rayon::ThreadPool,
+    encode: &(impl Fn(Setting) -> Result<Vec<u8>> + Sync),
+    mut report: impl FnMut(EncodeProgress<'_>) -> Result<()> + Send,
+) -> Result<Candidate> {
+    let mut best = None;
+    let mut reporting_failed = false;
+    let progress = Mutex::new(|candidate: &Candidate| -> Result<()> {
+        let key = selection_key(candidate);
+        if !reporting_failed {
+            let improved = best.is_none_or(|best| key < best);
+            let name = match candidate.setting {
+                Setting::NearLossless(quality) => format!("nl{quality}"),
+                Setting::Lossy(quality) => format!("q{quality}"),
+            };
+            if let Err(error) = report(EncodeProgress {
+                name,
+                bytes: &candidate.bytes,
+                improved,
+            }) {
+                reporting_failed = true;
+                return Err(error.context("reporting WebP candidate"));
+            }
+            if improved {
+                best = Some(key);
+            }
+        }
+        Ok(())
+    });
     let pass = |settings: &[Setting]| {
         // Collect every outcome before propagating errors: no candidate remains
         // running after the upload returns or starts the next pass.
@@ -81,10 +136,12 @@ fn encode_with(
             settings
                 .par_iter()
                 .map(|&setting| {
-                    Ok(Candidate {
+                    let candidate = Candidate {
                         setting,
                         bytes: encode(setting).with_context(|| format!("encoding {setting:?}"))?,
-                    })
+                    };
+                    progress.lock().unwrap()(&candidate)?;
+                    Ok(candidate)
                 })
                 .collect()
         });
@@ -102,23 +159,23 @@ fn encode_with(
 
 fn select(candidates: &[Candidate]) -> usize {
     // Fidelity is a setting preference, not a comparison of output byte sizes
-    // or perceptual metrics. Input order breaks equally ranked ties.
+    // or perceptual metrics. Configured order breaks equally ranked ties.
     candidates
         .iter()
         .enumerate()
-        .filter(|(_, candidate)| candidate.bytes.len() < TARGET_BYTES)
-        .min_by_key(|(_, candidate)| match candidate.setting {
-            Setting::NearLossless(quality) => (0, 100 - quality),
-            Setting::Lossy(quality) => (1, 100 - quality),
-        })
-        .or_else(|| {
-            candidates
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, candidate)| candidate.bytes.len())
-        })
+        .min_by_key(|(_, candidate)| selection_key(candidate))
         .expect("a successful pass produces four candidates")
         .0
+}
+
+fn selection_key(candidate: &Candidate) -> (bool, usize, usize) {
+    let order = FIRST_PASS
+        .iter()
+        .chain(&SECOND_PASS)
+        .position(|setting| *setting == candidate.setting)
+        .expect("configured candidate");
+    let fits = candidate.bytes.len() < TARGET_BYTES;
+    (!fits, if fits { 0 } else { candidate.bytes.len() }, order)
 }
 
 #[cfg(test)]

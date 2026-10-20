@@ -66,26 +66,73 @@ failure, trap, and timeout. Outputs are copied out before native buffers are
 freed. No original-byte passthrough or unsandboxed fallback is used.
 
 Both endpoints run upload processing on blocking workers. The streaming endpoint
-can announce its WebP thumbnail while primary encoding runs. Thumbnail settings
-and storage remain independent of this policy.
+publishes its WebP thumbnail first, then announces primary images as candidates
+finish. Thumbnail settings and storage remain independent of this policy.
+
+## Streamed provisional images
+
+For `/api/upload-stream`, the first completed candidate is published immediately
+at the target image path. Each later candidate replaces it only if it wins under
+the same selection rules used for the final result: prefer fidelity below the
+target, otherwise prefer smaller output, breaking ties by configured order.
+This includes improvements from the second pass. Every configured attempt still
+runs; early publication does not change final quality or failure behavior.
+
+After each publication the server sends an SSE `status` event:
+
+```json
+{"kind":"image","id":"e/abcdefghij.webp","url":"e/abcdefghij.webp?work-in-progress"}
+```
+
+Every completed primary encode also sends an SSE `status` event, including
+candidates that do not improve the currently published image:
+
+```json
+{"kind":"encoded","name":"q90","bytes":848030}
+```
+
+Names use `q<quality>` for lossy encodes and `nl<level>` for near-lossless
+encodes, with `nl100` representing ordinary lossless. Byte sizes are positive
+integers measured from the completed output. Results arrive in completion order
+for both passes; an `encoded` event precedes any corresponding `image` event.
+
+The first publication cannot clobber an existing primary. Replacements use
+atomic rename of complete, readable files, so active readers retain their
+previous complete image. Only the upload's own provisional primary is replaced.
+The query string separates the provisional URL from the final URL in caches;
+it requires no special serving or proxy behavior.
+
+The web client validates the image ID and matching provisional URL, shows the
+server thumbnail with “Image ready, optimizing…” and a “copy intermediate” button.
+Before an image is ready, it shows “Upload accepted, server transcoding…”.
+An initially collapsed “Upload details” fold contains the browser's upload
+statistics and each server encode's name and exact byte size. These results
+remain available for this session after completion or an encoding failure.
+After all encoding and gallery work succeeds, the existing `done` event carries
+the final image ID without a query string, and the copy button uses that URL.
+Non-streamed uploads, including Android's `/api/upload` requests, retain their
+existing response contract and publish only the final primary. GIF uploads
+continue to finish through the existing `done` event.
 
 ## Persistence and API behavior
 
 Successful still uploads persist only the selected server-encoded WebP at a
 server-selected `e/<id>.webp` path. The previous JPEG fallback and automatic
 `.raw.webp` companion archive are removed for new uploads. Existing images and
-raw companions are untouched. Primary images and thumbnails are published
+raw companions are untouched. New primary names and thumbnails are claimed
 without clobbering existing names. Failed primary encodes release any pending
-thumbnail claim and do not publish a primary or gallery entry.
+thumbnail claim and remove any provisional primary owned by that upload; no
+gallery entry is added.
 
 Animated GIFs remain on the existing GIF decode/re-encode path, preserving
 frames. They do not run the still-image candidate policy or its size targets.
 The existing GIF loop handling is unchanged.
 
-Multipart fields, image resource JSON, streaming events, gallery IDs, and
-`?variant=thumbnail` URLs keep the existing shared client contract. Web and
-Android clients already accept `.webp` image IDs. The browser upload policy
-itself is unchanged by this server implementation.
+Multipart fields, image resource JSON, existing streaming events, gallery IDs,
+and `?variant=thumbnail` URLs keep their existing shapes. The streaming endpoint
+adds the `image` and `encoded` statuses described above. Web and Android clients already accept
+`.webp` image IDs. The browser upload policy itself is unchanged by this server
+implementation.
 
 ## Evidence and tests
 
@@ -94,5 +141,9 @@ parallel passes, second-pass sequencing, smallest-output fallback, candidate
 failure/join behavior, near-lossless RGB and alpha behavior, sandbox isolation
 and resource limits, malformed inputs, 16-bit normalization, GIF frame retention,
 and persistence/thumbnail/gallery contracts through both upload endpoints.
+Additional tests cover early improvements before slower candidates finish,
+publication failure, atomic replacement and rollback, provisional SSE URLs,
+runtime URL and encode-result validation, temporary/final clipboard behavior,
+folded upload details, all-candidate completion events, and preview cleanup.
 
 Run `cargo test`, `cargo fmt --check`, and `cargo clippy --all-targets`.

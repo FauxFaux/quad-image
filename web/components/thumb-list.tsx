@@ -1,7 +1,7 @@
 import { JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { ImageId } from '../types';
-import type { PendingItem, UploadStats } from '../upload';
+import type { EncodeResult, PendingItem, UploadStats } from '../upload';
 import type { Prop } from './sign-in';
 import CheckboxBlankCircleOutlineIcon from 'mdi-preact/CheckboxBlankCircleOutlineIcon';
 import CheckboxMarkedCircleOutlineIcon from 'mdi-preact/CheckboxMarkedCircleOutlineIcon';
@@ -23,6 +23,7 @@ export function ThumbList(props: ThumbProps) {
               <ThumbDone
                 bare={item.base}
                 stats={item.stats}
+                encodes={item.encodes}
                 picking={
                   props.picking?.v
                     ? (props.picking.v[item.base] ?? false)
@@ -43,8 +44,11 @@ export function ThumbList(props: ThumbProps) {
 
 interface ThumbDoneProps {
   bare: ImageId;
+  url?: string;
+  message?: string;
   /** only present for uploads from this session */
   stats?: UploadStats;
+  encodes?: EncodeResult[];
   picking?: boolean;
   setPicked?: (picked: boolean) => void;
 }
@@ -54,8 +58,7 @@ export function ThumbDone(props: ThumbDoneProps) {
 
   const doCopy = async () => {
     try {
-      const { bare } = props;
-      const url = new URL(bare, document.location.href);
+      const url = new URL(props.url ?? props.bare, document.location.href);
       await navigator.clipboard.writeText(url.href);
       setCopied(true);
     } catch (err) {
@@ -80,7 +83,7 @@ export function ThumbDone(props: ThumbDoneProps) {
         }}
         onMouseLeave={clearCopy}
       >
-        {!copied ? 'copy' : 'copied!'}
+        {copied ? 'copied!' : props.url ? 'copy intermediate' : 'copy'}
       </button>
     );
   } else {
@@ -105,20 +108,50 @@ export function ThumbDone(props: ThumbDoneProps) {
   }
   return (
     <li>
-      <a href={bare} target={'_blank'} class={'thumb--frame-imgbox'}>
+      <a
+        href={props.url ?? bare}
+        target={'_blank'}
+        class={'thumb--frame-imgbox'}
+      >
         <img src={`${bare}?variant=thumbnail`} loading={'lazy'} />
       </a>
-      {props.stats && <StatsLine stats={props.stats} />}
+      {props.message && (
+        <div class={'thumb--stats text-body-secondary'}>{props.message}</div>
+      )}
+      <UploadDetails stats={props.stats} encodes={props.encodes} />
       {footer}
     </li>
   );
 }
 
-function StatsLine(props: { stats: UploadStats }) {
+function UploadDetails(props: {
+  stats?: UploadStats;
+  encodes?: EncodeResult[];
+}) {
+  if (!props.stats && !props.encodes?.length) return null;
   return (
-    <div class={'thumb--stats text-body-secondary'}>
-      {describeStats(props.stats)}
-    </div>
+    <details class={'thumb--stats text-body-secondary'}>
+      <summary>Upload details</summary>
+      {props.stats && <div>{describeStats(props.stats)}</div>}
+      {!!props.encodes?.length && (
+        <table>
+          <thead>
+            <tr>
+              <th>Server encode</th>
+              <th>Bytes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {props.encodes.map((encode) => (
+              <tr key={encode.name}>
+                <td>{encode.name}</td>
+                <td>{encode.bytes.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </details>
   );
 }
 
@@ -146,15 +179,38 @@ interface ThumbUploadProps {
 
 export function ThumbUpload(props: ThumbUploadProps) {
   const item = props.item;
+  const file =
+    item.state === 'done' || (item.state === 'processing' && item.available)
+      ? undefined
+      : item.file;
+  const [previewUrl, setPreviewUrl] = useState<string>();
+  useEffect(() => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
   if (item.state === 'done') {
     //return <ThumbDone bare={item.base} />;
     throw new Error('ThumbUpload should not be used for done items');
   }
 
+  if (item.state === 'processing' && item.available) {
+    return (
+      <ThumbDone
+        bare={item.available.id}
+        url={item.available.url}
+        message={item.message}
+        stats={item.stats}
+        encodes={item.encodes}
+      />
+    );
+  }
+
   const preview = (msg: string) => (
     <div class={'thumb--frame-imgbox thumb--frame-message'}>
       <img
-        src={URL.createObjectURL(item.file)}
+        src={previewUrl}
         alt={item.file.name ? `preview of ${item.file.name}` : 'preview'}
       />
       <span>
@@ -173,11 +229,7 @@ export function ThumbUpload(props: ThumbUploadProps) {
     return (
       <li>
         {preview(`error: ${item.error}`)}
-        {item.stats ? (
-          <StatsLine stats={item.stats} />
-        ) : (
-          <div class={'embarrassment'}>&nbsp;</div>
-        )}
+        <UploadDetails stats={item.stats} encodes={item.encodes} />
       </li>
     );
   }
@@ -187,7 +239,7 @@ export function ThumbUpload(props: ThumbUploadProps) {
     return (
       <li>
         {preview(msg)}
-        <div class={'embarrassment'}>&nbsp;</div>
+        <UploadDetails stats={item.stats} encodes={item.encodes} />
       </li>
     );
   }
@@ -201,6 +253,7 @@ export function ThumbUpload(props: ThumbUploadProps) {
   return (
     <li>
       {preview(`transferring: ${pct}% complete`)}
+      <UploadDetails stats={item.stats} encodes={item.encodes} />
       <div
         className="progress"
         role="progressbar"

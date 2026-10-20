@@ -94,6 +94,46 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
     store_with_thumbnail(data, |_| Ok(()))
 }
 
+pub enum StoreUpdate<'a> {
+    Thumbnail(&'a str),
+    Image(&'a str),
+    Encoded { name: &'a str, bytes: usize },
+}
+
+/// Streamed uploads expose complete provisional images while all candidates run.
+pub fn store_with_progress(
+    data: &[u8],
+    mut emit: impl FnMut(StoreUpdate<'_>) -> Result<()> + Send,
+) -> Result<SavedImage> {
+    let format = guess_format(data)?;
+    if format == ImageFormat::Gif {
+        return handle_gif(data);
+    }
+    let loaded = load_image(data, format)?;
+    let mut pending = PendingImage::thumbnail(&loaded)?;
+    emit(StoreUpdate::Thumbnail(&pending.id))?;
+    let rgba = loaded.to_rgba8();
+    crate::webp_policy::encode_rgba_with_progress(
+        rgba.as_raw(),
+        rgba.width(),
+        rgba.height(),
+        |update| {
+            emit(StoreUpdate::Encoded {
+                name: &update.name,
+                bytes: update.bytes.len(),
+            })?;
+            if update.improved {
+                pending.publish(update.bytes)?;
+                emit(StoreUpdate::Image(&pending.id))?;
+            }
+            Ok(())
+        },
+    )?;
+    // The last published improvement is also the final policy winner.
+    pending.persisted = true;
+    Ok(pending.id.clone())
+}
+
 pub fn store_with_thumbnail(
     data: &[u8],
     mut emit_thumbnail: impl FnMut(&str) -> Result<()> + Send,
@@ -135,6 +175,7 @@ struct PendingImage {
     id: String,
     thumbnail: std::path::PathBuf,
     persisted: bool,
+    published: bool,
 }
 
 impl PendingImage {
@@ -150,16 +191,43 @@ impl PendingImage {
                     id,
                     thumbnail,
                     persisted: false,
+                    published: false,
                 });
             }
         }
         bail!("couldn't find a viable file name")
+    }
+
+    fn publish(&mut self, bytes: &[u8]) -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let parent = std::path::Path::new(&self.id)
+            .parent()
+            .context("image has no parent directory")?;
+        let mut temp = PersistableTempFile::new_in(parent)?;
+        temp.write_all(bytes).context("writing provisional WebP")?;
+        temp.set_permissions(fs::Permissions::from_mode(0o0644))?;
+        // Only replace our own published primary. The first write still must
+        // respect any primary that appeared after the thumbnail claimed its ID.
+        let result = if self.published {
+            temp.persist_by_rename(&self.id)
+        } else {
+            temp.persist_noclobber(&self.id)
+        };
+        result.map_err(|error| anyhow!("couldn't publish image {}: {error:?}", self.id))?;
+        self.published = true;
+        Ok(())
     }
 }
 
 impl Drop for PendingImage {
     fn drop(&mut self) {
         if !self.persisted {
+            if self.published {
+                if let Err(error) = fs::remove_file(&self.id) {
+                    eprintln!("couldn't remove abandoned image {}: {error}", self.id);
+                }
+            }
             if let Err(error) = fs::remove_file(&self.thumbnail) {
                 eprintln!(
                     "couldn't remove abandoned thumbnail {}: {error}",
@@ -257,6 +325,58 @@ mod tests {
     use std::{fs, io};
 
     use image::ImageFormat;
+
+    fn pending_image(dir: &std::path::Path) -> super::PendingImage {
+        let thumbnail = dir.join("thumbnail.webp");
+        fs::write(&thumbnail, b"thumbnail").unwrap();
+        super::PendingImage {
+            id: dir.join("primary.webp").to_str().unwrap().to_owned(),
+            thumbnail,
+            persisted: false,
+            published: false,
+        }
+    }
+
+    #[test]
+    fn provisional_images_are_readable_atomic_and_removed_on_failure() -> anyhow::Result<()> {
+        use std::io::Read;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir()?;
+        let mut pending = pending_image(dir.path());
+        pending.publish(b"first complete image")?;
+        assert_eq!(
+            fs::metadata(&pending.id)?.permissions().mode() & 0o777,
+            0o644
+        );
+        let mut reader = fs::File::open(&pending.id)?;
+        pending.publish(b"better complete image")?;
+        assert_eq!(fs::read(&pending.id)?, b"better complete image");
+        let mut original = Vec::new();
+        reader.read_to_end(&mut original)?;
+        assert_eq!(
+            original, b"first complete image",
+            "replacement leaves active readers intact"
+        );
+        let id = pending.id.clone();
+        let thumbnail = pending.thumbnail.clone();
+        drop(pending);
+        assert!(!std::path::Path::new(&id).exists());
+        assert!(!thumbnail.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn provisional_first_write_never_clobbers_an_existing_primary() -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let mut pending = pending_image(dir.path());
+        fs::write(&pending.id, b"someone else's image")?;
+        assert!(pending.publish(b"candidate").is_err());
+        let id = pending.id.clone();
+        drop(pending);
+        assert_eq!(fs::read(id)?, b"someone else's image");
+        Ok(())
+    }
 
     #[test]
     fn exif() {

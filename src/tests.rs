@@ -243,8 +243,47 @@ async fn stream_upload_roundtrip() -> Result<()> {
             .unwrap(),
     )?;
     assert_eq!(thumbnail["kind"], "thumbnail");
-    let complete = stream.next().await.unwrap()?;
-    let complete = std::str::from_utf8(&complete)?;
+    let mut updates = 0;
+    let mut encodes = Vec::new();
+    let complete = loop {
+        let event = stream.next().await.unwrap()?;
+        let event = std::str::from_utf8(&event)?.to_owned();
+        if event.starts_with("event: done\n") {
+            break event;
+        }
+        assert!(event.starts_with("event: status\n"));
+        let update: serde_json::Value = serde_json::from_str(
+            event
+                .lines()
+                .find_map(|line| line.strip_prefix("data: "))
+                .unwrap(),
+        )?;
+        if update["kind"] == "encoded" {
+            assert!(update["bytes"].as_u64().unwrap() > 0);
+            encodes.push(update["name"].as_str().unwrap().to_owned());
+            continue;
+        }
+        assert_eq!(update["kind"], "image");
+        assert_eq!(update["id"], thumbnail["id"]);
+        let id = update["id"].as_str().unwrap();
+        assert_eq!(update["url"], format!("{id}?work-in-progress"));
+        // Every advertised URL already has a complete, readable server encode.
+        let served = tower_http::services::ServeDir::new(".")
+            .try_call(
+                axum::http::Request::builder()
+                    .uri(format!("/{}", update["url"].as_str().unwrap()))
+                    .body(axum::body::Body::empty())?,
+            )
+            .await?;
+        assert_eq!(served.status(), axum::http::StatusCode::OK);
+        let bytes =
+            axum::body::to_bytes(axum::body::Body::new(served.into_body()), usize::MAX).await?;
+        image::load_from_memory(&bytes)?;
+        updates += 1;
+    };
+    assert!(updates > 0);
+    encodes.sort();
+    assert_eq!(encodes, ["nl100", "nl40", "q70", "q90"]);
     assert!(complete.starts_with("event: done\n"));
     let data = complete
         .lines()
@@ -262,9 +301,16 @@ async fn stream_upload_roundtrip() -> Result<()> {
         id.strip_prefix("e/").unwrap()
     ))
     .exists());
-    let conn = state.conn.lock().unwrap();
-    let saved: String = conn.query_row("select image from gallery_images", [], |row| row.get(0))?;
-    assert_eq!(id, saved);
+    {
+        let conn = state.conn.lock().unwrap();
+        let saved: String =
+            conn.query_row("select image from gallery_images", [], |row| row.get(0))?;
+        assert_eq!(id, saved);
+    }
+    assert_eq!(
+        image::open(id)?.to_rgba8(),
+        image::load_from_memory(include_bytes!("test.png"))?.to_rgba8()
+    );
     assert!(stream.next().await.is_none());
 
     // Early notification sees a complete, readable thumbnail before the primary
@@ -323,6 +369,26 @@ async fn stream_upload_roundtrip() -> Result<()> {
     assert!(!std::path::Path::new(&format!(
         "e/.thumbs/{}.thumb.webp",
         collided.strip_prefix("e/").unwrap()
+    ))
+    .exists());
+
+    // An event receiver failing after publication removes both provisional
+    // files, and cannot accidentally add a gallery entry or report success.
+    let mut provisional = String::new();
+    let result = crate::ingest::store_with_progress(include_bytes!("test.png"), |update| {
+        if let crate::ingest::StoreUpdate::Image(id) = update {
+            provisional = id.to_owned();
+            image::open(id)?;
+            anyhow::bail!("receiver disconnected after image")
+        }
+        Ok(())
+    });
+    assert!(format!("{:#}", result.unwrap_err()).contains("receiver disconnected after image"));
+    assert!(!provisional.is_empty());
+    assert!(!std::path::Path::new(&provisional).exists());
+    assert!(!std::path::Path::new(&format!(
+        "e/.thumbs/{}.thumb.webp",
+        provisional.strip_prefix("e/").unwrap()
     ))
     .exists());
     Ok(())
