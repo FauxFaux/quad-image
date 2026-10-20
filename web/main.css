@@ -219,7 +219,7 @@
 }
 
 .thumb--stats th:last-child {
-  width: 25%;
+  width: 8em;
 }
 
 .thumb--spinner {
@@ -249,6 +249,7 @@
 .thumb--stats th:last-child,
 .thumb--stats td:last-child {
   text-align: right;
+  white-space: nowrap;
 }
 
 .gallery--header {

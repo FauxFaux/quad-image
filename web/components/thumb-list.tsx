@@ -186,15 +186,14 @@ function UploadDetails(props: {
     .at(-1)?.name;
   return (
     <details class={'thumb--stats text-body-secondary'}>
-      <summary title="Upload details">
+      <summary title="Encode details">
         {props.busy && <span class="thumb--spinner" aria-hidden="true" />}
-        {props.status ?? 'Upload details'}
+        {props.status ?? 'Encode details'}
       </summary>
       <table>
         <thead>
           <tr>
-            <th>Stage</th>
-            <th>Format / setting</th>
+            <th>Encode</th>
             <th>Size</th>
           </tr>
         </thead>
@@ -202,17 +201,19 @@ function UploadDetails(props: {
           {props.stats && (
             <>
               <tr>
-                <td>Original{props.stats.used === 'original' && ' (sent)'}</td>
-                <td>{props.stats.originalType}</td>
+                <td>
+                  Original{props.stats.used === 'original' && ' (sent)'}{' '}
+                  {props.stats.originalType}
+                </td>
                 <td>{humanSize(props.stats.originalSize)}</td>
               </tr>
               {props.stats.resizedSize !== undefined && (
                 <tr>
                   <td>
                     Local
-                    {props.stats.used === 'resized' ? ' (sent)' : ' (not sent)'}
-                  </td>
-                  <td>
+                    {props.stats.used === 'resized'
+                      ? ' (sent)'
+                      : ' (not sent)'}{' '}
                     WebP{' '}
                     {props.stats.quality === undefined
                       ? 'lossless'
@@ -234,9 +235,14 @@ function UploadDetails(props: {
                 encode.name === winner ? 'Winning server encode' : undefined
               }
             >
-              <td>Server</td>
-              <td>{encode.name}</td>
-              <td>{humanSize(encode.bytes)}</td>
+              <td>Server {encode.name}</td>
+              <td>
+                {encode.bytes !== undefined
+                  ? humanSize(encode.bytes)
+                  : props.busy
+                    ? 'Pending…'
+                    : 'Not completed'}
+              </td>
             </tr>
           ))}
         </tbody>

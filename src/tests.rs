@@ -245,6 +245,7 @@ async fn stream_upload_roundtrip() -> Result<()> {
     assert_eq!(thumbnail["kind"], "thumbnail");
     let mut updates = 0;
     let mut encodes = Vec::new();
+    let mut planned: Vec<String> = Vec::new();
     let complete = loop {
         let event = stream.next().await.unwrap()?;
         let event = std::str::from_utf8(&event)?.to_owned();
@@ -258,7 +259,16 @@ async fn stream_upload_roundtrip() -> Result<()> {
                 .find_map(|line| line.strip_prefix("data: "))
                 .unwrap(),
         )?;
+        if update["kind"] == "planned" {
+            assert!(encodes.is_empty());
+            planned = serde_json::from_value(update["names"].clone())?;
+            assert_eq!(planned, ["nl100", "nl40", "q90", "q70"]);
+            continue;
+        }
         if update["kind"] == "encoded" {
+            assert!(planned
+                .iter()
+                .any(|name| name == update["name"].as_str().unwrap()));
             assert!(update["bytes"].as_u64().unwrap() > 0);
             assert!(update["improved"].is_boolean());
             encodes.push(update["name"].as_str().unwrap().to_owned());

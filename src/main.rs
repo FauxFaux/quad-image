@@ -212,6 +212,7 @@ fn process_upload(
                 ingest::StoreUpdate::Image(id) => json!({
                     "kind": "image", "id": id, "url": format!("{id}?work-in-progress"),
                 }),
+                ingest::StoreUpdate::Planned(names) => json!({"kind": "planned", "names": names}),
                 ingest::StoreUpdate::Encoded {
                     name,
                     bytes,

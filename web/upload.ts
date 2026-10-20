@@ -18,7 +18,8 @@ export interface UploadStats {
 
 export interface EncodeResult {
   name: string;
-  bytes: number;
+  /** Absent until the planned encode completes. */
+  bytes?: number;
   improved?: boolean;
 }
 

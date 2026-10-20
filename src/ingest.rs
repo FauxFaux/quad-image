@@ -97,6 +97,7 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
 pub enum StoreUpdate<'a> {
     Thumbnail(&'a str),
     Image(&'a str),
+    Planned(&'a [String]),
     Encoded {
         name: &'a str,
         bytes: usize,
@@ -121,17 +122,26 @@ pub fn store_with_progress(
         rgba.as_raw(),
         rgba.width(),
         rgba.height(),
-        |update| {
-            emit(StoreUpdate::Encoded {
-                name: &update.name,
-                bytes: update.bytes.len(),
-                improved: update.improved,
-            })?;
-            if update.improved {
-                pending.publish(update.bytes)?;
-                emit(StoreUpdate::Image(&pending.id))?;
+        |update| match update {
+            crate::webp_policy::EncodeProgress::Planned(names) => {
+                emit(StoreUpdate::Planned(&names))
             }
-            Ok(())
+            crate::webp_policy::EncodeProgress::Completed {
+                name,
+                bytes,
+                improved,
+            } => {
+                emit(StoreUpdate::Encoded {
+                    name: &name,
+                    bytes: bytes.len(),
+                    improved,
+                })?;
+                if improved {
+                    pending.publish(bytes)?;
+                    emit(StoreUpdate::Image(&pending.id))?;
+                }
+                Ok(())
+            }
         },
     )?;
     // The last published improvement is also the final policy winner.

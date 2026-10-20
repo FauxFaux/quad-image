@@ -10,6 +10,64 @@ fn pool() -> rayon::ThreadPool {
         .unwrap()
 }
 
+#[test]
+fn announces_planned_encodes_even_while_the_pool_is_busy() -> Result<()> {
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build()?;
+    let calls = AtomicUsize::new(0);
+    let (occupied_tx, occupied_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    pool.spawn(move || {
+        let _ = occupied_tx.send(());
+        let _ = release_rx.recv_timeout(Duration::from_secs(5));
+    });
+    occupied_rx.recv_timeout(Duration::from_secs(5))?;
+    let (plan_tx, plan_rx) = mpsc::channel();
+    std::thread::scope(|scope| -> Result<()> {
+        let worker = scope.spawn(|| {
+            encode_with_progress(
+                &pool,
+                &|_| {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(vec![0; 10])
+                },
+                |update| {
+                    if let EncodeProgress::Planned(names) = update {
+                        plan_tx.send(names)?;
+                    }
+                    Ok(())
+                },
+            )
+        });
+        assert_eq!(
+            plan_rx.recv_timeout(Duration::from_secs(2))?,
+            ["nl100", "nl40", "q90", "q70"]
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        release_tx.send(())?;
+        assert_eq!(worker.join().unwrap()?.setting, Setting::NearLossless(100));
+        assert!(
+            plan_rx.try_recv().is_err(),
+            "no second pass when a candidate fits"
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn a_failed_plan_notification_starts_no_encoding() {
+    let calls = AtomicUsize::new(0);
+    let result = encode_with_progress(
+        &pool(),
+        &|_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![0; 10])
+        },
+        |_| anyhow::bail!("receiver disconnected"),
+    );
+    assert!(result.is_err());
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
 fn candidate(setting: Setting, size: usize) -> Candidate {
     Candidate {
         setting,
@@ -68,6 +126,7 @@ fn second_pass_waits_for_first_and_selects_highest_fitting_quality() -> Result<(
     let calls = Mutex::new(Vec::new());
     let mut published = Vec::new();
     let mut completions = Vec::new();
+    let mut plans = Vec::new();
     let selected = encode_with_progress(
         &pool(),
         &|setting| {
@@ -90,14 +149,36 @@ fn second_pass_waits_for_first_and_selects_highest_fitting_quality() -> Result<(
             ])
         },
         |update| {
-            completions.push(update.name);
-            if update.improved {
-                published.push(update.bytes.len());
+            match update {
+                EncodeProgress::Planned(names) => {
+                    assert_eq!(
+                        first_completed.load(Ordering::SeqCst),
+                        if plans.is_empty() { 0 } else { 4 }
+                    );
+                    plans.push(names);
+                }
+                EncodeProgress::Completed {
+                    name,
+                    bytes,
+                    improved,
+                } => {
+                    completions.push(name);
+                    if improved {
+                        published.push(bytes.len());
+                    }
+                }
             }
             Ok(())
         },
     )?;
     assert_eq!(calls.lock().unwrap().len(), 8);
+    assert_eq!(
+        plans,
+        [
+            vec!["nl100", "nl40", "q90", "q70"],
+            vec!["q50", "q35", "q20", "q5"]
+        ]
+    );
     completions.sort();
     assert_eq!(
         completions,
@@ -190,8 +271,13 @@ fn publishes_improvements_before_slower_candidates_finish() -> Result<()> {
                     Ok(vec![index as u8; (index + 1) * 100])
                 },
                 |update| {
-                    assert!(update.improved);
-                    published_tx.send((update.bytes[0], update.bytes.len()))?;
+                    if let EncodeProgress::Completed {
+                        bytes, improved, ..
+                    } = update
+                    {
+                        assert!(improved);
+                        published_tx.send((bytes[0], bytes.len()))?;
+                    }
                     Ok(())
                 },
             )
@@ -235,12 +321,19 @@ fn reports_every_candidate_but_marks_only_improvements() -> Result<()> {
             ])
         },
         |update| {
-            completions.push(update.name);
-            if update.improved {
-                published.push(update.bytes.len());
+            if let EncodeProgress::Completed {
+                name,
+                bytes,
+                improved,
+            } = update
+            {
+                completions.push(name);
+                if improved {
+                    published.push(bytes.len());
+                }
+                *ready.0.lock().unwrap() = true;
+                ready.1.notify_all();
             }
-            *ready.0.lock().unwrap() = true;
-            ready.1.notify_all();
             Ok(())
         },
     )?;
@@ -264,9 +357,12 @@ fn publication_failure_joins_encodes_and_stops_updates() {
             completed.fetch_add(1, Ordering::SeqCst);
             Ok(vec![0; 10])
         },
-        |_| {
-            publications += 1;
-            anyhow::bail!("receiver disconnected")
+        |update| {
+            if let EncodeProgress::Completed { .. } = update {
+                publications += 1;
+                anyhow::bail!("receiver disconnected")
+            }
+            Ok(())
         },
     );
     assert!(format!("{:#}", result.err().unwrap()).contains("receiver disconnected"));

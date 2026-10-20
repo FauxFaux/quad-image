@@ -153,17 +153,37 @@ export async function driveUpload(
             if (status.kind === 'image') {
               available = { id: status.id, url: status.url };
             }
+            if (status.kind === 'planned') {
+              const known = new Set(encodes.map((encode) => encode.name));
+              const pending: EncodeResult[] = [];
+              for (const name of status.names) {
+                if (!known.has(name)) {
+                  pending.push({ name });
+                  known.add(name);
+                }
+              }
+              encodes = [...encodes, ...pending];
+            }
             if (status.kind === 'encoded') {
-              encodes = [
-                ...encodes,
-                {
-                  name: status.name,
-                  bytes: status.bytes,
-                  ...(status.improved !== undefined
-                    ? { improved: status.improved }
-                    : {}),
-                },
-              ];
+              const completed: EncodeResult = {
+                name: status.name,
+                bytes: status.bytes,
+                ...(status.improved !== undefined
+                  ? { improved: status.improved }
+                  : {}),
+              };
+              const known = encodes.some(
+                (encode) => encode.name === status.name,
+              );
+              // Keep planned row order, but highlight the latest policy winner.
+              encodes = encodes.map((encode) =>
+                encode.name === status.name
+                  ? completed
+                  : status.improved && encode.improved
+                    ? { ...encode, improved: false }
+                    : encode,
+              );
+              if (!known) encodes = [...encodes, completed];
             }
             updateState({
               ...common,
@@ -231,12 +251,19 @@ const uploadErrorSchema = z.object({ message: z.string() });
 const imageIdSchema = z
   .string()
   .check(z.regex(/^e\/[a-zA-Z0-9]{10}\.(?:png|webp|jpg|gif)$/));
+const settingNameSchema = z
+  .string()
+  .check(z.regex(/^(?:q|nl)(?:100|[1-9]?\d)$/));
 const uploadStatusSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('accepted'), message: z.string() }),
   z.object({ kind: z.literal('thumbnail'), id: imageIdSchema }),
   z.object({
+    kind: z.literal('planned'),
+    names: z.array(settingNameSchema).check(z.minLength(1), z.maxLength(8)),
+  }),
+  z.object({
     kind: z.literal('encoded'),
-    name: z.string().check(z.regex(/^(?:q|nl)(?:100|[1-9]?\d)$/)),
+    name: settingNameSchema,
     bytes: z.int().check(z.positive()),
     improved: z.optional(z.boolean()),
   }),

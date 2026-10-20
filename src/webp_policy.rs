@@ -25,6 +25,15 @@ enum Setting {
     Lossy(u8),
 }
 
+impl Setting {
+    fn name(self) -> String {
+        match self {
+            Self::NearLossless(quality) => format!("nl{quality}"),
+            Self::Lossy(quality) => format!("q{quality}"),
+        }
+    }
+}
+
 const FIRST_PASS: [Setting; 4] = [
     Setting::NearLossless(100),
     Setting::NearLossless(40),
@@ -43,10 +52,13 @@ struct Candidate {
     bytes: Vec<u8>,
 }
 
-pub struct EncodeProgress<'a> {
-    pub name: String,
-    pub bytes: &'a [u8],
-    pub improved: bool,
+pub enum EncodeProgress<'a> {
+    Planned(Vec<String>),
+    Completed {
+        name: String,
+        bytes: &'a [u8],
+        improved: bool,
+    },
 }
 
 /// Encode already decoded, tightly packed RGBA. Input codec and byte size do
@@ -56,7 +68,7 @@ pub fn encode_rgba(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     encode_rgba_with_progress(rgba, width, height, |_| Ok(()))
 }
 
-/// Report every completed candidate, marking the first and later improvements.
+/// Announce each pass before scheduling it, then report every completed candidate.
 /// Calls are serialized, and all work is joined before returning, even on error.
 pub fn encode_rgba_with_progress(
     rgba: &[u8],
@@ -103,33 +115,18 @@ fn encode_with(
 fn encode_with_progress(
     pool: &rayon::ThreadPool,
     encode: &(impl Fn(Setting) -> Result<Vec<u8>> + Sync),
-    mut report: impl FnMut(EncodeProgress<'_>) -> Result<()> + Send,
+    report: impl FnMut(EncodeProgress<'_>) -> Result<()> + Send,
 ) -> Result<Candidate> {
-    let mut best = None;
-    let mut reporting_failed = false;
-    let progress = Mutex::new(|candidate: &Candidate| -> Result<()> {
-        let key = selection_key(candidate);
-        if !reporting_failed {
-            let improved = best.is_none_or(|best| key < best);
-            let name = match candidate.setting {
-                Setting::NearLossless(quality) => format!("nl{quality}"),
-                Setting::Lossy(quality) => format!("q{quality}"),
-            };
-            if let Err(error) = report(EncodeProgress {
-                name,
-                bytes: &candidate.bytes,
-                improved,
-            }) {
-                reporting_failed = true;
-                return Err(error.context("reporting WebP candidate"));
-            }
-            if improved {
-                best = Some(key);
-            }
-        }
-        Ok(())
-    });
+    let progress = Mutex::new((report, None, false));
     let pass = |settings: &[Setting]| {
+        {
+            // This runs on the caller, before pool.install can wait for workers.
+            let (report, _, _) = &mut *progress.lock().unwrap();
+            report(EncodeProgress::Planned(
+                settings.iter().map(|setting| setting.name()).collect(),
+            ))
+            .context("reporting planned WebP encodes")?;
+        }
         // Collect every outcome before propagating errors: no candidate remains
         // running after the upload returns or starts the next pass.
         let outcomes: Vec<Result<Candidate>> = pool.install(|| {
@@ -140,7 +137,22 @@ fn encode_with_progress(
                         setting,
                         bytes: encode(setting).with_context(|| format!("encoding {setting:?}"))?,
                     };
-                    progress.lock().unwrap()(&candidate)?;
+                    let (report, best, reporting_failed) = &mut *progress.lock().unwrap();
+                    if !*reporting_failed {
+                        let key = selection_key(&candidate);
+                        let improved = best.is_none_or(|best| key < best);
+                        if let Err(error) = report(EncodeProgress::Completed {
+                            name: setting.name(),
+                            bytes: &candidate.bytes,
+                            improved,
+                        }) {
+                            *reporting_failed = true;
+                            return Err(error.context("reporting WebP candidate"));
+                        }
+                        if improved {
+                            *best = Some(key);
+                        }
+                    }
                     Ok(candidate)
                 })
                 .collect()

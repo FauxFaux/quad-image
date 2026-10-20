@@ -15,6 +15,8 @@ const complete =
   'event: done\ndata: {"data":{"id":"e/abcdefghij.webp","type":"image"}}\n\n';
 const encoded = (name: string, bytes: number, improved?: boolean) =>
   `event: status\ndata: ${JSON.stringify({ kind: 'encoded', name, bytes, improved })}\n\n`;
+const planned = (names: string[]) =>
+  `event: status\ndata: ${JSON.stringify({ kind: 'planned', names })}\n\n`;
 
 class FakeRequest extends EventTarget {
   static latest: FakeRequest;
@@ -226,7 +228,7 @@ describe('streaming upload', () => {
       encoded('q90', 400000, true);
     xhr.progress(rest);
     const encodes = [
-      { name: 'q70', bytes: 200000, improved: true },
+      { name: 'q70', bytes: 200000, improved: false },
       { name: 'nl40', bytes: 1200000, improved: false },
       { name: 'q90', bytes: 400000, improved: true },
     ];
@@ -240,7 +242,7 @@ describe('streaming upload', () => {
     });
     // Progress snapshots remain immutable as subsequent candidates finish.
     expect(updates.find((u) => u.encodes?.length === 1)?.encodes).toEqual([
-      encodes[0],
+      { name: 'q70', bytes: 200000, improved: true },
     ]);
     xhr.load(rest + complete);
     expect(await upload).toMatchObject({
@@ -266,6 +268,70 @@ describe('streaming upload', () => {
         error: 'Encoding failed',
         encodes: [{ name: 'q90', bytes: 1234 }],
       }),
+    );
+  });
+
+  test('fills planned rows in place across both passes without duplicates', async () => {
+    const updates: PendingItem[] = [];
+    const upload = driveUpload(initial, (next) => updates.push(next));
+    const xhr = FakeRequest.latest;
+    const first = ['nl100', 'nl40', 'q90', 'q70'];
+    let response = accepted + planned(first);
+    xhr.progress(response);
+    expect(updates.at(-1)?.encodes).toEqual(first.map((name) => ({ name })));
+    response +=
+      encoded('q70', 2100000, true) +
+      encoded('nl100', 5000000, false) +
+      encoded('q90', 3000000, false) +
+      encoded('nl40', 4000000, false);
+    xhr.progress(response);
+    expect(updates.at(-1)?.encodes?.map((encode) => encode.name)).toEqual(
+      first,
+    );
+    const second = ['q50', 'q35', 'q20', 'q5'];
+    // Repeated plans cannot duplicate a row or clear completed results.
+    response += planned(first) + planned(second) + planned(second);
+    xhr.progress(response);
+    const pending = updates.at(-1)?.encodes;
+    expect(pending).toHaveLength(8);
+    expect(pending?.slice(4)).toEqual(second.map((name) => ({ name })));
+    expect(pending?.[3]).toMatchObject({
+      name: 'q70',
+      bytes: 2100000,
+      improved: true,
+    });
+    response +=
+      encoded('q50', 1100000, true) +
+      encoded('q5', 350000, true) +
+      encoded('q20', 800000, true) +
+      encoded('q35', 1000000, false);
+    xhr.progress(response);
+    expect(updates.at(-1)?.encodes?.map((encode) => encode.name)).toEqual([
+      ...first,
+      ...second,
+    ]);
+    expect(
+      updates.at(-1)?.encodes?.filter((encode) => encode.improved),
+    ).toEqual([{ name: 'q20', bytes: 800000, improved: true }]);
+    expect(pending?.slice(4)).toEqual(second.map((name) => ({ name })));
+    xhr.load(response + complete);
+    expect((await upload)?.encodes).toEqual(updates.at(-1)?.encodes);
+  });
+
+  test.each([
+    { names: [] },
+    { names: ['unknown'] },
+    { names: ['q101'] },
+    { names: 'q90' },
+  ])('rejects invalid planned names $names', async ({ names }) => {
+    const update = vi.fn<(next: PendingItem) => void>();
+    const upload = driveUpload(initial, update);
+    FakeRequest.latest.load(
+      `event: status\ndata: ${JSON.stringify({ kind: 'planned', names })}\n\n`,
+    );
+    expect(await upload).toBeUndefined();
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ state: 'error' }),
     );
   });
 

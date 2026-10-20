@@ -102,7 +102,7 @@ test('keeps the card, open details, and copy button through every upload stage a
   expect(card?.querySelector('button')).toBe(button);
   expect(button.disabled).toBe(false);
   expect(button.textContent).toBe('copy intermediate');
-  expect(card?.querySelector('summary')?.textContent).toBe('Upload details');
+  expect(card?.querySelector('summary')?.textContent).toBe('Encode details');
   expect(card?.querySelector('details')).toBe(details);
   expect(details?.open).toBe(true);
 
@@ -157,12 +157,26 @@ test('copies the available image while optimizing, then copies the final URL', a
     ],
   };
   const { rerender, container } = render(
-    <ThumbList items={[{ ...item, encodes: item.encodes?.slice(0, 1) }]} />,
+    <ThumbList
+      items={[
+        {
+          ...item,
+          encodes: item.encodes?.map((encode) =>
+            encode.name === 'nl40' ? { name: encode.name } : encode,
+          ),
+        },
+      ]}
+    />,
   );
+  const pendingRow = screen.getByText('Server nl40').closest('tr');
+  expect(pendingRow?.textContent).toContain('Pending…');
+  expect(pendingRow?.hasAttribute('aria-current')).toBe(false);
   expect(
-    screen.getByText('q90').closest('tr')?.getAttribute('aria-current'),
+    screen.getByText('Server q90').closest('tr')?.getAttribute('aria-current'),
   ).toBe('true');
   rerender(<ThumbList items={[item]} />);
+  expect(screen.getByText('Server nl40').closest('tr')).toBe(pendingRow);
+  expect(screen.queryByText('Pending…')).toBeNull();
   const temporary = new URL(`${id}?work-in-progress`, document.location.href)
     .href;
   expect(screen.getByRole('link').getAttribute('href')).toBe(
@@ -174,23 +188,24 @@ test('copies the available image while optimizing, then copies the final URL', a
   expect(screen.queryByText('Image ready, optimizing…')).toBeNull();
   const details = container.querySelector('details');
   expect(details?.open).toBe(false);
-  expect(screen.getByText('image/png').closest('details')).toBe(details);
-  fireEvent.click(screen.getByText('Upload details'));
+  expect(screen.getByText('Original image/png').closest('details')).toBe(
+    details,
+  );
+  fireEvent.click(screen.getByText('Encode details'));
   expect(details?.open).toBe(true);
-  screen.getByRole('cell', { name: 'Original' });
+  screen.getByRole('cell', { name: 'Original image/png' });
   screen.getByRole('cell', { name: '6.2MB' });
-  screen.getByRole('cell', { name: 'Local (sent)' });
-  screen.getByRole('cell', { name: 'WebP q80' });
+  screen.getByRole('cell', { name: 'Local (sent) WebP q80' });
   screen.getByRole('cell', { name: '1.3MB' });
-  screen.getByRole('cell', { name: 'q90' });
+  screen.getByRole('cell', { name: 'Server q90' });
   screen.getByRole('cell', { name: '242.2kB' });
-  screen.getByRole('cell', { name: 'nl40' });
+  screen.getByRole('cell', { name: 'Server nl40' });
   screen.getByRole('cell', { name: '393.1kB' });
   expect(
-    screen.getByText('nl40').closest('tr')?.getAttribute('aria-current'),
+    screen.getByText('Server nl40').closest('tr')?.getAttribute('aria-current'),
   ).toBe('true');
   expect(
-    screen.getByText('q90').closest('tr')?.hasAttribute('aria-current'),
+    screen.getByText('Server q90').closest('tr')?.hasAttribute('aria-current'),
   ).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'copy intermediate' }));
   await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(temporary));
@@ -217,10 +232,10 @@ test('copies the available image while optimizing, then copies the final URL', a
   expect(
     screen.queryByRole('button', { name: 'copy intermediate' }),
   ).toBeNull();
-  expect(screen.getByText('q90').closest('details')).not.toBeNull();
+  expect(screen.getByText('Server q90').closest('details')).not.toBeNull();
   expect(
     screen
-      .getByText('nl40')
+      .getByText('Server nl40')
       .closest('tr')
       ?.classList.contains('thumb--encode-winner'),
   ).toBe(true);

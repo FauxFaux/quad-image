@@ -84,6 +84,17 @@ After each publication the server sends an SSE `status` event:
 {"kind":"image","id":"e/abcdefghij.webp","url":"e/abcdefghij.webp?work-in-progress"}
 ```
 
+Before submitting a pass to the worker pool, the server sends an SSE `status`
+event listing its planned settings:
+
+```json
+{"kind":"planned","names":["nl100","nl40","q90","q70"]}
+```
+
+This event is emitted even while all encoder workers are busy. A second plan
+listing `q50`, `q35`, `q20`, and `q5` is emitted only if the first-pass results
+trigger that pass, before its work is submitted.
+
 Every completed primary encode also sends an SSE `status` event, including
 candidates that do not improve the currently published image:
 
@@ -97,6 +108,8 @@ integers measured from the completed output. Results arrive in completion order
 for both passes; an `encoded` event precedes any corresponding `image` event.
 `improved` marks candidates that win over all earlier completed candidates;
 the last such candidate is the final winner when the upload succeeds.
+The client keeps rows in planned order and fills each pending row in place as
+its result arrives. Repeated plans do not duplicate or reset existing rows.
 
 The first publication cannot clobber an existing primary. Replacements use
 atomic rename of complete, readable files, so active readers retain their
@@ -109,11 +122,12 @@ server thumbnail when available. A copy button is present from the start but
 disabled until a primary image is available; it then reads “copy intermediate”.
 The details expander uses the current queued, preparation, transfer, server
 processing, or error status as its label. Once an intermediate image is ready,
-it reads “Upload details” with a spinner until completion.
-The initially collapsed fold contains the browser's upload
-statistics and each server encode's name and size to one decimal place, with
-the currently winning server row highlighted. These results
-remain available for this session after completion or an encoding failure.
+it reads “Encode details” with a spinner until completion.
+The initially collapsed fold contains the browser's upload statistics and each
+server encode's name and size to one decimal place, with the currently winning
+server row highlighted. Rows show “Pending…” until an encode completes, or
+“Not completed” if the upload ends without that result. Results remain available
+for this session after completion or an encoding failure.
 Stable card identities and a shared component preserve the expanded fold and
 table as uploads progress, complete, and change position in the list.
 After all encoding and gallery work succeeds, the existing `done` event carries
@@ -152,6 +166,6 @@ and persistence/thumbnail/gallery contracts through both upload endpoints.
 Additional tests cover early improvements before slower candidates finish,
 publication failure, atomic replacement and rollback, provisional SSE URLs,
 runtime URL and encode-result validation, temporary/final clipboard behavior,
-folded upload details, all-candidate completion events, and preview cleanup.
+folded encode details, all-candidate completion events, and preview cleanup.
 
 Run `cargo test`, `cargo fmt --check`, and `cargo clippy --all-targets`.

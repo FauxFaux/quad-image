@@ -9,7 +9,7 @@ afterEach(cleanup);
 const renderStats = (stats: UploadStats) =>
   render(createElement(ThumbDone, { bare: 'e/abcdefghij.webp', stats }));
 
-describe('upload details table', () => {
+describe('encode details table', () => {
   test('shows the original and sent local encode', () => {
     renderStats({
       originalSize: 6_500_000,
