@@ -260,6 +260,7 @@ async fn stream_upload_roundtrip() -> Result<()> {
         )?;
         if update["kind"] == "encoded" {
             assert!(update["bytes"].as_u64().unwrap() > 0);
+            assert!(update["improved"].is_boolean());
             encodes.push(update["name"].as_str().unwrap().to_owned());
             continue;
         }

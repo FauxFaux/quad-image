@@ -13,8 +13,8 @@ const accepted =
   'event: status\ndata: {"kind":"accepted","message":"Upload accepted, server transcoding…"}\n\n';
 const complete =
   'event: done\ndata: {"data":{"id":"e/abcdefghij.webp","type":"image"}}\n\n';
-const encoded = (name: string, bytes: number) =>
-  `event: status\ndata: ${JSON.stringify({ kind: 'encoded', name, bytes })}\n\n`;
+const encoded = (name: string, bytes: number, improved?: boolean) =>
+  `event: status\ndata: ${JSON.stringify({ kind: 'encoded', name, bytes, improved })}\n\n`;
 
 class FakeRequest extends EventTarget {
   static latest: FakeRequest;
@@ -207,22 +207,25 @@ describe('streaming upload', () => {
     const updates: PendingItem[] = [];
     const upload = driveUpload(initial, (next) => updates.push(next));
     const xhr = FakeRequest.latest;
-    const first = accepted + encoded('q70', 200000);
+    const first = accepted + encoded('q70', 200000, true);
     xhr.progress(first);
     expect(updates.at(-1)).toMatchObject({
       state: 'processing',
       message: 'Upload accepted, server transcoding…',
-      encodes: [{ name: 'q70', bytes: 200000 }],
+      encodes: [{ name: 'q70', bytes: 200000, improved: true }],
     });
     const image =
       'event: status\ndata: {"kind":"image","id":"e/abcdefghij.webp","url":"e/abcdefghij.webp?work-in-progress"}\n\n';
     const rest =
-      first + image + encoded('nl40', 1200000) + encoded('q90', 400000);
+      first +
+      image +
+      encoded('nl40', 1200000, false) +
+      encoded('q90', 400000, true);
     xhr.progress(rest);
     const encodes = [
-      { name: 'q70', bytes: 200000 },
-      { name: 'nl40', bytes: 1200000 },
-      { name: 'q90', bytes: 400000 },
+      { name: 'q70', bytes: 200000, improved: true },
+      { name: 'nl40', bytes: 1200000, improved: false },
+      { name: 'q90', bytes: 400000, improved: true },
     ];
     expect(updates.at(-1)).toMatchObject({
       message: 'Image ready, optimizing…',
@@ -268,6 +271,7 @@ describe('streaming upload', () => {
     ['negative size', { name: 'q90', bytes: -1 }],
     ['fractional size', { name: 'q90', bytes: 1.5 }],
     ['string size', { name: 'q90', bytes: '123' }],
+    ['invalid improvement flag', { name: 'q90', bytes: 123, improved: 'yes' }],
   ])('rejects encode metadata with %s', async (_name, fields) => {
     const update = vi.fn<(next: PendingItem) => void>();
     const upload = driveUpload(initial, update);

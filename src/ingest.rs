@@ -97,7 +97,11 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
 pub enum StoreUpdate<'a> {
     Thumbnail(&'a str),
     Image(&'a str),
-    Encoded { name: &'a str, bytes: usize },
+    Encoded {
+        name: &'a str,
+        bytes: usize,
+        improved: bool,
+    },
 }
 
 /// Streamed uploads expose complete provisional images while all candidates run.
@@ -121,6 +125,7 @@ pub fn store_with_progress(
             emit(StoreUpdate::Encoded {
                 name: &update.name,
                 bytes: update.bytes.len(),
+                improved: update.improved,
             })?;
             if update.improved {
                 pending.publish(update.bytes)?;

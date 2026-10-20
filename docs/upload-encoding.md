@@ -88,13 +88,15 @@ Every completed primary encode also sends an SSE `status` event, including
 candidates that do not improve the currently published image:
 
 ```json
-{"kind":"encoded","name":"q90","bytes":848030}
+{"kind":"encoded","name":"q90","bytes":848030,"improved":true}
 ```
 
 Names use `q<quality>` for lossy encodes and `nl<level>` for near-lossless
 encodes, with `nl100` representing ordinary lossless. Byte sizes are positive
 integers measured from the completed output. Results arrive in completion order
 for both passes; an `encoded` event precedes any corresponding `image` event.
+`improved` marks candidates that win over all earlier completed candidates;
+the last such candidate is the final winner when the upload succeeds.
 
 The first publication cannot clobber an existing primary. Replacements use
 atomic rename of complete, readable files, so active readers retain their
@@ -106,7 +108,8 @@ The web client validates the image ID and matching provisional URL, shows the
 server thumbnail with “Image ready, optimizing…” and a “copy intermediate” button.
 Before an image is ready, it shows “Upload accepted, server transcoding…”.
 An initially collapsed “Upload details” fold contains the browser's upload
-statistics and each server encode's name and exact byte size. These results
+statistics and each server encode's name and size to one decimal place, with
+the currently winning server row highlighted. These results
 remain available for this session after completion or an encoding failure.
 After all encoding and gallery work succeeds, the existing `done` event carries
 the final image ID without a query string, and the copy button uses that URL.

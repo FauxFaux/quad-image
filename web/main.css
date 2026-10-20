@@ -222,6 +222,11 @@
   cursor: pointer;
 }
 
+.thumb--encode-winner {
+  background-color: var(--info-bg);
+  font-weight: bold;
+}
+
 .thumb--stats table {
   width: 100%;
   text-align: left;

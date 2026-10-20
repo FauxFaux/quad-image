@@ -129,28 +129,63 @@ function UploadDetails(props: {
   encodes?: EncodeResult[];
 }) {
   if (!props.stats && !props.encodes?.length) return null;
+  const winner = props.encodes
+    ?.filter((encode) => encode.improved)
+    .at(-1)?.name;
   return (
     <details class={'thumb--stats text-body-secondary'}>
       <summary>Upload details</summary>
-      {props.stats && <div>{describeStats(props.stats)}</div>}
-      {!!props.encodes?.length && (
-        <table>
-          <thead>
-            <tr>
-              <th>Server encode</th>
-              <th>Bytes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {props.encodes.map((encode) => (
-              <tr key={encode.name}>
-                <td>{encode.name}</td>
-                <td>{encode.bytes.toLocaleString()}</td>
+      <table>
+        <thead>
+          <tr>
+            <th>Stage</th>
+            <th>Format / setting</th>
+            <th>Size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {props.stats && (
+            <>
+              <tr>
+                <td>Original{props.stats.used === 'original' && ' (sent)'}</td>
+                <td>{props.stats.originalType}</td>
+                <td>{humanSize(props.stats.originalSize)}</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+              {props.stats.resizedSize !== undefined && (
+                <tr>
+                  <td>
+                    Local
+                    {props.stats.used === 'resized' ? ' (sent)' : ' (not sent)'}
+                  </td>
+                  <td>
+                    WebP{' '}
+                    {props.stats.quality === undefined
+                      ? 'lossless'
+                      : `q${Math.round(props.stats.quality * 100)}`}
+                  </td>
+                  <td>{humanSize(props.stats.resizedSize)}</td>
+                </tr>
+              )}
+            </>
+          )}
+          {props.encodes?.map((encode) => (
+            <tr
+              key={encode.name}
+              class={
+                encode.name === winner ? 'thumb--encode-winner' : undefined
+              }
+              aria-current={encode.name === winner ? 'true' : undefined}
+              title={
+                encode.name === winner ? 'Winning server encode' : undefined
+              }
+            >
+              <td>Server</td>
+              <td>{encode.name}</td>
+              <td>{humanSize(encode.bytes)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </details>
   );
 }
@@ -158,20 +193,7 @@ function UploadDetails(props: {
 const humanSize = (bytes: number) =>
   bytes >= 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)}MB`
-    : `${Math.round(bytes / 1024)}kB`;
-
-export const describeStats = (stats: UploadStats) => {
-  const { originalSize, originalType, resizedSize, quality, used } = stats;
-  const was = `${humanSize(originalSize)} ${originalType}`;
-  if (resizedSize === undefined) {
-    return `sent ${was} unchanged`;
-  }
-  const encode = `webp ${quality === undefined ? 'lossless' : `q${quality}`} ${humanSize(resizedSize)}`;
-  if (used === 'resized') {
-    return `sent ${encode}, from ${was}`;
-  }
-  return `sent ${was} unchanged, ${encode} wasn't worth it`;
-};
+    : `${(bytes / 1024).toFixed(1)}kB`;
 
 interface ThumbUploadProps {
   item: PendingItem;

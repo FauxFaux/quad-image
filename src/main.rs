@@ -212,8 +212,12 @@ fn process_upload(
                 ingest::StoreUpdate::Image(id) => json!({
                     "kind": "image", "id": id, "url": format!("{id}?work-in-progress"),
                 }),
-                ingest::StoreUpdate::Encoded { name, bytes } => json!({
-                    "kind": "encoded", "name": name, "bytes": bytes,
+                ingest::StoreUpdate::Encoded {
+                    name,
+                    bytes,
+                    improved,
+                } => json!({
+                    "kind": "encoded", "name": name, "bytes": bytes, "improved": improved,
                 }),
             };
             emit(Event::default().event("status").data(status.to_string()))

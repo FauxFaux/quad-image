@@ -155,7 +155,13 @@ export async function driveUpload(
             if (status.kind === 'encoded') {
               encodes = [
                 ...encodes,
-                { name: status.name, bytes: status.bytes },
+                {
+                  name: status.name,
+                  bytes: status.bytes,
+                  ...(status.improved !== undefined
+                    ? { improved: status.improved }
+                    : {}),
+                },
               ];
             }
             updateState({
@@ -230,6 +236,7 @@ const uploadStatusSchema = z.discriminatedUnion('kind', [
     kind: z.literal('encoded'),
     name: z.string().check(z.regex(/^(?:q|nl)(?:100|[1-9]?\d)$/)),
     bytes: z.int().check(z.positive()),
+    improved: z.optional(z.boolean()),
   }),
   z
     .object({

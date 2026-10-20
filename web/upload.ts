@@ -19,6 +19,7 @@ export interface UploadStats {
 export interface EncodeResult {
   name: string;
   bytes: number;
+  improved?: boolean;
 }
 
 export type PendingItem = {
