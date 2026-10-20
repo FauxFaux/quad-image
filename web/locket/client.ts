@@ -63,6 +63,7 @@ export async function driveUpload(
   }
 
   const common = {
+    ...(initial.uploadId !== undefined ? { uploadId: initial.uploadId } : {}),
     ctx: initial.ctx,
     file: initial.file,
     stats: initial.stats,
@@ -200,6 +201,7 @@ export async function driveUpload(
       }
     });
     return {
+      ...(initial.uploadId !== undefined ? { uploadId: initial.uploadId } : {}),
       state: 'done',
       ctx: initial.ctx,
       base,

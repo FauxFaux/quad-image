@@ -14,29 +14,23 @@ interface ThumbProps {
 
 export function ThumbList(props: ThumbProps) {
   return (
-    <ul class={'thumb--frame'}>
-      {props.items.map((item) => {
-        // I think I split these because Done is the most common case (by far), but I don't think I like it
-        switch (item.state) {
-          case 'done':
-            return (
-              <ThumbDone
-                bare={item.base}
-                stats={item.stats}
-                encodes={item.encodes}
-                picking={
-                  props.picking?.v
-                    ? (props.picking.v[item.base] ?? false)
-                    : undefined
-                }
-                setPicked={(v) => {
-                  props.picking?.set({ ...props.picking.v, [item.base]: v });
-                }}
-              />
-            );
-          default:
-            return <ThumbUpload item={item} />;
-        }
+    <ul class="thumb--frame">
+      {props.items.map((item, index) => {
+        const bare = item.state === 'done' ? item.base : undefined;
+        return (
+          <ThumbCard
+            key={item.uploadId ?? bare ?? index}
+            item={item}
+            picking={
+              bare && props.picking?.v
+                ? (props.picking.v[bare] ?? false)
+                : undefined
+            }
+            setPicked={(v) => {
+              if (bare) props.picking?.set({ ...props.picking.v, [bare]: v });
+            }}
+          />
+        );
       })}
     </ul>
   );
@@ -44,9 +38,6 @@ export function ThumbList(props: ThumbProps) {
 
 interface ThumbDoneProps {
   bare: ImageId;
-  url?: string;
-  message?: string;
-  /** only present for uploads from this session */
   stats?: UploadStats;
   encodes?: EncodeResult[];
   picking?: boolean;
@@ -54,13 +45,55 @@ interface ThumbDoneProps {
 }
 
 export function ThumbDone(props: ThumbDoneProps) {
-  const [copied, setCopied] = useState<boolean>(false);
+  return (
+    <ThumbCard
+      item={{
+        state: 'done',
+        base: props.bare,
+        ctx: 'gallery',
+        stats: props.stats,
+        encodes: props.encodes,
+      }}
+      picking={props.picking}
+      setPicked={props.setPicked}
+    />
+  );
+}
 
+function ThumbCard(props: {
+  item: PendingItem;
+  picking?: boolean;
+  setPicked?: (picked: boolean) => void;
+}) {
+  const { item } = props;
+  const available = item.state === 'processing' ? item.available : undefined;
+  const url = item.state === 'done' ? item.base : available?.url;
+  const image =
+    item.state === 'done'
+      ? item.base
+      : item.state === 'processing'
+        ? (available?.id ?? item.thumbnail)
+        : undefined;
+  const file = item.state === 'done' || image ? undefined : item.file;
+  const [previewUrl, setPreviewUrl] = useState<string>();
+  useEffect(() => {
+    if (!file) return;
+    const localUrl = URL.createObjectURL(file);
+    setPreviewUrl(localUrl);
+    return () => URL.revokeObjectURL(localUrl);
+  }, [file]);
+
+  // Tie acknowledgement to the copied URL so completing an intermediate upload
+  // resets it, including when the clipboard promise resolves after completion.
+  const [copiedUrl, setCopiedUrl] = useState<string>();
+  const copied = url !== undefined && copiedUrl === url;
   const doCopy = async () => {
+    if (!url) return;
     try {
-      const url = new URL(props.url ?? props.bare, document.location.href);
-      await navigator.clipboard.writeText(url.href);
-      setCopied(true);
+      await navigator.clipboard.writeText(
+        new URL(url, document.location.href).href,
+      );
+      setCopiedUrl(url);
     } catch (err) {
       alert(
         'Failed to copy to clipboard: ' + JSON.stringify(serializeError(err)),
@@ -68,58 +101,74 @@ export function ThumbDone(props: ThumbDoneProps) {
     }
   };
 
-  const clearCopy = () => {
-    setCopied(false);
-  };
-
-  const bare = props.bare;
   let footer: JSX.Element;
   if (props.picking === undefined) {
     footer = (
       <button
-        className={`btn btn-${!copied ? 'secondary' : 'success'}`}
+        className={`btn btn-${copied ? 'success' : 'secondary'}`}
+        disabled={!url}
         onClick={() => {
           void doCopy();
         }}
-        onMouseLeave={clearCopy}
+        onMouseLeave={() => setCopiedUrl(undefined)}
       >
-        {copied ? 'copied!' : props.url ? 'copy intermediate' : 'copy'}
+        {copied ? 'copied!' : available ? 'copy intermediate' : 'copy'}
       </button>
     );
   } else {
     const checked = props.picking;
-    const label = checked ? (
-      <>
-        <CheckboxMarkedCircleOutlineIcon /> selected
-      </>
-    ) : (
-      <>
-        <CheckboxBlankCircleOutlineIcon /> select
-      </>
-    );
     footer = (
       <button
-        className={`btn btn-${!checked ? 'secondary' : 'success'}`}
+        className={`btn btn-${checked ? 'success' : 'secondary'}`}
         onClick={() => props.setPicked?.(!checked)}
       >
-        {label}
+        {checked ? (
+          <>
+            <CheckboxMarkedCircleOutlineIcon /> selected
+          </>
+        ) : (
+          <>
+            <CheckboxBlankCircleOutlineIcon /> select
+          </>
+        )}
       </button>
     );
   }
+  const busy = item.state !== 'done' && item.state !== 'error';
   return (
     <li>
-      <a
-        href={props.url ?? bare}
-        target={'_blank'}
-        class={'thumb--frame-imgbox'}
-      >
-        <img src={`${bare}?variant=thumbnail`} loading={'lazy'} />
+      <a href={url} target="_blank" class="thumb--frame-imgbox">
+        <img
+          src={image ? `${image}?variant=thumbnail` : previewUrl}
+          alt={
+            item.state !== 'done' && item.file.name
+              ? `preview of ${item.file.name}`
+              : 'image preview'
+          }
+          loading="lazy"
+        />
       </a>
-      {props.message && (
-        <div class={'thumb--stats text-body-secondary'}>{props.message}</div>
-      )}
-      <UploadDetails stats={props.stats} encodes={props.encodes} />
+      <UploadDetails
+        stats={item.stats}
+        encodes={item.encodes}
+        status={uploadStatus(item)}
+        busy={busy}
+      />
       {footer}
+      {item.state === 'uploading' && !Number.isNaN(item.progress) && (
+        <div
+          className="progress"
+          role="progressbar"
+          aria-valuenow={Math.round(item.progress * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            className="progress-bar"
+            style={`width: ${Math.round(item.progress * 100)}%`}
+          />
+        </div>
+      )}
     </li>
   );
 }
@@ -127,14 +176,20 @@ export function ThumbDone(props: ThumbDoneProps) {
 function UploadDetails(props: {
   stats?: UploadStats;
   encodes?: EncodeResult[];
+  status?: string;
+  busy?: boolean;
 }) {
-  if (!props.stats && !props.encodes?.length) return null;
+  if (!props.stats && !props.encodes?.length && !props.status && !props.busy)
+    return null;
   const winner = props.encodes
     ?.filter((encode) => encode.improved)
     .at(-1)?.name;
   return (
     <details class={'thumb--stats text-body-secondary'}>
-      <summary>Upload details</summary>
+      <summary title="Upload details">
+        {props.busy && <span class="thumb--spinner" aria-hidden="true" />}
+        {props.status ?? 'Upload details'}
+      </summary>
       <table>
         <thead>
           <tr>
@@ -195,121 +250,25 @@ const humanSize = (bytes: number) =>
     ? `${(bytes / 1024 / 1024).toFixed(1)}MB`
     : `${(bytes / 1024).toFixed(1)}kB`;
 
-interface ThumbUploadProps {
-  item: PendingItem;
-}
-
-export function ThumbUpload(props: ThumbUploadProps) {
-  const item = props.item;
-  const file =
-    item.state === 'done' || (item.state === 'processing' && item.available)
-      ? undefined
-      : item.file;
-  const [previewUrl, setPreviewUrl] = useState<string>();
-  useEffect(() => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-  if (item.state === 'done') {
-    //return <ThumbDone bare={item.base} />;
-    throw new Error('ThumbUpload should not be used for done items');
-  }
-
-  if (item.state === 'processing' && item.available) {
-    return (
-      <ThumbDone
-        bare={item.available.id}
-        url={item.available.url}
-        message={item.message}
-        stats={item.stats}
-        encodes={item.encodes}
-      />
-    );
-  }
-
-  const preview = (msg: string) => (
-    <div class={'thumb--frame-imgbox thumb--frame-message'}>
-      <img
-        src={previewUrl}
-        alt={item.file.name ? `preview of ${item.file.name}` : 'preview'}
-      />
-      <span>
-        {item.ctx}
-        <br />
-        {item.file.name}
-        <br />
-        {msg}
-      </span>
-    </div>
-  );
-
-  // this is such garbage
-
-  if (item.state === 'error') {
-    return (
-      <li>
-        {preview(`error: ${item.error}`)}
-        <UploadDetails stats={item.stats} encodes={item.encodes} />
-      </li>
-    );
-  }
-
-  const msg = simpleMessage(item);
-  if (msg) {
-    return (
-      <li>
-        {preview(msg)}
-        <UploadDetails stats={item.stats} encodes={item.encodes} />
-      </li>
-    );
-  }
-
-  if (item.state !== 'uploading' || Number.isNaN(item.progress)) {
-    throw new Error(`unreachable state ${item.state}`);
-  }
-
-  const pct = Math.round(item.progress * 100);
-  // pct < 100
-  return (
-    <li>
-      {preview(`transferring: ${pct}% complete`)}
-      <UploadDetails stats={item.stats} encodes={item.encodes} />
-      <div
-        className="progress"
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <div className="progress-bar" style={`width: ${pct}%`} />
-      </div>
-    </li>
-  );
-}
-
-const simpleMessage = (item: PendingItem) => {
+const uploadStatus = (item: PendingItem): string | undefined => {
   switch (item.state) {
     case 'queued':
-      return 'queued';
+      return 'Queued';
     case 'resizing':
-      return 'resizing';
+      return 'Preparing image…';
     case 'ready':
-      return 'ready';
+      return 'Ready to upload';
     case 'starting':
-      return 'starting';
+      return 'Starting upload…';
     case 'processing':
-      return item.message;
-    case 'uploading': {
-      if (Number.isNaN(item.progress)) {
-        return 'transferring (progress not available)';
-      }
-      const pct = Math.round(item.progress * 100);
-      if (pct === 100) {
-        return 'upload complete, waiting for server';
-      }
-    }
+      return item.available ? undefined : item.message;
+    case 'error':
+      return `Upload failed: ${item.error}`;
+    case 'done':
+      return undefined;
+    case 'uploading':
+      if (Number.isNaN(item.progress)) return 'Uploading…';
+      if (item.progress === 1) return 'Upload sent, waiting for server…';
+      return `Uploading: ${Math.round(item.progress * 100)}%`;
   }
-  return undefined;
 };

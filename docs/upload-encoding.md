@@ -104,13 +104,18 @@ previous complete image. Only the upload's own provisional primary is replaced.
 The query string separates the provisional URL from the final URL in caches;
 it requires no special serving or proxy behavior.
 
-The web client validates the image ID and matching provisional URL, shows the
-server thumbnail with “Image ready, optimizing…” and a “copy intermediate” button.
-Before an image is ready, it shows “Upload accepted, server transcoding…”.
-An initially collapsed “Upload details” fold contains the browser's upload
+The web client validates the image ID and matching provisional URL and shows the
+server thumbnail when available. A copy button is present from the start but
+disabled until a primary image is available; it then reads “copy intermediate”.
+The details expander uses the current queued, preparation, transfer, server
+processing, or error status as its label. Once an intermediate image is ready,
+it reads “Upload details” with a spinner until completion.
+The initially collapsed fold contains the browser's upload
 statistics and each server encode's name and size to one decimal place, with
 the currently winning server row highlighted. These results
 remain available for this session after completion or an encoding failure.
+Stable card identities and a shared component preserve the expanded fold and
+table as uploads progress, complete, and change position in the list.
 After all encoding and gallery work succeeds, the existing `done` event carries
 the final image ID without a query string, and the copy button uses that URL.
 Non-streamed uploads, including Android's `/api/upload` requests, retain their

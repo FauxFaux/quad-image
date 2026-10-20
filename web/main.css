@@ -190,21 +190,6 @@
   max-height: 100%;
 }
 
-.thumb--frame-message img {
-  opacity: 0.4;
-  position: absolute;
-
-  max-width: 100%;
-  max-height: 80%;
-}
-.thumb--frame-message span {
-  position: relative;
-  text-align: center;
-  background-color: color-mix(in srgb, var(--secondary-bg) 80%, transparent);
-  padding: 0.2em;
-  border-radius: 4px;
-}
-
 .thumb--frame li button {
   margin-top: 4px;
   width: 100%;
@@ -229,7 +214,36 @@
 
 .thumb--stats table {
   width: 100%;
+  table-layout: fixed;
   text-align: left;
+}
+
+.thumb--stats th:last-child {
+  width: 25%;
+}
+
+.thumb--spinner {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 0.4em;
+  border: 0.12em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.05em;
+  animation: thumb-spin 1s linear infinite;
+}
+
+@keyframes thumb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb--spinner {
+    animation: none;
+  }
 }
 
 .thumb--stats th:last-child,

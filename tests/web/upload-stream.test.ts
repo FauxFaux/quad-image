@@ -205,12 +205,15 @@ describe('streaming upload', () => {
 
   test('retains all encode results through image updates and completion', async () => {
     const updates: PendingItem[] = [];
-    const upload = driveUpload(initial, (next) => updates.push(next));
+    const upload = driveUpload({ ...initial, uploadId: 0 }, (next) =>
+      updates.push(next),
+    );
     const xhr = FakeRequest.latest;
     const first = accepted + encoded('q70', 200000, true);
     xhr.progress(first);
     expect(updates.at(-1)).toMatchObject({
       state: 'processing',
+      uploadId: 0,
       message: 'Upload accepted, server transcoding…',
       encodes: [{ name: 'q70', bytes: 200000, improved: true }],
     });
@@ -242,6 +245,7 @@ describe('streaming upload', () => {
     xhr.load(rest + complete);
     expect(await upload).toMatchObject({
       state: 'done',
+      uploadId: 0,
       base: 'e/abcdefghij.webp',
       encodes,
     });

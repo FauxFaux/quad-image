@@ -14,6 +14,123 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+test('keeps the card, open details, and copy button through every upload stage and reordering', async () => {
+  const createObjectURL = vi.fn(() => 'blob:preview');
+  class PreviewURL extends URL {
+    static override createObjectURL = createObjectURL;
+    static override revokeObjectURL = vi.fn();
+  }
+  vi.stubGlobal('URL', PreviewURL);
+  const writeText = vi.fn();
+  vi.stubGlobal('navigator', { clipboard: { writeText } });
+  const original = new File(['original'], 'picture.png');
+  const prepared = new File(['prepared'], 'picture.webp');
+  const common = { uploadId: 0, ctx: 'picked' };
+  const other: PendingItem = {
+    uploadId: 1,
+    ctx: 'picked',
+    state: 'queued',
+    file: new File(['other'], 'other.png'),
+  };
+  const { container, rerender } = render(
+    <ThumbList
+      items={[{ ...common, state: 'queued', file: original }, other]}
+    />,
+  );
+  const button = screen.getAllByRole<HTMLButtonElement>('button', {
+    name: 'copy',
+  })[0];
+  expect(button.disabled).toBe(true);
+  fireEvent.click(button);
+  expect(writeText).not.toHaveBeenCalled();
+  const card = button.closest('li');
+  const details = card?.querySelector('details');
+  const table = details?.querySelector('table');
+  fireEvent.click(screen.getAllByText('Queued')[0]);
+  expect(details?.open).toBe(true);
+  const stats = {
+    originalSize: 2000000,
+    originalType: 'image/png',
+    resizedSize: 1000000,
+    quality: 0.8,
+    used: 'resized' as const,
+  };
+  const stages: PendingItem[] = [
+    { ...common, state: 'resizing', file: original },
+    { ...common, state: 'ready', file: prepared, stats },
+    { ...common, state: 'starting', file: prepared, stats },
+    { ...common, state: 'uploading', file: prepared, stats, progress: 0.25 },
+    { ...common, state: 'uploading', file: prepared, stats, progress: 1 },
+    {
+      ...common,
+      state: 'processing',
+      file: prepared,
+      stats,
+      message: 'Upload accepted, server transcoding…',
+    },
+    {
+      ...common,
+      state: 'processing',
+      file: prepared,
+      stats,
+      message: 'Upload accepted, server transcoding…',
+      thumbnail: 'e/abcdefghij.webp',
+    },
+  ];
+  for (const stage of stages) {
+    rerender(<ThumbList items={[stage, other]} />);
+    expect(card?.querySelector('details')).toBe(details);
+    expect(details?.querySelector('table')).toBe(table);
+    expect(details?.open).toBe(true);
+    expect(card?.querySelector('button')).toBe(button);
+    expect(button.disabled).toBe(true);
+    expect(card?.querySelector('.thumb--spinner')).not.toBeNull();
+  }
+  const processing: PendingItem = {
+    ...common,
+    state: 'processing',
+    file: prepared,
+    stats,
+    message: 'Image ready, optimizing…',
+    available: {
+      id: 'e/abcdefghij.webp',
+      url: 'e/abcdefghij.webp?work-in-progress',
+    },
+    encodes: [{ name: 'q90', bytes: 200000, improved: true }],
+  };
+  rerender(<ThumbList items={[processing, other]} />);
+  expect(card?.querySelector('button')).toBe(button);
+  expect(button.disabled).toBe(false);
+  expect(button.textContent).toBe('copy intermediate');
+  expect(card?.querySelector('summary')?.textContent).toBe('Upload details');
+  expect(card?.querySelector('details')).toBe(details);
+  expect(details?.open).toBe(true);
+
+  rerender(
+    <ThumbList
+      items={[
+        other,
+        {
+          ...common,
+          state: 'done',
+          base: 'e/abcdefghij.webp',
+          stats,
+          encodes: processing.encodes,
+        },
+      ]}
+    />,
+  );
+  expect(container.querySelectorAll('li')[1]).toBe(card);
+  expect(card?.querySelector('details')).toBe(details);
+  expect(details?.querySelector('table')).toBe(table);
+  expect(details?.open).toBe(true);
+  expect(card?.querySelector('button')).toBe(button);
+  expect(button.textContent).toBe('copy');
+  expect(button.disabled).toBe(false);
+  expect(card?.querySelector('.thumb--spinner')).toBeNull();
+  await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+});
+
 test('copies the available image while optimizing, then copies the final URL', async () => {
   const writeText = vi
     .fn<(text: string) => Promise<void>>()
@@ -21,6 +138,7 @@ test('copies the available image while optimizing, then copies the final URL', a
   vi.stubGlobal('navigator', { clipboard: { writeText } });
   const id = 'e/abcdefghij.webp';
   const item: PendingItem = {
+    uploadId: 0,
     ctx: 'picked',
     state: 'processing',
     file: new File(['image'], 'picture.png'),
@@ -53,7 +171,7 @@ test('copies the available image while optimizing, then copies the final URL', a
   expect(screen.getByRole('img').getAttribute('src')).toBe(
     `${id}?variant=thumbnail`,
   );
-  screen.getByText('Image ready, optimizing…');
+  expect(screen.queryByText('Image ready, optimizing…')).toBeNull();
   const details = container.querySelector('details');
   expect(details?.open).toBe(false);
   expect(screen.getByText('image/png').closest('details')).toBe(details);
@@ -83,6 +201,7 @@ test('copies the available image while optimizing, then copies the final URL', a
       items={[
         {
           state: 'done',
+          uploadId: item.uploadId,
           ctx: 'picked',
           base: id,
           stats: item.stats,
@@ -92,6 +211,8 @@ test('copies the available image while optimizing, then copies the final URL', a
     />,
   );
   expect(screen.getByRole('link').getAttribute('href')).toBe(id);
+  expect(container.querySelector('details')).toBe(details);
+  expect(details?.open).toBe(true);
   expect(screen.queryByText('Image ready, optimizing…')).toBeNull();
   expect(
     screen.queryByRole('button', { name: 'copy intermediate' }),

@@ -17,6 +17,7 @@ import * as z from 'zod/mini';
 export function Home() {
   const [messages, setMessages] = useState<['warn' | 'error', string][]>([]);
   const [uploads, setUploads] = useState<PendingItem[]>([]);
+  const nextUploadId = useRef(0);
   const [pees, setPees] = useState<string[]>(() => getLocalOrEmpty('quadpees'));
   const [configuredGallery, setConfiguredGallery] = useState<
     GallerySecret | undefined
@@ -146,6 +147,7 @@ export function Home() {
 
   const triggerUploads = (files: OurFile[], ctx: string) => {
     const additional: PendingItem[] = files.map((file) => ({
+      uploadId: nextUploadId.current++,
       file,
       ctx,
       state: 'queued',

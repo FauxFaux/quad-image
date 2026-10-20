@@ -23,6 +23,8 @@ export interface EncodeResult {
 }
 
 export type PendingItem = {
+  /** Stable card identity while files, status, and list position change. */
+  uploadId?: number;
   ctx: string;
   stats?: UploadStats;
   encodes?: EncodeResult[];
