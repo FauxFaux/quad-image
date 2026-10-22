@@ -105,47 +105,78 @@ pub enum StoreUpdate<'a> {
     },
 }
 
-/// Streamed uploads expose complete provisional images while all candidates run.
+/// Publish complete images while all candidates run.
 pub fn store_with_progress(
     data: &[u8],
+    emit: impl FnMut(StoreUpdate<'_>) -> Result<()> + Send,
+) -> Result<SavedImage> {
+    store_with_ready(data, emit, |_| Ok(()))
+}
+
+/// Call `ready` once the first primary and thumbnail are readable. Once it
+/// succeeds, retain them even if a later encode or progress notification fails.
+/// This still blocks until encoding finishes; callers can acknowledge readiness
+/// separately while keeping this work on a background worker.
+pub fn store_with_ready(
+    data: &[u8],
     mut emit: impl FnMut(StoreUpdate<'_>) -> Result<()> + Send,
+    ready: impl FnOnce(&str) -> Result<()> + Send,
 ) -> Result<SavedImage> {
     let format = guess_format(data)?;
     if format == ImageFormat::Gif {
-        return handle_gif(data);
+        let id = handle_gif(data)?;
+        ready(&id)?;
+        return Ok(id);
     }
     let loaded = load_image(data, format)?;
-    let mut pending = PendingImage::thumbnail(&loaded)?;
+    let pending = PendingImage::thumbnail(&loaded)?;
     emit(StoreUpdate::Thumbnail(&pending.id))?;
     let rgba = loaded.to_rgba8();
-    crate::webp_policy::encode_rgba_with_progress(
-        rgba.as_raw(),
-        rgba.width(),
-        rgba.height(),
-        |update| match update {
-            crate::webp_policy::EncodeProgress::Planned(names) => {
-                emit(StoreUpdate::Planned(&names))
-            }
-            crate::webp_policy::EncodeProgress::Completed {
-                name,
-                bytes,
-                improved,
-            } => {
-                emit(StoreUpdate::Encoded {
-                    name: &name,
-                    bytes: bytes.len(),
-                    improved,
-                })?;
-                if improved {
-                    pending.publish(bytes)?;
-                    emit(StoreUpdate::Image(&pending.id))?;
+    store_candidates(pending, emit, ready, |report| {
+        crate::webp_policy::encode_rgba_with_progress(
+            rgba.as_raw(),
+            rgba.width(),
+            rgba.height(),
+            report,
+        )
+    })
+}
+
+fn store_candidates(
+    mut pending: PendingImage,
+    mut emit: impl FnMut(StoreUpdate<'_>) -> Result<()> + Send,
+    ready: impl FnOnce(&str) -> Result<()> + Send,
+    encode: impl FnOnce(
+        &mut (dyn FnMut(crate::webp_policy::EncodeProgress<'_>) -> Result<()> + Send),
+    ) -> Result<Vec<u8>>,
+) -> Result<SavedImage> {
+    let mut ready = Some(ready);
+    encode(&mut |update| match update {
+        crate::webp_policy::EncodeProgress::Planned(names) => emit(StoreUpdate::Planned(&names)),
+        crate::webp_policy::EncodeProgress::Completed {
+            name,
+            bytes,
+            improved,
+        } => {
+            if improved {
+                pending.publish(bytes)?;
+                if let Some(ready) = ready.take() {
+                    ready(&pending.id)?;
+                    pending.persisted = true;
                 }
-                Ok(())
             }
-        },
-    )?;
+            emit(StoreUpdate::Encoded {
+                name: &name,
+                bytes: bytes.len(),
+                improved,
+            })?;
+            if improved {
+                emit(StoreUpdate::Image(&pending.id))?;
+            }
+            Ok(())
+        }
+    })?;
     // The last published improvement is also the final policy winner.
-    pending.persisted = true;
     Ok(pending.id.clone())
 }
 
@@ -153,39 +184,17 @@ pub fn store_with_thumbnail(
     data: &[u8],
     mut emit_thumbnail: impl FnMut(&str) -> Result<()> + Send,
 ) -> Result<SavedImage> {
-    let guessed_format = guess_format(data)?;
-
-    use image::ImageFormat::*;
-    if Gif == guessed_format {
-        return handle_gif(data);
-    }
-
-    let loaded = load_image(data, guessed_format)?;
-    // Scoped Rayon work borrows the decoded pixels and the callback. Neither
-    // needs an Arc or a 'static lifetime, and thumbnailing needs no pixel copy.
-    let (pending, encoded) = rayon::join(
-        || {
-            let pending = PendingImage::thumbnail(&loaded)?;
-            emit_thumbnail(&pending.id)?;
-            Ok::<_, anyhow::Error>(pending)
-        },
-        || encode_image(&loaded),
-    );
-    // Both branches have finished, including thumbnail persistence and emit,
-    // before publishing the primary image or starting gallery writes.
-    let mut pending = pending?;
-    let temp = encoded?;
-    temp.persist_noclobber(&pending.id)
-        .map_err(|error| anyhow!("couldn't save image {}: {error:?}", pending.id))?;
-    pending.persisted = true;
-    make_readable(&pending.id)?;
-    let saved = pending.id.clone();
-    Ok(saved)
+    store_with_progress(data, |update| {
+        if let StoreUpdate::Thumbnail(id) = update {
+            emit_thumbnail(id)?;
+        }
+        Ok(())
+    })
 }
 
 /// The atomically published thumbnail claims the name for still-image uploads.
-/// Until the primary is committed, failure (including a disconnected receiver)
-/// releases that claim. The primary is also persisted without clobbering.
+/// Until readiness is acknowledged, failure releases that claim. The first
+/// primary is also persisted without clobbering; later improvements replace it.
 struct PendingImage {
     id: String,
     thumbnail: std::path::PathBuf,
@@ -251,14 +260,6 @@ impl Drop for PendingImage {
             }
         }
     }
-}
-
-fn encode_image(loaded: &DynamicImage) -> Result<PersistableTempFile> {
-    let rgba = loaded.to_rgba8();
-    let bytes = crate::webp_policy::encode_rgba(rgba.as_raw(), rgba.width(), rgba.height())?;
-    let mut temp = temp_file()?;
-    temp.write_all(&bytes).context("writing selected WebP")?;
-    Ok(temp)
 }
 
 fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
@@ -350,6 +351,131 @@ mod tests {
             persisted: false,
             published: false,
         }
+    }
+
+    fn completed(bytes: &[u8], improved: bool) -> crate::webp_policy::EncodeProgress<'_> {
+        crate::webp_policy::EncodeProgress::Completed {
+            name: "test".to_owned(),
+            bytes,
+            improved,
+        }
+    }
+
+    #[test]
+    fn readiness_precedes_completion_and_later_improvements_keep_the_same_id() -> anyhow::Result<()>
+    {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let dir = tempfile::tempdir()?;
+        let pending = pending_image(dir.path());
+        let id = pending.id.clone();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            super::store_candidates(
+                pending,
+                |_| Ok(()),
+                |id| {
+                    assert_eq!(fs::read(id)?, b"first image");
+                    ready_tx.send(id.to_owned())?;
+                    Ok(())
+                },
+                |report| {
+                    report(completed(b"first image", true))?;
+                    release_rx.recv_timeout(Duration::from_secs(5))?;
+                    report(completed(b"worse image", false))?;
+                    report(completed(b"better image", true))?;
+                    Ok(b"better image".to_vec())
+                },
+            )
+        });
+        let ready = ready_rx.recv_timeout(Duration::from_secs(5));
+        let first = fs::read(&id);
+        let still_encoding = !worker.is_finished();
+        // Release before asserting, so a regression cannot leave a blocked worker.
+        release_tx.send(())?;
+        let final_id = worker.join().unwrap()?;
+        assert_eq!(ready?, id);
+        assert_eq!(first?, b"first image");
+        assert!(still_encoding);
+        assert_eq!(final_id, id);
+        assert_eq!(fs::read(id)?, b"better image");
+        assert!(ready_rx.try_recv().is_err(), "readiness is signalled once");
+        Ok(())
+    }
+
+    #[test]
+    fn failures_after_readiness_retain_the_last_image_and_thumbnail() -> anyhow::Result<()> {
+        // Both a later encoder failure and a disconnected progress receiver
+        // must leave acknowledged images (and their gallery targets) usable.
+        for notification_fails in [false, true] {
+            let dir = tempfile::tempdir()?;
+            let pending = pending_image(dir.path());
+            let id = pending.id.clone();
+            let thumbnail = pending.thumbnail.clone();
+            let mut ready = 0;
+            let result = super::store_candidates(
+                pending,
+                |_| {
+                    if notification_fails {
+                        anyhow::bail!("receiver disconnected");
+                    }
+                    Ok(())
+                },
+                |_| {
+                    ready += 1;
+                    Ok(())
+                },
+                |report| {
+                    report(completed(b"first image", true))?;
+                    report(completed(b"better image", true))?;
+                    anyhow::bail!("later encoder timed out")
+                },
+            );
+            assert!(result.is_err());
+            assert_eq!(ready, 1);
+            assert_eq!(
+                fs::read(id)?,
+                if notification_fails {
+                    b"first image".as_slice()
+                } else {
+                    b"better image".as_slice()
+                }
+            );
+            assert!(thumbnail.exists());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn failures_before_readiness_roll_back_the_image_and_thumbnail() -> anyhow::Result<()> {
+        for readiness_fails in [false, true] {
+            let dir = tempfile::tempdir()?;
+            let pending = pending_image(dir.path());
+            let id = pending.id.clone();
+            let thumbnail = pending.thumbnail.clone();
+            let mut ready = 0;
+            let result = super::store_candidates(
+                pending,
+                |_| Ok(()),
+                |_| {
+                    ready += 1;
+                    anyhow::bail!("gallery write failed")
+                },
+                |report| {
+                    if readiness_fails {
+                        report(completed(b"first image", true))?;
+                    }
+                    anyhow::bail!("encoder failed")
+                },
+            );
+            assert!(result.is_err());
+            assert_eq!(ready, usize::from(readiness_fails));
+            assert!(!std::path::Path::new(&id).exists());
+            assert!(!thumbnail.exists());
+        }
+        Ok(())
     }
 
     #[test]

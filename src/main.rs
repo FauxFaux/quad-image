@@ -130,20 +130,38 @@ async fn upload(
 
     let gallery = gallery.map(|(public, private)| (public.to_owned(), private.to_owned()));
     let image = form.image.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        process_upload(
-            &image,
-            gallery
-                .as_ref()
-                .map(|(public, private)| (public.as_str(), private.as_str())),
-            &state,
-            false,
-            |_| Ok(()),
-        )
-    })
-    .await
-    .context("joining upload worker")
-    .and_then(|result| result);
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        let result = tokio::task::spawn_blocking(move || {
+            let mut ready_tx = Some(tx);
+            let result = process_upload(
+                &image,
+                gallery
+                    .as_ref()
+                    .map(|(public, private)| (public.as_str(), private.as_str())),
+                &state,
+                |_| Ok(()),
+                |id| {
+                    // A disconnected HTTP client must not cancel a valid upload.
+                    let _ = ready_tx.take().unwrap().send(Ok(id.to_owned()));
+                    Ok(())
+                },
+            );
+            if let Some(tx) = ready_tx {
+                let _ = tx.send(result);
+            } else if let Err(error) = result {
+                println!("{conn_info:?}: failed improving uploaded image: {error:?}");
+            }
+        })
+        .await;
+        if let Err(error) = result {
+            println!("{conn_info:?}: upload worker failed: {error:?}");
+        }
+    });
+    let result = rx
+        .await
+        .context("waiting for first image")
+        .and_then(|result| result);
     match result {
         Ok(image_id) => {
             println!("{caller:?}: {image_id}");
@@ -202,11 +220,12 @@ fn process_upload(
     image: &[u8],
     gallery: Option<(&str, &str)>,
     state: &Ctx,
-    streamed: bool,
     mut emit: impl FnMut(Event) -> Result<()> + Send,
+    ready: impl FnOnce(&str) -> Result<()> + Send,
 ) -> Result<String> {
-    let image_id = if streamed {
-        ingest::store_with_progress(image, |update| {
+    let image_id = ingest::store_with_ready(
+        image,
+        |update| {
             let status = match update {
                 ingest::StoreUpdate::Thumbnail(id) => json!({"kind": "thumbnail", "id": id}),
                 ingest::StoreUpdate::Image(id) => json!({
@@ -222,22 +241,17 @@ fn process_upload(
                 }),
             };
             emit(Event::default().event("status").data(status.to_string()))
-        })
-    } else {
-        ingest::store(image)
-    }
+        },
+        |image_id| {
+            thumbs::thumbnail(image_id).context("thumbnailing just written")?;
+            if let Some((gallery, private)) = gallery {
+                gallery::gallery_store(&state.conn, &state.secret, gallery, private, &[image_id])
+                    .context("saving uploaded image to gallery")?;
+            }
+            ready(image_id)
+        },
+    )
     .context("storing image")?;
-    thumbs::thumbnail(&image_id).context("thumbnailing just written")?;
-    if let Some((gallery, private)) = gallery {
-        gallery::gallery_store(
-            &state.conn,
-            &state.secret,
-            gallery,
-            private,
-            &[image_id.as_str()],
-        )
-        .context("saving uploaded image to gallery")?;
-    }
     emit(
         Event::default().event("done").data(
             json!({
@@ -282,10 +296,16 @@ async fn upload_stream(
                 .map(parse_gallery_spec)
                 .transpose()
                 .map_err(|message| anyhow!(message))?;
-            process_upload(&form.image, gallery, &state, true, |event| {
-                worker_tx.blocking_send(Ok(event))?;
-                Ok(())
-            })
+            process_upload(
+                &form.image,
+                gallery,
+                &state,
+                |event| {
+                    worker_tx.blocking_send(Ok(event))?;
+                    Ok(())
+                },
+                |_| Ok(()),
+            )
         })
         .await;
         match result {

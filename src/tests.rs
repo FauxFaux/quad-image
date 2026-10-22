@@ -104,6 +104,7 @@ fn write_an_image() -> Result<()> {
 
     tokio::runtime::Runtime::new()?.block_on(async {
         legacy_upload_roundtrip().await?;
+        legacy_upload_response_variants().await?;
         stream_upload_roundtrip().await
     })?;
 
@@ -206,6 +207,56 @@ async fn legacy_upload_roundtrip() -> Result<()> {
     Ok(())
 }
 
+async fn legacy_upload_response_variants() -> Result<()> {
+    use axum::http::StatusCode;
+
+    // Exercise plain URLs and redirects, including GIF's single-encode path.
+    for redirect in [false, true] {
+        let state = stream_context();
+        let mut fields = vec![
+            ("image", include_bytes!("../tests/parrot.gif").as_slice()),
+            ("gallery", b"album!secret".as_slice()),
+        ];
+        if redirect {
+            fields.push(("return_redirect", b"true"));
+        }
+        let (status, headers, response) = crate::upload(
+            axum::extract::ConnectInfo("127.0.0.1:1234".parse()?),
+            axum::http::HeaderMap::new(),
+            axum::extract::State(state.clone()),
+            request_multipart(&fields).await,
+        )
+        .await;
+        assert_eq!(
+            status,
+            if redirect {
+                StatusCode::SEE_OTHER
+            } else {
+                StatusCode::OK
+            }
+        );
+        assert_eq!(headers["content-type"], "text/plain; charset=utf-8");
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
+        let id = std::str::from_utf8(&body)?;
+        assert!(crate::is_image_id(id) && id.ends_with(".gif"));
+        if redirect {
+            assert_eq!(headers["location"], id);
+        }
+        assert!(std::path::Path::new(id).is_file());
+        image::open(format!(
+            "e/.thumbs/{}.thumb.webp",
+            id.strip_prefix("e/").unwrap()
+        ))?;
+        let stored: String = state.conn.lock().unwrap().query_row(
+            "select image from gallery_images",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(stored, id);
+    }
+    Ok(())
+}
+
 // Runs within write_an_image's temporary working directory, since storage is
 // relative to cwd and changing cwd in a separate test would race that test.
 async fn stream_upload_roundtrip() -> Result<()> {
@@ -278,6 +329,13 @@ async fn stream_upload_roundtrip() -> Result<()> {
         assert_eq!(update["id"], thumbnail["id"]);
         let id = update["id"].as_str().unwrap();
         assert_eq!(update["url"], format!("{id}?work-in-progress"));
+        // Gallery insertion happens at first publication, before stream completion.
+        {
+            let conn = state.conn.lock().unwrap();
+            let stored: String =
+                conn.query_row("select image from gallery_images", [], |row| row.get(0))?;
+            assert_eq!(stored, id);
+        }
         // Every advertised URL already has a complete, readable server encode.
         let served = tower_http::services::ServeDir::new(".")
             .try_call(
@@ -383,8 +441,8 @@ async fn stream_upload_roundtrip() -> Result<()> {
     ))
     .exists());
 
-    // An event receiver failing after publication removes both provisional
-    // files, and cannot accidentally add a gallery entry or report success.
+    // After readiness, disconnecting the progress receiver must leave the
+    // primary and thumbnail available for an already published gallery entry.
     let mut provisional = String::new();
     let result = crate::ingest::store_with_progress(include_bytes!("test.png"), |update| {
         if let crate::ingest::StoreUpdate::Image(id) = update {
@@ -396,8 +454,8 @@ async fn stream_upload_roundtrip() -> Result<()> {
     });
     assert!(format!("{:#}", result.unwrap_err()).contains("receiver disconnected after image"));
     assert!(!provisional.is_empty());
-    assert!(!std::path::Path::new(&provisional).exists());
-    assert!(!std::path::Path::new(&format!(
+    image::open(&provisional)?;
+    assert!(std::path::Path::new(&format!(
         "e/.thumbs/{}.thumb.webp",
         provisional.strip_prefix("e/").unwrap()
     ))
@@ -415,6 +473,46 @@ async fn stream_upload_rejects_invalid_forms_before_acceptance() {
         let response = stream_request(&fields, stream_context()).await;
         assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
         assert_eq!(response.headers()["content-type"], "application/json");
+    }
+}
+
+#[tokio::test]
+async fn legacy_upload_reports_errors_before_readiness() {
+    for (fields, expected_status) in [
+        (vec![], axum::http::StatusCode::BAD_REQUEST),
+        (
+            vec![("image", b"x".as_slice()), ("gallery", b"bad".as_slice())],
+            axum::http::StatusCode::BAD_REQUEST,
+        ),
+        (
+            vec![
+                ("image", b"not an image".as_slice()),
+                ("gallery", b"album!secret".as_slice()),
+            ],
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        ),
+    ] {
+        let state = stream_context();
+        let (status, _, response) = crate::upload(
+            axum::extract::ConnectInfo("127.0.0.1:1234".parse().unwrap()),
+            axum::http::HeaderMap::new(),
+            axum::extract::State(state.clone()),
+            request_multipart(&fields).await,
+        )
+        .await;
+        assert_eq!(status, expected_status);
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["errors"].is_array());
+        let count: u32 = state
+            .conn
+            .lock()
+            .unwrap()
+            .query_row("select count(*) from gallery_images", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
     }
 }
 
