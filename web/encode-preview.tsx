@@ -3,7 +3,7 @@ import { ImageComparison } from './components/image-comparison';
 import { Upload } from './components/upload';
 import { Messages, printer } from './locket/err';
 import { canvasSupportsWebP, encodeWebPUsingCanvas } from './locket/encode';
-import { encodeWebPUsingWasm } from './locket/webp-wasm';
+import { encodeInWorker } from './locket/encode-worker-client';
 
 const qualities = [0.8, 0.5, 0.2, 0.1, 0.01];
 
@@ -61,8 +61,12 @@ export function EncodePreview() {
           if (cancelled) return;
           await sleep(15);
           const wasmStart = performance.now();
-          const wasmWebp = await encodeWebPUsingWasm(image, quality);
-          const wasmDuration = performance.now() - wasmStart;
+          const { blob: wasmWebp, duration } = await encodeInWorker(
+            file,
+            file.type,
+            { mode: 'wasm', quality },
+          );
+          const wasmDuration = duration ?? performance.now() - wasmStart;
           if (cancelled) return;
 
           const canvasUrl = URL.createObjectURL(canvasWebp);

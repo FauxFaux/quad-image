@@ -113,10 +113,10 @@ export const encodeWebPUsingWasm = async (
   );
 };
 
-export const encodeWebPLosslessUsingWasm = (
+export const encodeWebPLosslessUsingWasm = async (
   image: ImageBitmap,
   encoder: WebPEncoderExports,
-): Blob =>
+): Promise<Blob> =>
   encodeWebPWithEncoder(image, encoder, (input, output) =>
     encoder.WebPEncodeLosslessRGBA(
       input,
@@ -127,11 +127,15 @@ export const encodeWebPLosslessUsingWasm = (
     ),
   );
 
-const encodeWebPWithEncoder = (
+// A timer gives input and rendering a turn; awaiting a resolved promise does not.
+const yieldToBrowser = async () =>
+  new Promise<void>((resolve) => setTimeout(resolve, 15));
+
+const encodeWebPWithEncoder = async (
   image: ImageBitmap,
   encoder: WebPEncoderExports,
   encode: (input: number, output: number) => number,
-): Blob => {
+): Promise<Blob> => {
   const canvas = new OffscreenCanvas(image.width, image.height);
   try {
     const context = canvas.getContext('2d');
@@ -154,6 +158,7 @@ const encodeWebPWithEncoder = (
       new Uint8Array(encoder.memory.buffer, input, rgba.byteLength).set(rgba);
       new DataView(encoder.memory.buffer).setUint32(output, 0, true);
 
+      await yieldToBrowser();
       const size = encode(input, output);
       encoded = new DataView(encoder.memory.buffer).getUint32(output, true);
 
@@ -174,5 +179,7 @@ const encodeWebPWithEncoder = (
   } finally {
     canvas.width = 0;
     canvas.height = 0;
+    // Yield after cleanup as well, including when the encoder fails.
+    await yieldToBrowser();
   }
 };

@@ -11,12 +11,13 @@ import {
   loadLosslessEncoder,
 } from '../../../web/locket/webp-wasm';
 import { attemptShrinkage } from '../../../web/upload';
+import { encodeInWorker } from '../../../web/locket/encode-worker-client';
 
 describe('image ops', () => {
   it('uses q90 for pasted photographic PNGs whose lossless encode exceeds 1 MiB', () => {
     cy.then(async () => {
       const png = await randomImage(3, 1024, 768, 'image/png');
-      const close = cy.spy(ImageBitmap.prototype, 'close');
+      const decode = cy.spy(globalThis, 'createImageBitmap');
       const result = await attemptShrinkage(
         { state: 'resizing', ctx: 'pasted', file: png },
         'image/png',
@@ -24,7 +25,7 @@ describe('image ops', () => {
       expect(result.stats).to.include({ quality: 0.9, used: 'resized' });
       if (result.state !== 'ready') throw new Error('expected a ready upload');
       expect(result.file.type).to.equal('image/webp');
-      expect(close).to.have.been.calledOnce;
+      expect(decode).not.to.have.been.called;
       expect(await readDimensions(result.file)).to.deep.equal({
         width: 1024,
         height: 768,
@@ -115,10 +116,31 @@ describe('image ops', () => {
     () => {
       cy.then(async () => {
         const png = await randomImage(4, 3072, 3072, 'image/png');
-        const result = await attemptShrinkage(
-          { state: 'resizing', ctx: 'pasted', file: png },
-          'image/png',
-        );
+        const decode = cy.spy(globalThis, 'createImageBitmap');
+        let ticks = 0;
+        let lastTick = performance.now();
+        let longestGap = 0;
+        const timer = setInterval(() => {
+          const now = performance.now();
+          longestGap = Math.max(longestGap, now - lastTick);
+          lastTick = now;
+          ticks++;
+        }, 20);
+        let result;
+        try {
+          result = await attemptShrinkage(
+            { state: 'resizing', ctx: 'pasted', file: png },
+            'image/png',
+          );
+          longestGap = Math.max(longestGap, performance.now() - lastTick);
+        } finally {
+          clearInterval(timer);
+        }
+        expect(decode).not.to.have.been.called;
+        expect(ticks).to.be.greaterThan(5);
+        // The lossless WASM call takes seconds for this image. The UI thread
+        // must keep running throughout, with tolerance for loaded CI machines.
+        expect(longestGap).to.be.lessThan(1000);
         expect(result.stats).to.include({ quality: 0.5, used: 'resized' });
         if (result.state !== 'ready')
           throw new Error('expected a ready upload');
@@ -156,6 +178,37 @@ describe('image ops', () => {
     });
   });
 
+  it('matches queued worker results and continues after a malformed image', () => {
+    cy.then(async () => {
+      const png = await randomImage(2, 64, 32, 'image/png');
+      const results = await Promise.allSettled([
+        attemptShrinkage(
+          { state: 'resizing', ctx: 'bad', file: new Blob(['invalid']) },
+          'image/png',
+        ),
+        attemptShrinkage(
+          { state: 'resizing', ctx: 'first', file: png },
+          'image/png',
+        ),
+        attemptShrinkage(
+          { state: 'resizing', ctx: 'second', file: png },
+          'image/png',
+        ),
+      ]);
+      expect(results[0].status).to.equal('rejected');
+      for (const [index, ctx] of [
+        [1, 'first'],
+        [2, 'second'],
+      ] as const) {
+        const result = results[index];
+        if (result.status !== 'fulfilled') throw result.reason;
+        expect(result.value.ctx).to.equal(ctx);
+        expect(result.value.state).to.equal('ready');
+        expect(result.value.stats?.originalSize).to.equal(png.size);
+      }
+    });
+  });
+
   it('supports webp', async () => {
     expect(await canvasSupportsWebP()).to.be.true;
   });
@@ -183,6 +236,24 @@ describe('image ops', () => {
 
   it('encodes webp using wasm', () => {
     cy.then(() => expectWebP(encodeWebPUsingWasm));
+  });
+
+  it('runs explicit WASM previews in the shared worker', () => {
+    cy.then(async () => {
+      const png = await randomImage(3, 128, 64, 'image/png');
+      const decode = cy.spy(globalThis, 'createImageBitmap');
+      const result = await encodeInWorker(png, 'image/png', {
+        mode: 'wasm',
+        quality: 0.5,
+      });
+      expect(decode).not.to.have.been.called;
+      expect(result.blob.type).to.equal('image/webp');
+      expect(result.duration).to.be.greaterThan(0);
+      expect(await readDimensions(result.blob)).to.deep.equal({
+        width: 128,
+        height: 64,
+      });
+    });
   });
 
   it('exposes near-lossless preprocessing and validates its range', () => {
@@ -263,6 +334,37 @@ describe('image ops', () => {
     });
   });
 
+  it('lets browser tasks run before and after a wasm encode', () => {
+    cy.then(async () => {
+      const encoder = await loadLosslessEncoder();
+      const image = await createImageBitmap(new ImageData(1, 1));
+      let beforeEncode = false;
+      let afterEncode = false;
+      try {
+        setTimeout(() => {
+          beforeEncode = true;
+        }, 0);
+        const webp = await encodeWebPLosslessUsingWasm(image, {
+          ...encoder,
+          WebPEncodeLosslessRGBA: (...args) => {
+            expect(beforeEncode).to.be.true;
+            setTimeout(() => {
+              afterEncode = true;
+            }, 0);
+            return encoder.WebPEncodeLosslessRGBA(...args);
+          },
+        });
+        expect(afterEncode).to.be.true;
+        expect(await readDimensions(webp)).to.deep.equal({
+          width: 1,
+          height: 1,
+        });
+      } finally {
+        image.close();
+      }
+    });
+  });
+
   it('encodes narrow and odd-sized images across SIMD block boundaries', () => {
     cy.then(async () => {
       const encoders = [await loadEncoder(), await loadLosslessEncoder()];
@@ -282,7 +384,7 @@ describe('image ops', () => {
             expect(await readDimensions(webp)).to.deep.equal({ width, height });
           }
           for (const encoder of encoders) {
-            const webp = encodeWebPLosslessUsingWasm(image, encoder);
+            const webp = await encodeWebPLosslessUsingWasm(image, encoder);
             const decoded = await createImageBitmap(webp);
             const canvas = new OffscreenCanvas(width, height);
             try {
@@ -318,14 +420,14 @@ describe('image ops', () => {
         const image = await createImageBitmap(png);
         try {
           const fullEncoder = await loadEncoder();
-          const webp = encodeWebPLosslessUsingWasm(image, fullEncoder);
+          const webp = await encodeWebPLosslessUsingWasm(image, fullEncoder);
           expect(await readDimensions(webp)).to.deep.equal({
             width: 5120,
             height: 1440,
           });
 
           const losslessEncoder = await loadLosslessEncoder();
-          const losslessWebp = encodeWebPLosslessUsingWasm(
+          const losslessWebp = await encodeWebPLosslessUsingWasm(
             image,
             losslessEncoder,
           );

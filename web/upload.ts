@@ -1,11 +1,5 @@
-import { encodeWebP, encodeWebPLossless } from './locket/encode';
-import {
-  initialLossyQuality,
-  maxUploadBytes,
-  nextLossyQuality,
-  selectUpload,
-  shrinkThreshold,
-} from './upload-policy';
+import { encodeInWorker } from './locket/encode-worker-client';
+import { maxUploadBytes, selectUpload } from './upload-policy';
 export { shrinkThreshold } from './upload-policy';
 
 export type OurFile = Blob & { name?: string };
@@ -77,43 +71,11 @@ export const attemptShrinkage = async (
     };
   }
 
-  await unblock();
-  // firefox rejects with a bare, stackless InvalidStateError for anything it
-  // can't decode (heic, tiff, ...), so say what we were holding at the time
-  const image = await createImageBitmap(original).catch((cause: unknown) => {
-    throw new Error(`cannot decode ${originalType} (${original.size} bytes)`, {
-      cause,
-    });
-  });
+  const { blob: resized, quality } = await encodeInWorker(
+    original,
+    originalType,
+  );
 
-  let quality: number | undefined;
-  let resized;
-  try {
-    if (isLosslessFormat(originalType)) {
-      await unblock();
-      resized = await encodeWebPLossless(image);
-    }
-
-    // Small lossless images are worth preserving exactly. Larger ones fall
-    // through to the existing quality-based encoding strategy.
-    if (!resized || resized.size > shrinkThreshold) {
-      await unblock();
-      quality = initialLossyQuality;
-      resized = await encodeWebP(image, quality);
-      let retry = nextLossyQuality(quality, resized.size);
-      while (retry !== undefined) {
-        resized = undefined;
-        await unblock();
-        quality = retry;
-        resized = await encodeWebP(image, quality);
-        retry = nextLossyQuality(quality, resized.size);
-      }
-    }
-  } finally {
-    image.close();
-  }
-
-  await unblock();
   const used = selectUpload(
     original.size,
     resized.size,
@@ -138,12 +100,5 @@ export const attemptShrinkage = async (
   };
 };
 
-// GIF is excluded: it can be losslessly encoded, but decoding it to an
-// ImageBitmap would discard animation. PNG is the lossless still-image format
-// accepted by the uploader.
+// GIFs must retain their animation.
 export const isLosslessFormat = (type: string) => type === 'image/png';
-
-const unblock = async () => sleep(15);
-
-const sleep = async (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
