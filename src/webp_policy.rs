@@ -94,13 +94,6 @@ pub fn encode_rgba_with_progress(
         },
         report,
     )?;
-    println!(
-        "upload WebP: {:?}, {} bytes ({}x{})",
-        selected.setting,
-        selected.bytes.len(),
-        width,
-        height
-    );
     Ok(selected.bytes)
 }
 

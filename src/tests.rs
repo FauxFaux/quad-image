@@ -107,6 +107,7 @@ fn write_an_image() -> Result<()> {
         legacy_upload_response_variants().await?;
         stream_upload_roundtrip().await
     })?;
+    upload_logging_roundtrip()?;
 
     Ok(())
 }
@@ -122,6 +123,120 @@ fn stream_context() -> std::sync::Arc<crate::Ctx> {
         conn: std::sync::Arc::new(std::sync::Mutex::new(conn)),
         secret: [0; 32],
     })
+}
+
+fn upload_logging_roundtrip() -> Result<()> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    for scenario in [
+        "thumbnail delivery",
+        "image delivery",
+        "gallery",
+        "success",
+        "gif",
+        "gif gallery",
+    ] {
+        let records = Arc::new(Mutex::new(Vec::<serde_json::Value>::new()));
+        let output = records.clone();
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("X-Forwarded-For", "203.0.113.1".parse()?);
+        let log = crate::UploadLog::with_writer(
+            "127.0.0.1:1234".parse()?,
+            &headers,
+            scenario == "success",
+            move |record| output.lock().unwrap().push(record),
+        );
+        let state = stream_context();
+        if scenario.ends_with("gallery") {
+            state
+                .conn
+                .lock()
+                .unwrap()
+                .execute("drop table gallery_images", [])?;
+        }
+        let ready = AtomicBool::new(false);
+        let data: &[u8] = if scenario.starts_with("gif") {
+            include_bytes!("../tests/parrot.gif")
+        } else {
+            include_bytes!("test.png")
+        };
+        let result = crate::process_upload(
+            data,
+            Some(("album", "secret")),
+            &state,
+            &log,
+            |_| {
+                if scenario == "thumbnail delivery"
+                    || (scenario == "image delivery" && ready.load(Ordering::SeqCst))
+                {
+                    // Ownership must be logged before a disconnected client
+                    // can prevent delivery of the very first progress event.
+                    assert!(records
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|record| record["event"] == "assigned"));
+                    anyhow::bail!("client disconnected");
+                }
+                Ok(())
+            },
+            |_| {
+                ready.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+        );
+        log.finish(
+            result
+                .as_ref()
+                .map(|_| ())
+                .map_err(|error| format!("{error:#}")),
+        );
+        let records = records.lock().unwrap();
+        let assigned = records
+            .iter()
+            .find(|record| record["event"] == "assigned")
+            .unwrap();
+        let id = assigned["image_id"].as_str().unwrap();
+        assert!(crate::is_image_id(id));
+        assert_eq!(assigned["peer"], "127.0.0.1:1234");
+        assert_eq!(assigned["forwarded_for"], "203.0.113.1");
+        let finished = records.last().unwrap();
+        let success = matches!(scenario, "success" | "gif");
+        assert_eq!(finished["success"], success);
+        assert_eq!(finished["image_id"], id);
+        assert_eq!(finished["ready"], ready.load(Ordering::SeqCst));
+        // GIFs retain their existing persistence policy even if gallery work
+        // fails, so retention and readiness need separate log fields.
+        let retained = ready.load(Ordering::SeqCst) || scenario == "gif gallery";
+        assert_eq!(finished["retained"], retained);
+        assert_eq!(std::path::Path::new(id).exists(), retained);
+        if scenario != "thumbnail delivery" {
+            assert!(finished["selected"]["bytes"].as_u64().unwrap() > 0);
+        }
+        if scenario.ends_with("gallery") {
+            assert!(finished["error"]
+                .as_str()
+                .unwrap()
+                .contains("saving uploaded image to gallery"));
+        }
+        if success {
+            assert_eq!(
+                finished["selected"]["name"],
+                if scenario == "gif" { "gif" } else { "nl100" }
+            );
+        }
+        // Each record after assignment is correlated even on a failure path.
+        let assigned_index = records
+            .iter()
+            .position(|record| record["event"] == "assigned")
+            .unwrap();
+        for record in &records[assigned_index..] {
+            assert_eq!(record["image_id"], id);
+            assert_eq!(record["request_id"], assigned["request_id"]);
+        }
+    }
+    Ok(())
 }
 
 async fn request_multipart(fields: &[(&str, &[u8])]) -> axum::extract::Multipart {

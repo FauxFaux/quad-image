@@ -174,6 +174,44 @@ adds the `image`, `planned`, and `encoded` statuses described above. Web and And
 `.webp` image IDs. Client transfer thresholds and qualities are documented in
 [the client encoding policy](client-encoding.md).
 
+## Upload logging
+
+Upload lifecycle records are single-line JSON on stdout with `component: "upload"`.
+Every record includes a random `request_id`, `timestamp_ms` (Unix milliseconds),
+`elapsed_ms`, the socket `peer`, the reported `forwarded_for` header, `endpoint`,
+and a `legacy` boolean. The owned caller information follows the background
+worker after the HTTP handler returns. Gallery passwords are not logged.
+
+The `received` record is written before multipart parsing. `accepted` records
+the uploaded byte count after form and gallery validation. `image_id` is null
+until the `assigned` record, which is written as soon as a still image's name is
+claimed, before any client progress delivery or primary encoding. GIF assignment
+is recorded immediately after its re-encoded file is persisted, before permission
+updates and readiness work. Failures before a name is assigned remain searchable
+by `request_id` and caller.
+
+| Event | Meaning |
+| --- | --- |
+| `transcode` | Detected input format and WebP candidate or GIF re-encode policy. |
+| `decoded` | Decoded still-image dimensions after supported EXIF orientation. |
+| `planned` | Candidate names scheduled for each pass. |
+| `encoded` | Completed candidate name, byte count, and `improved` decision. |
+| `published` | Successfully published candidate name and byte count, before gallery work. |
+| `ready` | Thumbnail and gallery work succeeded; includes the first selected image. |
+| `response` | HTTP response status, including the early legacy response. |
+| `finished` | Final processing outcome after the worker finishes, including failure or panic. |
+
+Every record after assignment carries the image ID, including failures during
+primary encoding, gallery work, or client delivery. `finished.success` means all
+processing and progress delivery completed. `ready` records whether the upload
+reached readiness, `retained` reports whether the primary file still exists, and
+`selected` gives the last successfully published name and byte count. `error`
+contains the full error chain on failure. A legacy HTTP success can therefore
+be followed by `finished.success: false` with `retained: true` if a later encode
+fails. GIF persistence before readiness follows its existing policy. Candidate
+errors include the failing setting in the terminal error chain; progress stops
+after a publication or delivery failure, while already started encodes are joined.
+
 ## Evidence and tests
 
 Rust tests cover strict byte boundaries, preference versus encoded size,

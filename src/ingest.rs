@@ -59,7 +59,7 @@ fn temp_file() -> Result<PersistableTempFile> {
     PersistableTempFile::new_in("e").with_context(|| anyhow!("temp file"))
 }
 
-fn handle_gif(data: &[u8]) -> Result<SavedImage> {
+fn handle_gif(data: &[u8], assigned: impl FnMut(&str) -> Result<()>) -> Result<SavedImage> {
     let mut reader =
         gif::Decoder::new(io::Cursor::new(data)).with_context(|| anyhow!("loading gif"))?;
 
@@ -87,7 +87,7 @@ fn handle_gif(data: &[u8]) -> Result<SavedImage> {
         }
     }
 
-    write_out(temp, "gif")
+    write_out(temp, "gif", assigned)
 }
 
 pub fn store(data: &[u8]) -> Result<SavedImage> {
@@ -95,6 +95,16 @@ pub fn store(data: &[u8]) -> Result<SavedImage> {
 }
 
 pub enum StoreUpdate<'a> {
+    Detected(ImageFormat),
+    Decoded {
+        width: u32,
+        height: u32,
+    },
+    Assigned(&'a str),
+    Published {
+        name: &'a str,
+        bytes: usize,
+    },
     Thumbnail(&'a str),
     Image(&'a str),
     Planned(&'a [String]),
@@ -123,13 +133,23 @@ pub fn store_with_ready(
     ready: impl FnOnce(&str) -> Result<()> + Send,
 ) -> Result<SavedImage> {
     let format = guess_format(data)?;
+    emit(StoreUpdate::Detected(format))?;
     if format == ImageFormat::Gif {
-        let id = handle_gif(data)?;
+        let id = handle_gif(data, |id| emit(StoreUpdate::Assigned(id)))?;
+        emit(StoreUpdate::Published {
+            name: "gif",
+            bytes: fs::metadata(&id)?.len().try_into()?,
+        })?;
         ready(&id)?;
         return Ok(id);
     }
     let loaded = load_image(data, format)?;
+    emit(StoreUpdate::Decoded {
+        width: loaded.width(),
+        height: loaded.height(),
+    })?;
     let pending = PendingImage::thumbnail(&loaded)?;
+    emit(StoreUpdate::Assigned(&pending.id))?;
     emit(StoreUpdate::Thumbnail(&pending.id))?;
     let rgba = loaded.to_rgba8();
     store_candidates(pending, emit, ready, |report| {
@@ -159,7 +179,13 @@ fn store_candidates(
             improved,
         } => {
             if improved {
-                pending.publish(bytes)?;
+                pending
+                    .publish(bytes)
+                    .with_context(|| format!("publishing {name} ({} bytes)", bytes.len()))?;
+                emit(StoreUpdate::Published {
+                    name: &name,
+                    bytes: bytes.len(),
+                })?;
                 if let Some(ready) = ready.take() {
                     ready(&pending.id)?;
                     pending.persisted = true;
@@ -262,12 +288,17 @@ impl Drop for PendingImage {
     }
 }
 
-fn write_out(mut temp: PersistableTempFile, ext: &str) -> Result<SavedImage> {
+fn write_out(
+    mut temp: PersistableTempFile,
+    ext: &str,
+    mut assigned: impl FnMut(&str) -> Result<()>,
+) -> Result<SavedImage> {
     for _ in 0..32768 {
         let rand_bit = random_name();
         let cand = format!("e/{}.{}", rand_bit, ext);
         temp = match temp.persist_noclobber(&cand) {
             Ok(_) => {
+                assigned(&cand)?;
                 make_readable(&cand)?;
                 return Ok(cand);
             }
@@ -417,8 +448,8 @@ mod tests {
             let mut ready = 0;
             let result = super::store_candidates(
                 pending,
-                |_| {
-                    if notification_fails {
+                |update| {
+                    if notification_fails && matches!(update, super::StoreUpdate::Encoded { .. }) {
                         anyhow::bail!("receiver disconnected");
                     }
                     Ok(())

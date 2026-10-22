@@ -4,6 +4,7 @@ pub mod ingest;
 mod tests;
 mod thumbnail_response;
 mod thumbs;
+mod upload_log;
 use quad_image::{webp_encoder, webp_policy};
 
 use std::convert::Infallible;
@@ -29,6 +30,7 @@ use regex::Regex;
 use serde_json::{json, Value};
 use tokio::task::JoinSet;
 use tower_http::services::ServeDir;
+use upload_log::UploadLog;
 
 type Caller<'h> = (SocketAddr, Option<&'h HeaderValue>);
 
@@ -115,23 +117,36 @@ async fn upload(
     body: Multipart,
 ) -> (StatusCode, HeaderMap, Response) {
     let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
+    let log = UploadLog::new(conn_info, &headers, true);
 
     let nh = |(s, b): (StatusCode, Json<Value>)| (s, HeaderMap::new(), b.into_response());
     let form = match extract_image_form(body).await {
         Ok(UploadFormStatus::Form(form)) => form,
-        Ok(UploadFormStatus::BadRequest(message)) => return nh(bad_request(message)),
-        Err(e) => return nh(log_error("parsing image form", &caller, &e)),
+        Ok(UploadFormStatus::BadRequest(message)) => {
+            log.finish(Err(message.to_owned()));
+            return nh(bad_request(message));
+        }
+        Err(e) => {
+            log.finish(Err(format!("parsing image form: {e:#}")));
+            return nh(log_error("parsing image form", &caller, &e));
+        }
     };
 
     let gallery = match form.gallery.as_deref().map(parse_gallery_spec).transpose() {
         Ok(gallery) => gallery,
-        Err(message) => return nh(bad_request(message)),
+        Err(message) => {
+            log.finish(Err(message.to_owned()));
+            return nh(bad_request(message));
+        }
     };
 
     let gallery = gallery.map(|(public, private)| (public.to_owned(), private.to_owned()));
+    log.event("accepted", json!({"bytes": form.image.len()}));
     let image = form.image.clone();
     let (tx, rx) = tokio::sync::oneshot::channel();
+    let background_log = log.clone();
     tokio::spawn(async move {
+        let worker_log = background_log.clone();
         let result = tokio::task::spawn_blocking(move || {
             let mut ready_tx = Some(tx);
             let result = process_upload(
@@ -140,6 +155,7 @@ async fn upload(
                     .as_ref()
                     .map(|(public, private)| (public.as_str(), private.as_str())),
                 &state,
+                &worker_log,
                 |_| Ok(()),
                 |id| {
                     // A disconnected HTTP client must not cancel a valid upload.
@@ -147,15 +163,19 @@ async fn upload(
                     Ok(())
                 },
             );
+            worker_log.finish(
+                result
+                    .as_ref()
+                    .map(|_| ())
+                    .map_err(|error| format!("{error:#}")),
+            );
             if let Some(tx) = ready_tx {
                 let _ = tx.send(result);
-            } else if let Err(error) = result {
-                println!("{conn_info:?}: failed improving uploaded image: {error:?}");
             }
         })
         .await;
         if let Err(error) = result {
-            println!("{conn_info:?}: upload worker failed: {error:?}");
+            background_log.finish(Err(format!("upload worker failed: {error}")));
         }
     });
     let result = rx
@@ -164,8 +184,6 @@ async fn upload(
         .and_then(|result| result);
     match result {
         Ok(image_id) => {
-            println!("{caller:?}: {image_id}");
-
             let status = if form.return_redirect {
                 StatusCode::SEE_OTHER
             } else {
@@ -180,7 +198,13 @@ async fn upload(
                     .and_then(|h| h.to_str().ok())
                 {
                     Some(host) => host,
-                    None => return nh(bad_request("missing host header")),
+                    None => {
+                        log.event(
+                            "response",
+                            json!({"status": 400, "error": "missing host header"}),
+                        );
+                        return nh(bad_request("missing host header"));
+                    }
                 };
                 format!("https://{host}/{image_id}")
             } else {
@@ -209,9 +233,13 @@ async fn upload(
                 url.into_response()
             };
 
+            log.event("response", json!({"status": status.as_u16()}));
             (status, map, resp)
         }
-        Err(e) => nh(log_error("storing image", &caller, &e)),
+        Err(e) => {
+            log.event("response", json!({"status": 500}));
+            nh(log_error("storing image", &caller, &e))
+        }
     }
 }
 
@@ -220,13 +248,20 @@ fn process_upload(
     image: &[u8],
     gallery: Option<(&str, &str)>,
     state: &Ctx,
+    log: &UploadLog,
     mut emit: impl FnMut(Event) -> Result<()> + Send,
     ready: impl FnOnce(&str) -> Result<()> + Send,
 ) -> Result<String> {
     let image_id = ingest::store_with_ready(
         image,
         |update| {
+            // Record the ID and decisions before any fallible client delivery.
+            log.update(&update);
             let status = match update {
+                ingest::StoreUpdate::Detected(_)
+                | ingest::StoreUpdate::Decoded { .. }
+                | ingest::StoreUpdate::Assigned(_)
+                | ingest::StoreUpdate::Published { .. } => return Ok(()),
                 ingest::StoreUpdate::Thumbnail(id) => json!({"kind": "thumbnail", "id": id}),
                 ingest::StoreUpdate::Image(id) => json!({
                     "kind": "image", "id": id, "url": format!("{id}?work-in-progress"),
@@ -241,6 +276,7 @@ fn process_upload(
                 }),
             };
             emit(Event::default().event("status").data(status.to_string()))
+                .context("sending upload status")
         },
         |image_id| {
             thumbs::thumbnail(image_id).context("thumbnailing just written")?;
@@ -248,7 +284,9 @@ fn process_upload(
                 gallery::gallery_store(&state.conn, &state.secret, gallery, private, &[image_id])
                     .context("saving uploaded image to gallery")?;
             }
-            ready(image_id)
+            ready(image_id)?;
+            log.ready();
+            Ok(())
         },
     )
     .context("storing image")?;
@@ -259,7 +297,8 @@ fn process_upload(
             })
             .to_string(),
         ),
-    )?;
+    )
+    .context("sending upload completion")?;
     Ok(image_id)
 }
 
@@ -270,14 +309,23 @@ async fn upload_stream(
     body: Multipart,
 ) -> Response {
     let caller: Caller = (conn_info, headers.get("X-Forwarded-For"));
+    let log = UploadLog::new(conn_info, &headers, false);
     let form = match extract_image_form(body).await {
         Ok(UploadFormStatus::Form(form)) => form,
-        Ok(UploadFormStatus::BadRequest(message)) => return bad_request(message).into_response(),
-        Err(e) => return log_error("parsing image form", &caller, &e).into_response(),
+        Ok(UploadFormStatus::BadRequest(message)) => {
+            log.finish(Err(message.to_owned()));
+            return bad_request(message).into_response();
+        }
+        Err(e) => {
+            log.finish(Err(format!("parsing image form: {e:#}")));
+            return log_error("parsing image form", &caller, &e).into_response();
+        }
     };
     if let Err(message) = form.gallery.as_deref().map(parse_gallery_spec).transpose() {
+        log.finish(Err(message.to_owned()));
         return bad_request(message).into_response();
     }
+    log.event("accepted", json!({"bytes": form.image.len()}));
 
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(8);
 
@@ -287,8 +335,10 @@ async fn upload_stream(
     .await
     .expect("upload event receiver is still owned by this handler");
 
+    log.event("response", json!({"status": 200}));
     tokio::spawn(async move {
         let worker_tx = tx.clone();
+        let worker_log = log.clone();
         let result = tokio::task::spawn_blocking(move || {
             let gallery = form
                 .gallery
@@ -300,6 +350,7 @@ async fn upload_stream(
                 &form.image,
                 gallery,
                 &state,
+                &worker_log,
                 |event| {
                     worker_tx.blocking_send(Ok(event))?;
                     Ok(())
@@ -309,9 +360,14 @@ async fn upload_stream(
         })
         .await;
         match result {
-            Ok(Ok(image_id)) => println!("{conn_info:?}: {image_id}"),
+            Ok(Ok(_)) => log.finish(Ok(())),
             result => {
-                println!("{conn_info:?}: failed processing upload: {result:?}");
+                let error = match result {
+                    Ok(Err(error)) => format!("{error:#}"),
+                    Err(error) => format!("upload worker failed: {error}"),
+                    Ok(Ok(_)) => unreachable!(),
+                };
+                log.finish(Err(error));
                 let _ = tx
                     .send(Ok(Event::default().event("error").data(
                         json!({"message": "Image processing failed"}).to_string(),
