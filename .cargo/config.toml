@@ -1,0 +1,2 @@
+[alias]
+run-fast = "run --profile release-no-lto"

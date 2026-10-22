@@ -48,5 +48,16 @@ features = ["bundled"]
 tempfile = "3"
 wat = "1"
 
+[profile.dev]
+opt-level = 1
+
+# Optimize image codecs and the Wasmtime runtime without disabling dev checks.
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
 lto = true
+
+[profile.release-no-lto]
+inherits = "release"
+lto = false
