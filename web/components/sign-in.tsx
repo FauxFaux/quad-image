@@ -1,6 +1,6 @@
 import { JSX } from 'preact';
 import { useState } from 'preact/hooks';
-import { useQuery } from 'preact-fetching';
+import { useQuery } from '../use-query';
 
 import { toWords } from 'ts-number-to-words';
 
@@ -38,6 +38,20 @@ export function SignIn(props: SignInProps) {
   const [configuring, setConfiguring] = useState<boolean>(false);
   const [addingPicked, setAddingPicked] = useState(false);
   const [addResult, setAddResult] = useState<GalleryAddResult | undefined>();
+
+  const existing = props.gallery.v;
+  const { data, isLoading, isError } = useQuery(
+    existing ? `gallery-${existing}-id` : undefined,
+    async () => {
+      const resp = await putGalleryResp(existing!, []);
+      if (resp.status === 400) {
+        return { valid: false } as const;
+      }
+      if (!resp.ok) throw new Error(`unexpected response: ${resp.status}`);
+      const body = await resp.json();
+      return { valid: true, id: body?.data?.id as string } as const;
+    },
+  );
 
   const addPicked = async (gallery: string) => {
     setAddingPicked(true);
@@ -206,21 +220,7 @@ export function SignIn(props: SignInProps) {
     </span>
   );
 
-  const existing = props.gallery.v;
   if (existing) {
-    const { data, isLoading, isError } = useQuery(
-      `gallery-${existing}-id`,
-      async () => {
-        const resp = await putGalleryResp(existing, []);
-        if (resp.status === 400) {
-          return { valid: false } as const;
-        }
-        if (!resp.ok) throw new Error(`unexpected response: ${resp.status}`);
-        const body = await resp.json();
-        return { valid: true, id: body?.data?.id as string } as const;
-      },
-    );
-
     const id = data?.id;
 
     let status: JSX.Element;

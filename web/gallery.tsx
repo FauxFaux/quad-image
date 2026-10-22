@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { useQuery } from 'preact-fetching';
+import { useQuery } from './use-query';
 import { getGallery } from './locket/client';
 import { ThumbList } from './components/thumb-list';
 
@@ -21,13 +21,15 @@ export function Gallery() {
   }, []);
 
   const pub = hash?.[0];
-  if (!pub || !pub.includes(':')) {
+  const valid = !!pub?.includes(':');
+  const { status, error, data } = useQuery(
+    valid ? `gallery-${pub}-data` : undefined,
+    async () => getGallery(pub!),
+  );
+  if (!valid) {
     return <div class={'alert alert-warning'}>no valid gallery specified</div>;
   }
 
-  const { status, error, data } = useQuery(`gallery-${pub}-data`, async () =>
-    getGallery(pub),
-  );
   if (status === 'loading') {
     return <div>fetching gallery details...</div>;
   }

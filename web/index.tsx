@@ -5,6 +5,12 @@ import { serializeError } from 'serialize-error';
 import { Gallery } from './gallery';
 import { Home } from './home';
 import { EncodePreview } from './encode-preview';
+import { preloadWorker } from './locket/encode-worker-client';
+
+// Give the page time to settle before starting the image encoder worker.
+void new Promise<void>((resolve) => setTimeout(resolve, 200))
+  .then(preloadWorker)
+  .catch(() => {});
 
 export function init(element: HTMLElement, mode: string | null) {
   element.innerHTML = 'JS App booting...';

@@ -51,6 +51,10 @@ const getWorker = () => {
   return worker;
 };
 
+export const preloadWorker = () => {
+  getWorker();
+};
+
 export const encodeInWorker = async (
   blob: Blob,
   originalType: string,

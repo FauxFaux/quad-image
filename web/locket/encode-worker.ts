@@ -1,5 +1,10 @@
 import { encodeImage, encodeWasmImage } from './encode-image';
 import { encodeRequest, type EncodeResponse } from './encode-worker-protocol';
+import { preloadWebPEncoder } from './encode';
+
+// The page starts this worker after settling; only the worker preloads WASM.
+// An encode operation will surface loading failures to its caller.
+void preloadWebPEncoder().catch(() => {});
 
 // Async decoding and canvas encoding can overlap message handlers. Serialize
 // whole jobs to bound decoded memory and keep one encoder operation in flight.

@@ -15,6 +15,12 @@ import { addImagesToGallery, removeSelectedImages } from './gallery-actions';
 import * as z from 'zod/mini';
 
 export function Home() {
+  const [showThumbnails, setShowThumbnails] = useState(false);
+  useEffect(() => {
+    // Let controls paint and request effects run before adding image loads.
+    const timer = setTimeout(() => setShowThumbnails(true), 15);
+    return () => clearTimeout(timer);
+  }, []);
   const [messages, setMessages] = useState<['warn' | 'error', string][]>([]);
   const [uploads, setUploads] = useState<PendingItem[]>([]);
   const nextUploadId = useRef(0);
@@ -257,7 +263,9 @@ export function Home() {
             triggerUploads={triggerUploads}
           />
         </div>
-        <ThumbList items={displayItems} picking={pickingProp} />
+        {showThumbnails && (
+          <ThumbList items={displayItems} picking={pickingProp} />
+        )}
       </div>
       <div className={'util--clear'} />
       <div class={'row'}>

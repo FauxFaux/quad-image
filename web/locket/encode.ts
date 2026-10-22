@@ -15,15 +15,15 @@ export const canvasSupportsWebP = async () => {
   return blob.type === 'image/webp';
 };
 
-// Begin both capability detection and the appropriate fallback download before
-// an image is selected. The result is shared by all subsequent encodes.
-const canvasWebPSupported = canvasSupportsWebP();
-void canvasWebPSupported
-  .then((supported) => {
-    void (supported ? loadLosslessEncoder() : loadEncoder()).catch(() => {});
-  })
-  // An encode operation will surface either failure to its caller.
-  .catch(() => {});
+// Detect capabilities on demand and share the result across encodes.
+let canvasWebPSupported: Promise<boolean> | undefined;
+const getCanvasWebPSupport = async () =>
+  (canvasWebPSupported ??= canvasSupportsWebP());
+
+export const preloadWebPEncoder = async () => {
+  const supported = await getCanvasWebPSupport();
+  await (supported ? loadLosslessEncoder() : loadEncoder());
+};
 
 export const encodeWebPUsingCanvas = async (
   image: ImageBitmap,
@@ -46,12 +46,12 @@ export const encodeWebP = async (
   image: ImageBitmap,
   quality: number | undefined,
 ): Promise<Blob> => {
-  if (await canvasWebPSupported) return encodeWebPUsingCanvas(image, quality);
+  if (await getCanvasWebPSupport()) return encodeWebPUsingCanvas(image, quality);
   return encodeWebPUsingWasm(image, quality);
 };
 
 export const encodeWebPLossless = async (image: ImageBitmap): Promise<Blob> => {
-  const encoder = await ((await canvasWebPSupported)
+  const encoder = await ((await getCanvasWebPSupport())
     ? loadLosslessEncoder()
     : loadEncoder());
   return encodeWebPLosslessUsingWasm(image, encoder);
