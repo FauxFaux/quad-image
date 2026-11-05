@@ -2,20 +2,27 @@
 
 Both `/api/upload` and `/api/upload-stream` use this policy for still images.
 The [client encoding policy](client-encoding.md) optimizes upload transfers;
-the server always detects the format from the bytes, decodes the image, applies supported EXIF orientation,
-and encodes its own output. Filenames, MIME types, incoming file sizes, and
-browser encoder choices do not determine persistence or candidate settings.
+the server always detects the format from the bytes, decodes the image, applies
+supported EXIF orientation, and encodes its own output. Filenames, MIME types, and browser encoder choices
+do not determine persistence. Detected source codec and incoming byte count
+only control whether an ordinary lossless candidate is worth attempting.
 
 ## Two passes
 
-The first pass runs these four encodes in parallel:
+The first pass runs these encodes in parallel:
 
 | Setting | Behavior                                            |
 | ------- | --------------------------------------------------- |
 | nl100   | Lossless WebP with preprocessing disabled           |
-| nl40    | Lossless WebP after near-lossless RGB preprocessing |
 | q90     | Lossy WebP at quality 90                            |
+| q80     | Lossy WebP at quality 80                            |
 | q70     | Lossy WebP at quality 70                            |
+
+For a **lossy WebP or JPEG strictly larger than 1,000,000 input bytes**, skip
+`nl100` and run only q90, q80, and q70. WebP losslessness comes from
+`image_webp::WebPDecoder::is_lossy()`; filenames and MIME types are not used. Exactly 1,000,000 bytes remains eligible. PNGs, lossless WebPs, and
+other still formats retain the lossless attempt. All inputs still decode and
+re-encode on the server. `nl40` is no longer attempted at any size.
 
 Only if **every first-pass result is strictly larger than 2,000,000 bytes**,
 run a second parallel pass: **q50, q35, q20, q5**. Exactly 2,000,000 bytes does
@@ -23,8 +30,8 @@ not trigger the second pass. There is no resizing or third pass.
 
 Select across all attempted candidates:
 
-1. Among outputs **strictly below 1,000,000 bytes**, prefer nl100, then nl40,
-   then the highest lossy quality.
+1. Among outputs **strictly below 1,000,000 bytes**, prefer nl100, then the
+   highest lossy quality (q90, q80, q70, then second-pass settings).
 2. If no output fits, select the smallest actual output, regardless of setting.
    Ties use the configured candidate order.
 
@@ -34,11 +41,10 @@ another pass, and even the second pass can exceed 2 MB. The target is soft.
 Setting preference expresses the preservation policy; it does not use PSNR,
 image classification, or the assumption that larger outputs look better.
 
-Near-lossless uses `WebPEncodeRGBAWithNearLossless` from the checked-in full
+The nl100 candidate uses `WebPEncodeRGBAWithNearLossless` from the checked-in full
 WASM module. The wrapper sets lossless mode, preset quality 70 (compression
-effort), default method 4, and RGBA/ARGB import. Its integer strength buckets
-make levels 40–59 equivalent. Lossy candidates use default lossless alpha
-(quality 100). All inputs are normalized to 8-bit RGBA before primary encoding;
+effort), default method 4, and RGBA/ARGB import. Lossy candidates use default
+lossless alpha (quality 100). All inputs are normalized to 8-bit RGBA before primary encoding;
 nl100 disables additional RGB preprocessing at that precision. As with libwebp's
 convenience lossless encoder, invisible RGB under fully transparent pixels may
 be normalized; alpha itself remains lossless.
@@ -100,9 +106,10 @@ Before submitting a pass to the worker pool, the server sends an SSE `status`
 event listing its planned settings:
 
 ```json
-{"kind":"planned","names":["nl100","nl40","q90","q70"]}
+{"kind":"planned","names":["nl100","q90","q80","q70"]}
 ```
 
+For large lossy sources the first plan contains only `q90`, `q80`, and `q70`.
 This event is emitted even while all encoder workers are busy. A second plan
 listing `q50`, `q35`, `q20`, and `q5` is emitted only if the first-pass results
 trigger that pass, before its work is submitted.
@@ -212,9 +219,40 @@ fails. GIF persistence before readiness follows its existing policy. Candidate
 errors include the failing setting in the terminal error chain; progress stops
 after a publication or delivery failure, while already started encodes are joined.
 
+## Latency goals and evidence
+
+The interactivity goal is a first encode result within one second and a final
+result within a few seconds. These are best-effort goals, not hard deadlines:
+large decoded images, compilation, and contention in the shared pool can exceed
+them. Skipping expensive candidates reduces both completion latency and the
+queueing imposed on other uploads; it does not resize images or preempt work.
+
+The local `quad.journal` sample contained 357 complete four-candidate comparisons.
+`nl40` was selected 21 times (5.9%), so it did sometimes provide a fitting result
+when nl100 did not. In all 21 cases q90 also fit, with a smaller output. Logs do
+not establish visual equivalence. Removing nl40 trades that preservation
+preference for lower latency; q80 adds a middle quality between q90 and q70.
+There are no q80 measurements in those logs.
+
+Measured from pass planning, median completion was 1,239 ms for nl100, 1,684 ms
+for nl40, 260 ms for q90, and 258 ms for q70. These measurements include queueing
+and contention. Across those requests, the first result arrived within one
+second in 267/357 cases (74.8%); final completion was within three seconds in
+229/357 cases (64.1%) and five seconds in 265/357 (74.2%). The 95th percentiles
+were 3.532 seconds to first result and 25.029 seconds to final completion, measured
+from request receipt. None of the 45 inputs larger than 1,000,000 bytes produced
+an nl100 output below the target. The logs identify WebP containers, not their
+lossy/lossless bitstreams; the runtime guard distinguishes those bitstreams to
+retain lossless attempts for lossless sources.
+
+These are observations of the previous policy, not measured speedups for the
+new one. Source images, identifiers, and raw logs remain outside version control.
+
 ## Evidence and tests
 
-Rust tests cover strict byte boundaries, preference versus encoded size,
+Rust tests cover the source-size cutoff, lossy/lossless WebP classification,
+three- and four-candidate plans, strict output byte boundaries, preference versus
+encoded size,
 parallel passes, second-pass sequencing, smallest-output fallback, candidate
 failure/join behavior, near-lossless RGB and alpha behavior, sandbox isolation
 and resource limits, malformed inputs, 16-bit normalization, GIF frame retention,

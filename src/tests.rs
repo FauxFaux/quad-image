@@ -102,6 +102,35 @@ fn write_an_image() -> Result<()> {
     assert!(selected.windows(4).any(|chunk| chunk == b"VP8 "));
     assert!(!std::path::Path::new(&raw_path(&jpeg)).exists());
 
+    // Input bytes only affect scheduling: large lossy WebPs skip nl100, while
+    // lossless WebPs remain eligible. Both must still persist a fresh encode.
+    for (source, expected) in [
+        (selected.as_slice(), vec!["q90", "q80", "q70"]),
+        (saved_bytes.as_slice(), vec!["nl100", "q90", "q80", "q70"]),
+    ] {
+        let mut padded = source.to_vec();
+        padded.extend_from_slice(b"JUNK");
+        padded.extend_from_slice(&1_000_000_u32.to_le_bytes());
+        padded.resize(padded.len() + 1_000_000, 0);
+        let riff_size = u32::try_from(padded.len() - 8)?;
+        padded[4..8].copy_from_slice(&riff_size.to_le_bytes());
+        let mut plans = Vec::new();
+        let resaved = crate::ingest::store_with_progress(&padded, |update| {
+            if let crate::ingest::StoreUpdate::Planned(names) = update {
+                plans.push(names.to_vec());
+            }
+            Ok(())
+        })?;
+        assert_eq!(plans, [expected]);
+        let stored = fs::read(resaved)?;
+        assert!(stored.len() < padded.len());
+        assert_eq!(image::guess_format(&stored)?, image::ImageFormat::WebP);
+        assert_eq!(
+            image::load_from_memory(&stored)?.to_rgba8().dimensions(),
+            image::load_from_memory(source)?.to_rgba8().dimensions()
+        );
+    }
+
     tokio::runtime::Runtime::new()?.block_on(async {
         legacy_upload_roundtrip().await?;
         legacy_upload_response_variants().await?;
@@ -428,7 +457,7 @@ async fn stream_upload_roundtrip() -> Result<()> {
         if update["kind"] == "planned" {
             assert!(encodes.is_empty());
             planned = serde_json::from_value(update["names"].clone())?;
-            assert_eq!(planned, ["nl100", "nl40", "q90", "q70"]);
+            assert_eq!(planned, ["nl100", "q90", "q80", "q70"]);
             continue;
         }
         if update["kind"] == "encoded" {
@@ -467,7 +496,7 @@ async fn stream_upload_roundtrip() -> Result<()> {
     };
     assert!(updates > 0);
     encodes.sort();
-    assert_eq!(encodes, ["nl100", "nl40", "q70", "q90"]);
+    assert_eq!(encodes, ["nl100", "q70", "q80", "q90"]);
     assert!(complete.starts_with("event: done\n"));
     let data = complete
         .lines()

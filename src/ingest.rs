@@ -22,19 +22,27 @@ pub fn make_readable(path: &str) -> io::Result<()> {
 
 pub type SavedImage = String;
 
-/// the crate supports webp, but doesn't seem to detect it:
-/// https://github.com/PistonDevelopers/image/issues/660
 fn guess_format(data: &[u8]) -> Result<ImageFormat> {
-    Ok(if data.len() >= 4 && b"RIFF"[..] == data[..4] {
-        ImageFormat::WebP
-    } else {
-        image::guess_format(data).with_context(|| {
-            anyhow!(
-                "guess from {} bytes: {:?}",
-                data.len(),
-                &data[..30.min(data.len())]
-            )
-        })?
+    image::guess_format(data).with_context(|| {
+        anyhow!(
+            "guess from {} bytes: {:?}",
+            data.len(),
+            &data[..30.min(data.len())]
+        )
+    })
+}
+
+fn encode_source(data: &[u8], format: ImageFormat) -> Result<crate::webp_policy::Source> {
+    let lossy = match format {
+        ImageFormat::Jpeg => true,
+        ImageFormat::WebP => image_webp::WebPDecoder::new(io::Cursor::new(data))
+            .context("reading WebP encoding mode")?
+            .is_lossy(),
+        _ => false,
+    };
+    Ok(crate::webp_policy::Source {
+        bytes: data.len(),
+        lossy,
     })
 }
 
@@ -144,6 +152,7 @@ pub fn store_with_ready(
         return Ok(id);
     }
     let loaded = load_image(data, format)?;
+    let source = encode_source(data, format)?;
     emit(StoreUpdate::Decoded {
         width: loaded.width(),
         height: loaded.height(),
@@ -157,6 +166,7 @@ pub fn store_with_ready(
             rgba.as_raw(),
             rgba.width(),
             rgba.height(),
+            source,
             report,
         )
     })
@@ -372,6 +382,81 @@ mod tests {
     use std::{fs, io};
 
     use image::ImageFormat;
+
+    #[test]
+    fn guess_format_recognizes_upload_fixtures() -> anyhow::Result<()> {
+        for (data, expected) in [
+            (include_bytes!("test.png").as_slice(), ImageFormat::Png),
+            (
+                include_bytes!("../tests/orient.jpg").as_slice(),
+                ImageFormat::Jpeg,
+            ),
+            (
+                include_bytes!("../tests/parrot.gif").as_slice(),
+                ImageFormat::Gif,
+            ),
+            (
+                include_bytes!("../tests/orient.webp").as_slice(),
+                ImageFormat::WebP,
+            ),
+        ] {
+            assert_eq!(super::guess_format(data)?, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn guess_format_rejects_non_image_riff_and_short_inputs() {
+        for data in [
+            b"".as_slice(),
+            b"RIF",
+            b"RIFF",
+            b"RIFF\x04\0\0\0WEB",
+            b"RIFF\x04\0\0\0WAVE",
+            b"RIFF\x04\0\0\0AVI ",
+        ] {
+            let error = super::guess_format(data).unwrap_err();
+            assert!(error
+                .to_string()
+                .starts_with(&format!("guess from {} bytes:", data.len())));
+        }
+    }
+
+    #[test]
+    fn source_hints_distinguish_lossy_webp_from_lossless_and_png() -> anyhow::Result<()> {
+        for alpha in [255, 128] {
+            let pixels = image::RgbaImage::from_pixel(2, 2, image::Rgba([12, 34, 56, alpha]));
+            let lossy = crate::webp_encoder::encode_rgba(
+                pixels.as_raw(),
+                2,
+                2,
+                80.0,
+                crate::webp_encoder::Limits::default(),
+            )?;
+            let exact = crate::webp_encoder::encode_rgba_with_near_lossless(
+                pixels.as_raw(),
+                2,
+                2,
+                100,
+                crate::webp_encoder::Limits::default(),
+            )?;
+            for (data, expected) in [(lossy.as_slice(), true), (exact.as_slice(), false)] {
+                let source = super::encode_source(data, super::guess_format(data)?)?;
+                assert_eq!(source.lossy, expected);
+                assert_eq!(source.bytes, data.len());
+            }
+        }
+        for (data, expected) in [
+            (include_bytes!("../tests/orient.jpg").as_slice(), true),
+            (include_bytes!("test.png").as_slice(), false),
+        ] {
+            let source = super::encode_source(data, super::guess_format(data)?)?;
+            assert_eq!(source.lossy, expected);
+            assert_eq!(source.bytes, data.len());
+        }
+        assert!(super::encode_source(b"RIFF", ImageFormat::WebP).is_err());
+        Ok(())
+    }
 
     fn pending_image(dir: &std::path::Path) -> super::PendingImage {
         let thumbnail = dir.join("thumbnail.webp");

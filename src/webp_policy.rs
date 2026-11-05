@@ -11,6 +11,7 @@ use crate::webp_encoder::{self, Limits};
 
 const TARGET_BYTES: usize = 1_000_000;
 const SECOND_PASS_THRESHOLD: usize = 2_000_000;
+const LOSSY_INPUT_LOSSLESS_LIMIT: usize = 1_000_000;
 // Full-resolution images need larger budgets than thumbnails. The shared pool
 // bounds this to four live sandboxes across all primary-image uploads.
 const LIMITS: Limits = Limits {
@@ -36,8 +37,8 @@ impl Setting {
 
 const FIRST_PASS: [Setting; 4] = [
     Setting::NearLossless(100),
-    Setting::NearLossless(40),
     Setting::Lossy(90),
+    Setting::Lossy(80),
     Setting::Lossy(70),
 ];
 const SECOND_PASS: [Setting; 4] = [
@@ -52,6 +53,22 @@ struct Candidate {
     bytes: Vec<u8>,
 }
 
+/// Scheduling hints from validated input bytes, never permission to persist them.
+pub struct Source {
+    pub bytes: usize,
+    pub lossy: bool,
+}
+
+impl Source {
+    fn first_pass(&self) -> &'static [Setting] {
+        if self.lossy && self.bytes > LOSSY_INPUT_LOSSLESS_LIMIT {
+            &FIRST_PASS[1..]
+        } else {
+            &FIRST_PASS
+        }
+    }
+}
+
 pub enum EncodeProgress<'a> {
     Planned(Vec<String>),
     Completed {
@@ -61,11 +78,20 @@ pub enum EncodeProgress<'a> {
     },
 }
 
-/// Encode already decoded, tightly packed RGBA. Input codec and byte size do
-/// not affect the candidates; alpha stays lossless even for lossy RGB encoding.
+/// Encode already decoded, tightly packed RGBA without source codec hints.
+/// Alpha stays lossless even for lossy RGB encoding.
 /// This blocks until every started sandbox has exited, including on failure.
 pub fn encode_rgba(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
-    encode_rgba_with_progress(rgba, width, height, |_| Ok(()))
+    encode_rgba_with_progress(
+        rgba,
+        width,
+        height,
+        Source {
+            bytes: 0,
+            lossy: false,
+        },
+        |_| Ok(()),
+    )
 }
 
 /// Announce each pass before scheduling it, then report every completed candidate.
@@ -74,6 +100,7 @@ pub fn encode_rgba_with_progress(
     rgba: &[u8],
     width: u32,
     height: u32,
+    source: Source,
     report: impl FnMut(EncodeProgress<'_>) -> Result<()> + Send,
 ) -> Result<Vec<u8>> {
     let pool = POOL.get_or_try_init(|| {
@@ -84,6 +111,7 @@ pub fn encode_rgba_with_progress(
     })?;
     let selected = encode_with_progress(
         pool,
+        source.first_pass(),
         &|setting| match setting {
             Setting::NearLossless(quality) => {
                 webp_encoder::encode_rgba_with_near_lossless(rgba, width, height, quality, LIMITS)
@@ -102,11 +130,12 @@ fn encode_with(
     pool: &rayon::ThreadPool,
     encode: &(impl Fn(Setting) -> Result<Vec<u8>> + Sync),
 ) -> Result<Candidate> {
-    encode_with_progress(pool, encode, |_| Ok(()))
+    encode_with_progress(pool, &FIRST_PASS, encode, |_| Ok(()))
 }
 
 fn encode_with_progress(
     pool: &rayon::ThreadPool,
+    first_pass: &[Setting],
     encode: &(impl Fn(Setting) -> Result<Vec<u8>> + Sync),
     report: impl FnMut(EncodeProgress<'_>) -> Result<()> + Send,
 ) -> Result<Candidate> {
@@ -152,7 +181,7 @@ fn encode_with_progress(
         });
         outcomes.into_iter().collect::<Result<Vec<_>>>()
     };
-    let mut candidates = pass(&FIRST_PASS)?;
+    let mut candidates = pass(first_pass)?;
     if candidates
         .iter()
         .all(|candidate| candidate.bytes.len() > SECOND_PASS_THRESHOLD)
@@ -169,7 +198,7 @@ fn select(candidates: &[Candidate]) -> usize {
         .iter()
         .enumerate()
         .min_by_key(|(_, candidate)| selection_key(candidate))
-        .expect("a successful pass produces four candidates")
+        .expect("a successful pass produces candidates")
         .0
 }
 
