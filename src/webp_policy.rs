@@ -1,5 +1,6 @@
 //! Two-pass, size-targeted still-image encoding. See docs/upload-encoding.md.
 
+use std::cmp::Reverse;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -22,25 +23,27 @@ static POOL: OnceCell<rayon::ThreadPool> = OnceCell::new();
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Setting {
-    NearLossless(u8),
+    Lossless,
     Lossy(u8),
 }
 
 impl Setting {
     fn name(self) -> String {
         match self {
-            Self::NearLossless(quality) => format!("nl{quality}"),
+            Self::Lossless => "nl100".to_owned(),
             Self::Lossy(quality) => format!("q{quality}"),
+        }
+    }
+
+    fn fidelity_rank(self) -> (bool, Reverse<u8>) {
+        match self {
+            Self::Lossless => (false, Reverse(0)),
+            Self::Lossy(quality) => (true, Reverse(quality)),
         }
     }
 }
 
-const FIRST_PASS: [Setting; 4] = [
-    Setting::NearLossless(100),
-    Setting::Lossy(90),
-    Setting::Lossy(80),
-    Setting::Lossy(70),
-];
+const LOSSY_FIRST_PASS: [Setting; 3] = [Setting::Lossy(90), Setting::Lossy(80), Setting::Lossy(70)];
 const SECOND_PASS: [Setting; 4] = [
     Setting::Lossy(50),
     Setting::Lossy(35),
@@ -60,12 +63,13 @@ pub struct Source {
 }
 
 impl Source {
-    fn first_pass(&self) -> &'static [Setting] {
-        if self.lossy && self.bytes > LOSSY_INPUT_LOSSLESS_LIMIT {
-            &FIRST_PASS[1..]
-        } else {
-            &FIRST_PASS
+    fn first_pass(&self) -> Vec<Setting> {
+        let mut settings = Vec::new();
+        if !self.lossy || self.bytes <= LOSSY_INPUT_LOSSLESS_LIMIT {
+            settings.push(Setting::Lossless);
         }
+        settings.extend_from_slice(&LOSSY_FIRST_PASS);
+        settings
     }
 }
 
@@ -111,10 +115,10 @@ pub fn encode_rgba_with_progress(
     })?;
     let selected = encode_with_progress(
         pool,
-        source.first_pass(),
+        &source.first_pass(),
         &|setting| match setting {
-            Setting::NearLossless(quality) => {
-                webp_encoder::encode_rgba_with_near_lossless(rgba, width, height, quality, LIMITS)
+            Setting::Lossless => {
+                webp_encoder::encode_rgba_with_near_lossless(rgba, width, height, 100, LIMITS)
             }
             Setting::Lossy(quality) => {
                 webp_encoder::encode_rgba(rgba, width, height, f32::from(quality), LIMITS)
@@ -123,14 +127,6 @@ pub fn encode_rgba_with_progress(
         report,
     )?;
     Ok(selected.bytes)
-}
-
-#[cfg(test)]
-fn encode_with(
-    pool: &rayon::ThreadPool,
-    encode: &(impl Fn(Setting) -> Result<Vec<u8>> + Sync),
-) -> Result<Candidate> {
-    encode_with_progress(pool, &FIRST_PASS, encode, |_| Ok(()))
 }
 
 fn encode_with_progress(
@@ -192,8 +188,8 @@ fn encode_with_progress(
 }
 
 fn select(candidates: &[Candidate]) -> usize {
-    // Fidelity is a setting preference, not a comparison of output byte sizes
-    // or perceptual metrics. Configured order breaks equally ranked ties.
+    // Within the target, prefer lossless, then the highest lossy quality.
+    // Otherwise prefer the smallest output, using fidelity to break size ties.
     candidates
         .iter()
         .enumerate()
@@ -202,14 +198,13 @@ fn select(candidates: &[Candidate]) -> usize {
         .0
 }
 
-fn selection_key(candidate: &Candidate) -> (bool, usize, usize) {
-    let order = FIRST_PASS
-        .iter()
-        .chain(&SECOND_PASS)
-        .position(|setting| *setting == candidate.setting)
-        .expect("configured candidate");
+fn selection_key(candidate: &Candidate) -> (bool, usize, (bool, Reverse<u8>)) {
     let fits = candidate.bytes.len() < TARGET_BYTES;
-    (!fits, if fits { 0 } else { candidate.bytes.len() }, order)
+    (
+        !fits,
+        if fits { 0 } else { candidate.bytes.len() },
+        candidate.setting.fidelity_rank(),
+    )
 }
 
 #[cfg(test)]

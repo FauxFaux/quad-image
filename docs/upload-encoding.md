@@ -33,7 +33,7 @@ Select across all attempted candidates:
 1. Among outputs **strictly below 1,000,000 bytes**, prefer nl100, then the
    highest lossy quality (q90, q80, q70, then second-pass settings).
 2. If no output fits, select the smallest actual output, regardless of setting.
-   Ties use the configured candidate order.
+   Size ties prefer lossless, then the highest lossy quality.
 
 These are decimal MB thresholds, not MiB. An output of exactly 1,000,000 bytes
 does not fit the target. Results between 1 MB and 2 MB can be retained without
@@ -92,7 +92,7 @@ may continue to see that complete image until it fetches the URL again.
 For both endpoints, the first completed candidate is published immediately
 at the target image path. Each later candidate replaces it only if it wins under
 the same selection rules used for the final result: prefer fidelity below the
-target, otherwise prefer smaller output, breaking ties by configured order.
+target, otherwise prefer smaller output, breaking size ties by fidelity.
 This includes improvements from the second pass. Every configured attempt still
 runs; early publication does not change the final selection rules.
 

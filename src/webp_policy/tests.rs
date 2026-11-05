@@ -10,6 +10,21 @@ fn pool() -> rayon::ThreadPool {
         .unwrap()
 }
 
+fn first_pass() -> Vec<Setting> {
+    Source {
+        bytes: 0,
+        lossy: false,
+    }
+    .first_pass()
+}
+
+fn encode_with(
+    pool: &rayon::ThreadPool,
+    encode: &(impl Fn(Setting) -> Result<Vec<u8>> + Sync),
+) -> Result<Candidate> {
+    encode_with_progress(pool, &first_pass(), encode, |_| Ok(()))
+}
+
 #[test]
 fn lossless_cutoff_only_applies_to_large_lossy_sources() -> Result<()> {
     for (lossy, bytes, lossless) in [
@@ -23,7 +38,7 @@ fn lossless_cutoff_only_applies_to_large_lossy_sources() -> Result<()> {
         let calls = AtomicUsize::new(0);
         let selected = encode_with_progress(
             &pool(),
-            first,
+            &first,
             &|setting| {
                 if !lossless {
                     assert!(matches!(setting, Setting::Lossy(_)));
@@ -51,7 +66,7 @@ fn lossless_cutoff_only_applies_to_large_lossy_sources() -> Result<()> {
         assert_eq!(
             selected.setting,
             if lossless {
-                Setting::NearLossless(100)
+                Setting::Lossless
             } else {
                 Setting::Lossy(90)
             }
@@ -70,9 +85,9 @@ fn lossy_only_first_pass_still_triggers_second_pass() -> Result<()> {
     let calls = AtomicUsize::new(0);
     let selected = encode_with_progress(
         &pool(),
-        first,
+        &first,
         &|setting| {
-            assert_ne!(setting, Setting::NearLossless(100));
+            assert_ne!(setting, Setting::Lossless);
             calls.fetch_add(1, Ordering::SeqCst);
             Ok(vec![
                 0;
@@ -106,7 +121,7 @@ fn announces_planned_encodes_even_while_the_pool_is_busy() -> Result<()> {
         let worker = scope.spawn(|| {
             encode_with_progress(
                 &pool,
-                &FIRST_PASS,
+                &first_pass(),
                 &|_| {
                     calls.fetch_add(1, Ordering::SeqCst);
                     Ok(vec![0; 10])
@@ -125,7 +140,7 @@ fn announces_planned_encodes_even_while_the_pool_is_busy() -> Result<()> {
         );
         assert_eq!(calls.load(Ordering::SeqCst), 0);
         release_tx.send(())?;
-        assert_eq!(worker.join().unwrap()?.setting, Setting::NearLossless(100));
+        assert_eq!(worker.join().unwrap()?.setting, Setting::Lossless);
         assert!(
             plan_rx.try_recv().is_err(),
             "no second pass when a candidate fits"
@@ -139,7 +154,7 @@ fn a_failed_plan_notification_starts_no_encoding() {
     let calls = AtomicUsize::new(0);
     let result = encode_with_progress(
         &pool(),
-        &FIRST_PASS,
+        &first_pass(),
         &|_| {
             calls.fetch_add(1, Ordering::SeqCst);
             Ok(vec![0; 10])
@@ -163,13 +178,21 @@ fn selection_prefers_fidelity_instead_of_size_and_excludes_exact_target() {
         candidate(Setting::Lossy(70), 50),
         candidate(Setting::Lossy(80), 200),
         candidate(Setting::Lossy(90), 100),
-        candidate(Setting::NearLossless(100), TARGET_BYTES - 1),
+        candidate(Setting::Lossless, TARGET_BYTES - 1),
     ];
     assert_eq!(select(&candidates), 3);
     candidates[3].bytes.push(0); // Exactly one million bytes does not fit.
     assert_eq!(select(&candidates), 2);
     candidates[2].bytes.resize(TARGET_BYTES, 0);
     assert_eq!(select(&candidates), 1);
+
+    // Above the target, equally sized outputs still prefer fidelity.
+    for candidate in &mut candidates {
+        candidate.bytes.resize(TARGET_BYTES, 0);
+    }
+    assert_eq!(select(&candidates), 3);
+    candidates.pop();
+    assert_eq!(select(&candidates), 2);
 }
 
 #[test]
@@ -177,14 +200,14 @@ fn parallel_first_pass_does_not_stop_at_a_fitting_candidate() -> Result<()> {
     let barrier = Barrier::new(4);
     let completed = AtomicUsize::new(0);
     let selected = encode_with(&pool(), &|setting| {
-        assert!(FIRST_PASS.contains(&setting));
+        assert!(first_pass().contains(&setting));
         // All four closures must be running concurrently to get past this.
         barrier.wait();
         completed.fetch_add(1, Ordering::SeqCst);
         Ok(vec![0; 10])
     })?;
     assert_eq!(completed.load(Ordering::SeqCst), 4);
-    assert_eq!(selected.setting, Setting::NearLossless(100));
+    assert_eq!(selected.setting, Setting::Lossless);
     Ok(())
 }
 
@@ -192,7 +215,7 @@ fn parallel_first_pass_does_not_stop_at_a_fitting_candidate() -> Result<()> {
 fn exact_second_pass_threshold_is_not_a_trigger() -> Result<()> {
     let calls = AtomicUsize::new(0);
     let selected = encode_with(&pool(), &|setting| {
-        assert!(FIRST_PASS.contains(&setting));
+        assert!(first_pass().contains(&setting));
         calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![0; SECOND_PASS_THRESHOLD])
     })?;
@@ -211,10 +234,10 @@ fn second_pass_waits_for_first_and_selects_highest_fitting_quality() -> Result<(
     let mut plans = Vec::new();
     let selected = encode_with_progress(
         &pool(),
-        &FIRST_PASS,
+        &first_pass(),
         &|setting| {
             calls.lock().unwrap().push(setting);
-            if FIRST_PASS.contains(&setting) {
+            if first_pass().contains(&setting) {
                 first_completed.fetch_add(1, Ordering::SeqCst);
                 return Ok(vec![0; SECOND_PASS_THRESHOLD + 1]);
             }
@@ -292,7 +315,7 @@ fn no_fit_selects_smallest_actual_output_not_lowest_quality() -> Result<()> {
 #[test]
 fn one_to_two_mb_band_keeps_smallest_first_pass_without_retry() -> Result<()> {
     let selected = encode_with(&pool(), &|setting| {
-        assert!(FIRST_PASS.contains(&setting));
+        assert!(first_pass().contains(&setting));
         Ok(vec![
             0;
             if setting == Setting::Lossy(70) {
@@ -312,10 +335,10 @@ fn error_joins_all_candidates_and_never_starts_second_pass() {
     let barrier = Barrier::new(4);
     let completed = AtomicUsize::new(0);
     let error = encode_with(&pool(), &|setting| {
-        assert!(FIRST_PASS.contains(&setting));
+        assert!(first_pass().contains(&setting));
         barrier.wait();
         completed.fetch_add(1, Ordering::SeqCst);
-        if setting == Setting::NearLossless(100) {
+        if setting == Setting::Lossless {
             anyhow::bail!("encoder failed");
         }
         Ok(vec![0; SECOND_PASS_THRESHOLD + 1])
@@ -330,7 +353,7 @@ fn publishes_improvements_before_slower_candidates_finish() -> Result<()> {
         Setting::Lossy(70),
         Setting::Lossy(80),
         Setting::Lossy(90),
-        Setting::NearLossless(100),
+        Setting::Lossless,
     ];
     let (releases, receivers): (Vec<_>, Vec<_>) = order
         .iter()
@@ -344,7 +367,7 @@ fn publishes_improvements_before_slower_candidates_finish() -> Result<()> {
         let worker = scope.spawn(|| {
             encode_with_progress(
                 &pool(),
-                &FIRST_PASS,
+                &first_pass(),
                 &|setting| {
                     let index = order.iter().position(|&s| s == setting).unwrap();
                     receivers[index]
@@ -374,7 +397,7 @@ fn publishes_improvements_before_slower_candidates_finish() -> Result<()> {
                 (index as u8, (index + 1) * 100)
             );
         }
-        assert_eq!(worker.join().unwrap()?.setting, Setting::NearLossless(100));
+        assert_eq!(worker.join().unwrap()?.setting, Setting::Lossless);
         Ok(())
     })
 }
@@ -387,9 +410,9 @@ fn reports_every_candidate_but_marks_only_improvements() -> Result<()> {
     let mut completions = Vec::new();
     let selected = encode_with_progress(
         &pool(),
-        &FIRST_PASS,
+        &first_pass(),
         &|setting| {
-            if setting != Setting::NearLossless(100) {
+            if setting != Setting::Lossless {
                 let (lock, changed) = &ready;
                 let mut available = lock.lock().unwrap();
                 while !*available {
@@ -398,7 +421,7 @@ fn reports_every_candidate_but_marks_only_improvements() -> Result<()> {
             }
             Ok(vec![
                 0;
-                if setting == Setting::NearLossless(100) {
+                if setting == Setting::Lossless {
                     500
                 } else {
                     100
@@ -425,7 +448,7 @@ fn reports_every_candidate_but_marks_only_improvements() -> Result<()> {
     assert_eq!(published, [500]);
     completions.sort();
     assert_eq!(completions, ["nl100", "q70", "q80", "q90"]);
-    assert_eq!(selected.setting, Setting::NearLossless(100));
+    assert_eq!(selected.setting, Setting::Lossless);
     Ok(())
 }
 
@@ -436,9 +459,9 @@ fn publication_failure_joins_encodes_and_stops_updates() {
     let mut publications = 0;
     let result = encode_with_progress(
         &pool(),
-        &FIRST_PASS,
+        &first_pass(),
         &|setting| {
-            assert!(FIRST_PASS.contains(&setting));
+            assert!(first_pass().contains(&setting));
             barrier.wait();
             completed.fetch_add(1, Ordering::SeqCst);
             Ok(vec![0; 10])
