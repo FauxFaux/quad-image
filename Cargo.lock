@@ -1238,7 +1238,6 @@ dependencies = [
  "image",
  "image-webp",
  "kamadak-exif",
- "libc",
  "once_cell",
  "rand",
  "rayon",

@@ -312,8 +312,8 @@ fn write_out(
                 make_readable(&cand)?;
                 return Ok(cand);
             }
-            Err(e) => match e.error.raw_os_error() {
-                Some(libc::EEXIST) => e.file,
+            Err(e) => match e.error.kind() {
+                io::ErrorKind::AlreadyExists => e.file,
                 _ => bail!("couldn't create candidate {}: {:?}", cand, e),
             },
         }
